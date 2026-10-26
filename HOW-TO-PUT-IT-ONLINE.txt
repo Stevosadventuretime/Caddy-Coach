@@ -1,0 +1,116 @@
+CADDY COACH: STANDALONE APP
+===========================
+
+This folder is the whole Caddy Coach app. Put it on a free web host and it runs on its own
+web address, where your phone's GPS, satellite maps and live course data all work.
+
+DO THIS FIRST: LOGINS AND PASSWORDS (once, about 5 minutes, BEFORE you upload this version)
+Every golfer now has their own login with a strong password, and each username can only be used once.
+1. Open your Supabase project (supabase.com > your project).
+2. Authentication > Sign In / Providers > Email:
+   - turn OFF "Confirm email"
+   - set "Minimum password length" to 10
+   - Save.
+3. SQL Editor > New query. Open caddy-coach-supabase-setup.sql, copy all of it, paste it in, press Run.
+   It should say "Success. No rows returned". It's safe to run again.
+4. Now upload this version (below).
+What testers see: the next time anyone who signed up with the old 1234 password logs in, they are asked
+to choose their own password. It must be at least 10 characters, with upper and lower case letters,
+at least 2 numbers and a special character (like ! ? # %), and not be a common or easy-to-guess one.
+Once everyone has done that (check in SQL Editor: select username from profiles where auth_id is null;
+it should return nothing), run step 7 at the bottom of the SQL file to close the old route for good.
+Emails and forgotten passwords: everyone gives an email address when they sign up or choose their new password
+(people who signed up before are asked for one the next time they open the app). It's kept with their login, never
+shown to other golfers, and used only for "Forgotten your password?" on the log-in screen. For the reset emails to
+reach golfers, do these two things once in Supabase:
+ a) Authentication > URL Configuration: set "Site URL" to https://caddycoach-test.netlify.app
+    and add the same address under "Redirect URLs". The link in the email brings people back there.
+ b) Authentication > Emails > SMTP Settings: turn on custom SMTP. Without it Supabase only emails members of your
+    Supabase team. The easiest free option is a Gmail account with an app password:
+    host smtp.gmail.com, port 465, username = the Gmail address, password = an app password
+    (Google Account > Security > 2-Step Verification > App passwords). Sender email = the same Gmail address,
+    sender name = Caddy Coach. For a public launch, use a proper email service (e.g. Resend) with your own domain.
+
+TWO SETTINGS TO FILL IN (in index.html, search for them; both are optional for testing)
+- APP_OWNER_EMAIL='' : put the email address golfers should contact about their data. It appears
+  in the privacy notice. Needed before you launch publicly.
+- WEATHER={provider:'open-meteo',key:''} : the free Open-Meteo service is for non-commercial use.
+  Before you charge for the app or advertise it, buy an Open-Meteo API plan (open-meteo.com/en/pricing)
+  and paste the key in, or switch provider to 'openweathermap' with an OpenWeatherMap key.
+
+PUT IT ONLINE (about 5 minutes, free)
+1. On a computer, go to https://app.netlify.com/drop and sign up for a free account.
+2. Unzip CaddyCoach-Standalone.zip, then drag the whole "caddy-coach" folder onto the page.
+3. Netlify gives you a web address like https://something-random.netlify.app.
+   Under Site configuration > Change site name you can make it e.g. https://caddycoach-test.netlify.app
+
+INSTALL IT ON YOUR PHONE
+- iPhone: open the address in Safari, tap Share, then Add to Home Screen.
+- Android: open it in Chrome, tap the menu (three dots), then Install app or Add to Home screen.
+It opens full screen with the Caddy Coach icon. Once it has opened online, it also works
+without signal (the satellite map needs signal the first time you view each course).
+
+UPDATING
+In Netlify, open your site, go to Deploys, and drag the new "caddy-coach" folder onto the
+deploy area. The web address stays the same and the app updates next time you open it.
+
+HOW IT WORKS WITHOUT CLAUDE
+- Courses: every UK course on OpenStreetMap is found automatically and quickly, near your
+  GPS position or by name. Results are remembered, so the second time is instant.
+- Greens: where a course's holes are numbered on the map, every green is matched to its hole
+  automatically. Where the greens are drawn but not numbered, the app matches the green to
+  the hole using your position and the card length, and confirms it when you walk onto the
+  green; the rest show as white flags with your distance to each. Matches are saved, so each
+  course is fully set up after one round.
+- Hole map: satellite view, your position, live yards to the middle of the green, tap to measure.
+- Swing feedback: Caddy Coach's own coach writes your summary, strengths, top priority and
+  a finding and fix for every area, on the phone, with no internet needed.
+- Saved swings, clips, rounds and course cards are kept on the phone. Your clubs and yardages are also saved with your profile, so they come back wherever you log in.
+
+GOOD TO KNOW
+- Some smaller courses haven't had their holes mapped on OpenStreetMap yet. For those the app
+  says so, and you set the card and greens once. Anyone can add a course's holes at
+  openstreetmap.org, and the app picks them up automatically.
+- Saved swings and rounds stay on the phone they were made on. Your profile, clubs, handicap
+  record, leaderboard posts, group rounds and competitions are online, so they follow your login.
+- Feedback sent from the app (Me > Send feedback) lands in Supabase: Table Editor > course_cards,
+  rows whose course_key starts with fb~.
+
+NEW IN THIS VERSION
+- Group rounds: on the course screen, "Start a group" gives a 5-character code. Friends enter it on
+  their own phone before they tee off, and everyone sees each other's scores update during the round.
+- Club competitions: Play > Club > Competitions. Anyone at a club can set one up (Stableford or
+  net medal, up to 3 months). Rounds posted to the club leaderboard between the dates count.
+- Goals and a getting-started checklist on Home, and an Updates card (handicap changes, goals reached,
+  practice reminders, new rounds and competitions at your club).
+- Phone notifications when a swing analysis or shot trace finishes while you're in another app
+  (Me > Text size and display). On iPhone this works once the app is added to the Home Screen.
+  Notifications sent when the app is closed (true push) need a small server; see APP STORES below.
+- Course rating, slope and stroke index fill in automatically when other golfers have entered them
+  for those tees, with a note saying how many golfers they came from.
+- The shot tracer now says what the ball flight means for your clubface and swing path, and the
+  swing report uses your last traced shot for its clubface and path section.
+
+TESTING ON REAL PHONES
+Before a wider launch, get 5 to 10 golfers with a mix of phones (at least two iPhones, one older
+Android, one newer Android) to use it for two weeks. Send them the web address; "Invite a friend"
+under Send feedback shares it. Ask them to use Send feedback for anything odd.
+
+APP STORES (when you're ready)
+The app is set up as an installable web app (icons, maskable icon, screenshots, offline support).
+- Google Play: go to https://www.pwabuilder.com, enter your Netlify address, choose Android, and
+  download the package. You need a Google Play developer account (one-off fee). PWABuilder gives you
+  an assetlinks.json file: put it in a folder called .well-known inside caddy-coach and upload again.
+- Apple App Store: on PWABuilder choose iOS to get an Xcode project. You need a Mac with Xcode and
+  an Apple Developer account (yearly fee). Apple reviews apps that are mostly a website wrapper more
+  strictly, so expect to explain the camera, GPS and analysis features in the review notes.
+- Before either store: fill in APP_OWNER_EMAIL, put the privacy notice on a public web page (stores
+  ask for its address), buy the weather licence, and switch the satellite maps to your own ArcGIS key.
+- True push notifications (for example "your friend posted a round" when the app is closed) need a
+  Supabase Edge Function plus Web Push keys, or Firebase Cloud Messaging inside the store apps.
+
+Credits: course data © OpenStreetMap contributors (Open Database Licence), via the Overpass API.
+Satellite imagery: Esri World Imagery (Esri, Maxar, Earthstar Geographics) - fine for testing;
+create a free ArcGIS Location Platform account before a public launch. Map library: Leaflet.
+Before launching publicly, run your own course-data server rather than the free public
+Overpass servers, which are meant for light use.

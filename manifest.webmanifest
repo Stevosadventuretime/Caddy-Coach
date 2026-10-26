@@ -1,0 +1,79 @@
+{
+ "id": "/caddy-coach",
+ "name": "Caddy Coach",
+ "short_name": "Caddy Coach",
+ "description": "Golf swing analysis, shot tracer, round scoring with GPS yardages, and your handicap worked out the England Golf way.",
+ "lang": "en-GB",
+ "dir": "ltr",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "display_override": [
+  "standalone",
+  "minimal-ui"
+ ],
+ "orientation": "portrait",
+ "background_color": "#0f3a22",
+ "theme_color": "#0f3a22",
+ "categories": [
+  "sports",
+  "health",
+  "fitness",
+  "lifestyle"
+ ],
+ "icons": [
+  {
+   "src": "icons/icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icons/icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icons/icon-1024.png",
+   "sizes": "1024x1024",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "icons/icon-maskable-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "maskable"
+  },
+  {
+   "src": "icons/icon-maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ],
+ "screenshots": [
+  {
+   "src": "screens/home.png",
+   "sizes": "780x1688",
+   "type": "image/png",
+   "form_factor": "narrow",
+   "label": "Home: your swing score, handicap and this week's plan"
+  },
+  {
+   "src": "screens/swing.png",
+   "sizes": "780x1688",
+   "type": "image/png",
+   "form_factor": "narrow",
+   "label": "Shot tracer: film a shot and see the ball flight"
+  },
+  {
+   "src": "screens/round.png",
+   "sizes": "780x1688",
+   "type": "image/png",
+   "form_factor": "narrow",
+   "label": "Scoring a round with your shots and points"
+  }
+ ]
+}
