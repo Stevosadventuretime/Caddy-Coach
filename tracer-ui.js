@@ -290,6 +290,7 @@ const TracerUI = {
     this.st.auto = { shot: JSON.parse(JSON.stringify(this.st.shot)), start: Object.assign({}, start), t0: this.st.t0 };
     this.st.secs = (performance.now() - t00) / 1000; mk.all = performance.now() - t00;
     this.say('');
+    if (typeof window.ccTrack === 'function') window.ccTrack('trace');
     if (typeof window.ccNotify === 'function') window.ccNotify('Your shot tracer is ready', 'Tap to see the ball flight and what it says about your swing.');
     this.q('#trNote').textContent = this.st.note;
     this.q('#trResult').hidden = false; this.q('#trEdit').hidden = false;

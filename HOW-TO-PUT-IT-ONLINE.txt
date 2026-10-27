@@ -91,6 +91,35 @@ NEW IN THIS VERSION
 - The shot tracer now says what the ball flight means for your clubface and swing path, and the
   swing report uses your last traced shot for its clubface and path section.
 
+LIVE PINS, CLUBS, COACHING AND CADDY COACH PLUS
+- Live pins: when a golfer is near a green, the hole map asks "Where's the hole today?". One mark shows as
+  "not confirmed"; once two golfers agree (within 4 m) it's "confirmed", and everyone gets yards to the pin.
+  Pins clear at midnight. A club's own pin sheet always wins.
+- Club admins: you (stevosadventuretime) are the app owner. In the app: Me > App usage and club admins, type a
+  golfer's username and press "Make club admin". They run their local course: a club page (logo, colour,
+  welcome message) on the Club tab, official competitions, and "Set today's pins" for the greenkeeper or pro,
+  with a printable pin sheet.
+- App usage: Me > App usage and club admins shows golfers per week, rounds, swings, pins and how many come back
+  after four weeks. It's anonymous: golfers are counted by a one-way code, not their name.
+- Coaching: Me > Coaching. A coach taps "Get my coach code"; a pupil enters it, then uses "Send to my coach" under
+  any swing (scores and key-position pictures, never the video). The coach sends notes back; pupils see them in
+  Coaching and as an update on Home.
+- Weather: comes through Caddy Coach's server function. To switch to the Met Office (free for up to 360 lookups a
+  day, and answers are shared between golfers for 30 minutes): register at datahub.metoffice.gov.uk, subscribe to
+  "Site Specific Global Spot" (free plan), then in Supabase > Edge Functions > Secrets add METOFFICE_API_KEY with
+  your key. Until then it uses Open-Meteo, which is free for non-commercial use only.
+- Caddy Coach Plus (built, switched off). Free: GPS, scoring, stats, handicap, leaderboards, 3 swing analyses a
+  month. Plus: unlimited swing analysis, shot tracer, live grip coaching, swing comparison. To switch it on, once
+  you're set up as a sole trader or company:
+   1. Create a free Stripe account. Add two products (e.g. GBP 4.99 monthly, GBP 34.99 yearly, 14-day free trial)
+      and a Payment Link for each.
+   2. Stripe > Developers > Webhooks: add endpoint
+      https://dhrzscyirgvjwnvgdpqt.supabase.co/functions/v1/cc-stripe-webhook
+      with events checkout.session.completed and customer.subscription.created/updated/deleted. Copy its
+      signing secret into Supabase > Edge Functions > Secrets as STRIPE_WEBHOOK_SECRET.
+   3. In index.html set PLUS={on:true, linkMonthly:'<monthly link>', linkYearly:'<yearly link>',
+      portal:'<Stripe customer portal link>', ...}. Or ask Claude to do it.
+
 TESTING ON REAL PHONES
 Before a wider launch, get 5 to 10 golfers with a mix of phones (at least two iPhones, one older
 Android, one newer Android) to use it for two weeks. Send them the web address; "Invite a friend"
