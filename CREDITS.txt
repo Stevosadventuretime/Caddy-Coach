@@ -1,0 +1,13 @@
+Caddy Coach credits
+
+3D golfer (golfer-mesh.wasm, golfer-skin.jpg, golfer-eye.jpg)
+  Body shape, skeleton, skin weights and eyes come from MakeHuman (makehumancommunity.org),
+  released under CC0 1.0 (public domain). The clothes, cap, skin texture, grip and posing
+  were made for Caddy Coach.
+
+3D library
+  three.js, MIT licence.
+
+Hole flyover
+  Satellite imagery: Esri World Imagery (Esri, Maxar, Earthstar Geographics), shown with attribution.
+  Ground heights: Copernicus DEM via Open-Meteo (CC BY 4.0).

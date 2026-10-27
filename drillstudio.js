@@ -56,7 +56,8 @@ function rig(p) {
   const pel = [p.ws + p.hx + p.walk, hipH, -hipBack + p.hz];
   const H = rotAxis([1, 0, 0], [0, 1, 0], -p.hip * D2R);
   J.pel = pel; J.lhip = add(pel, mul(H, 0.11)); J.thip = add(pel, mul(H, -0.11)); J.H = H;
-  J.lk = ik(J.la, J.lhip, 0.44, 0.46, norm(add([0.15, 0, 1], mul(H, 0.2)))); J.tk = ik(J.ta, J.thip, 0.44, 0.46, norm([-0.15, 0, 1]));
+  J.lkp = norm(add([0.15, 0, 1], mul(H, 0.2))); J.tkp = norm([-0.15, 0, 1]);
+  J.lk = ik(J.la, J.lhip, 0.44, 0.46, J.lkp); J.tk = ik(J.ta, J.thip, 0.44, 0.46, J.tkp); J.arms = p.arms; J.tdrop = p.tdrop;
   let s = rotAxis([0, 1, 0], [1, 0, 0], p.bend * D2R);
   s = rotAxis(s, [0, 0, 1], p.side * D2R);
   const Lt = norm(rotAxis([1, 0, 0], s, -p.turn * D2R)), F = norm(cross(Lt, s));
@@ -160,7 +161,7 @@ function webgl() {
     if (!T) throw new Error('no three');
     R = new T.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
     R.shadowMap.enabled = true; R.shadowMap.type = T.PCFSoftShadowMap;
-    R.outputEncoding = T.sRGBEncoding; R.toneMapping = T.NoToneMapping;
+    R.outputEncoding = T.sRGBEncoding; R.toneMapping = T.ACESFilmicToneMapping; R.toneMappingExposure = 1.05;
     glOK = !!R.getContext();
   } catch (e) { glOK = false; R = null; }
   return glOK;
@@ -179,7 +180,7 @@ const PROF = {
   pelvis: [[0, 0.02], [0.1, 0.125], [0.45, 0.142], [0.8, 0.132], [1, 0.125]],
 };
 function ell(rx, ry, rz, seg) { const g = new T.SphereGeometry(1, seg || 24, Math.round((seg || 24) * 0.7)); g.scale(rx, ry, rz); return g; }
-function std(col, o) { return new T.MeshStandardMaterial(Object.assign({ color: col, roughness: 0.62, metalness: 0.02 }, o || {})); }
+function std(col, o) { const m = new T.MeshStandardMaterial(Object.assign({ color: col, roughness: 0.62, metalness: 0.02 }, o || {})); m.color.convertSRGBToLinear(); return m; }
 function figure(ghost) {
   const G = new T.Group(), P = {};
   const tone = ghost ? null : 1;
@@ -231,7 +232,12 @@ function poseFigure(FG, J) {
     P[sd + 'glute'].position.copy(v3(add(add(J.pel, mul(H, 0.075 * side)), add(mul(Fh, -0.08), mul(s, -0.04))))); P[sd + 'glute'].quaternion.copy(P.pelvis.quaternion);
   }
 }
+const HLR = { hips: ['hips'], head: ['head', 'neck'], chest: ['chest'], shoulders: ['chest'], leadarm: ['leadarm', 'leadhand'], trailarm: ['trailarm', 'trailhand'], arms: ['leadarm', 'trailarm'],
+  trailleg: ['trailleg'], leadleg: ['leadleg'], legs: ['leadleg', 'trailleg'], trailknee: ['trailleg'], leadknee: ['leadleg'], feet: ['leadfoot', 'trailfoot'], trailfoot: ['trailfoot'], leadfoot: ['leadfoot'], bum: ['hips'] };
+function poseAny(FG, J) { if (FG.real) FG.pose(J); else poseFigure(FG, J); }
+function ghostOpacity(FG, o) { if (FG.real) { FG.mats[0].opacity = Math.min(0.55, o * 1.6); FG.G.renderOrder = 2; } else FG.P.chest.material.opacity = o; }
 function setTone(FG, hl, t) {
+  if (FG.real) { const ps = []; for (const h of hl || []) for (const n of (HLR[h] || [h])) ps.push(n); return FG.highlight(ps, t); }
   // highlighted body parts glow green; everything else back to normal
   const parts = new Set(); for (const h of hl || []) for (const n of (HL[h] || [h])) parts.add(n);
   for (const n in FG.P) { const m = FG.P[n]; if (FG.ghost) continue;
@@ -244,24 +250,92 @@ const HL = { hips: ['pelvis', 'lglute', 'tglute', 'lhipj', 'thipj'], head: ['hea
   trailknee: ['tknee', 'tthigh'], leadknee: ['lknee', 'lthigh'], feet: ['lfoot', 'tfoot'], trailfoot: ['tfoot', 'tsole'], leadfoot: ['lfoot', 'lsole'], bum: ['lglute', 'tglute', 'pelvis'] };
 
 // ---------- textures ----------
-let TX = null;
+let TX = null, TX_STRIPES = null;
 function textures() {
   if (TX) return TX;
   const mkC = (w, h, f) => { const c = document.createElement('canvas'); c.width = w; c.height = h; f(c.getContext('2d'), w, h); const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4; return t; };
   const grass = mkC(1024, 1024, (x, w, h) => {
-    x.fillStyle = '#6aa857'; x.fillRect(0, 0, w, h);
-    for (let i = 0; i < 16; i++) { x.fillStyle = i % 2 ? 'rgba(255,255,255,.045)' : 'rgba(0,0,0,.035)'; x.fillRect(i * w / 16, 0, w / 16, h); }
-    for (let i = 0; i < 9000; i++) { const g = 90 + Math.random() * 60; x.fillStyle = `rgba(${g * 0.55},${g * 1.15},${g * 0.45},${0.08 + Math.random() * 0.1})`; x.fillRect(Math.random() * w, Math.random() * h, 1.5, 3 + Math.random() * 3); }
-    const r = x.createRadialGradient(w / 2, h / 2, w * 0.22, w / 2, h / 2, w * 0.5); r.addColorStop(0, 'rgba(232,236,231,0)'); r.addColorStop(1, 'rgba(232,236,231,1)'); x.fillStyle = r; x.fillRect(0, 0, w, h); });
+    x.fillStyle = '#5f9a47'; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 6000; i++) { const l = Math.random(); x.fillStyle = `rgba(${40 + l * 50},${90 + l * 70},${25 + l * 30},${0.05 + Math.random() * 0.06})`; const s = 6 + Math.random() * 30; x.beginPath(); x.arc(Math.random() * w, Math.random() * h, s, 0, 7); x.fill(); }
+    for (let i = 0; i < 60000; i++) { const g = 70 + Math.random() * 90; x.fillStyle = `rgba(${g * 0.5},${g * 1.1},${g * 0.38},${0.12 + Math.random() * 0.18})`; x.fillRect(Math.random() * w, Math.random() * h, 1, 2 + Math.random() * 3); } });
+  grass.wrapS = grass.wrapT = T.RepeatWrapping; grass.repeat.set(10, 10);
+  const stripes = mkC(512, 512, (x, w, h) => { for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? '#e8f0e0' : '#c9d6c0'; x.fillRect(i * w / 8, 0, w / 8, h); } });
+  stripes.wrapS = stripes.wrapT = T.RepeatWrapping; stripes.repeat.set(5, 1); TX_STRIPES = stripes;
   const wood = mkC(1024, 1024, (x, w, h) => {
     for (let i = 0; i < 24; i++) { const l = 205 + (i * 37 % 23) - 10; x.fillStyle = `rgb(${l},${l * 0.88 | 0},${l * 0.74 | 0})`; x.fillRect(0, i * h / 24, w, h / 24 - 2); x.fillStyle = 'rgba(90,60,30,.25)'; x.fillRect(0, (i + 1) * h / 24 - 2, w, 2); }
     for (let i = 0; i < 400; i++) { x.strokeStyle = 'rgba(120,80,40,.06)'; x.beginPath(); const y = Math.random() * h; x.moveTo(0, y); x.bezierCurveTo(w / 3, y + 6, w * 2 / 3, y - 6, w, y + 2); x.stroke(); }
     const r = x.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.5); r.addColorStop(0, 'rgba(236,232,226,0)'); r.addColorStop(1, 'rgba(236,232,226,1)'); x.fillStyle = r; x.fillRect(0, 0, w, h); });
-  const sky = mkC(16, 256, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#d9e4e8'); g.addColorStop(0.62, '#eef1ee'); g.addColorStop(1, '#e8ece7'); x.fillStyle = g; x.fillRect(0, 0, w, h); });
+  const sky = mkC(16, 256, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#8fb6dc'); g.addColorStop(0.55, '#d5e4ee'); g.addColorStop(1, '#eef2ef'); x.fillStyle = g; x.fillRect(0, 0, w, h); });
   const home = mkC(16, 256, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#e7e2da'); g.addColorStop(0.62, '#f1ede7'); g.addColorStop(1, '#ece8e2'); x.fillStyle = g; x.fillRect(0, 0, w, h); });
   return (TX = { grass, wood, sky, home });
 }
 
+// ---------- sky light for reflections, and the course around the golfer ----------
+let ENV = null;
+function envMap() {
+  if (ENV) return ENV;
+  const es = new T.Scene(), g = new T.SphereGeometry(10, 32, 16), pa = g.attributes.position, cols = [];
+  const top = new T.Color(0x7fa8d4).convertSRGBToLinear(), hor = new T.Color(0xe9f0f2).convertSRGBToLinear(), gr = new T.Color(0x5e7d47).convertSRGBToLinear();
+  for (let i = 0; i < pa.count; i++) { const yy = pa.getY(i) / 10; const c = yy > 0 ? hor.clone().lerp(top, Math.pow(yy, 0.6)) : hor.clone().lerp(gr, Math.min(1, -yy * 4)); cols.push(c.r, c.g, c.b); }
+  g.setAttribute('color', new T.Float32BufferAttribute(cols, 3)); es.add(new T.Mesh(g, new T.MeshBasicMaterial({ vertexColors: true, side: T.BackSide })));
+  const sun = new T.Mesh(new T.SphereGeometry(0.7, 16, 8), new T.MeshBasicMaterial({ color: new T.Color(6, 5.6, 5) })); sun.position.set(4, 7, 5); es.add(sun);
+  const pm = new T.PMREMGenerator(R); ENV = pm.fromScene(es, 0.03).texture; pm.dispose(); return ENV;
+}
+let BACK = null, ROOM = null;
+// a quiet living room: warm wall, a bright window, skirting board and a sofa
+function roomBack() {
+  if (!ROOM) {
+    const W = 4096, H = 640, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+    const wall = x.createLinearGradient(0, 0, 0, H); wall.addColorStop(0, '#e9e1d6'); wall.addColorStop(1, '#ddd2c3'); x.fillStyle = wall; x.fillRect(0, 0, W, H);
+    for (let i = 0; i < 3000; i++) { x.fillStyle = `rgba(120,100,80,${Math.random() * 0.025})`; x.fillRect(Math.random() * W, Math.random() * H, 3, 3); }
+    const win = (cx, w) => { const g = x.createRadialGradient(cx, H * 0.42, 10, cx, H * 0.42, w * 1.2); g.addColorStop(0, 'rgba(255,252,240,.55)'); g.addColorStop(1, 'rgba(255,252,240,0)'); x.fillStyle = g; x.fillRect(cx - w * 1.5, 0, w * 3, H);
+      x.fillStyle = '#f7f5ee'; x.fillRect(cx - w / 2 - 14, H * 0.18 - 14, w + 28, H * 0.5 + 28); const sky = x.createLinearGradient(0, H * 0.18, 0, H * 0.68); sky.addColorStop(0, '#cfe3f1'); sky.addColorStop(1, '#eef4ec'); x.fillStyle = sky; x.fillRect(cx - w / 2, H * 0.18, w, H * 0.5);
+      x.save(); x.beginPath(); x.rect(cx - w / 2, H * 0.18, w, H * 0.5); x.clip(); x.fillStyle = 'rgba(110,150,100,.5)'; for (let i = 0; i < 60; i++) { x.beginPath(); x.arc(cx - w / 2 + Math.random() * w, H * 0.6 + Math.random() * 30, 14 + Math.random() * 22, 0, 7); x.fill(); } x.restore();
+      x.fillStyle = '#f7f5ee'; x.fillRect(cx - 6, H * 0.18, 12, H * 0.5); x.fillRect(cx - w / 2, H * 0.42, w, 10); };
+    win(W * 0.5, 360); win(W * 0.12, 300);
+    x.fillStyle = '#6f6458'; x.beginPath(); x.roundRect ? x.roundRect(W * 0.72, H * 0.6, 700, 200, 40) : x.rect(W * 0.72, H * 0.6, 700, 200); x.fill();
+    x.fillStyle = '#857a6d'; x.fillRect(W * 0.72 + 20, H * 0.66, 660, 60);
+    x.fillStyle = '#f2ede4'; x.fillRect(0, H * 0.93, W, H * 0.07); x.fillStyle = 'rgba(0,0,0,.08)'; x.fillRect(0, H * 0.93, W, 3);
+    const tx = new T.CanvasTexture(c); tx.encoding = T.sRGBEncoding; tx.anisotropy = 4;
+    const geo = new T.CylinderGeometry(7, 7, 3.2, 96, 1, true); geo.translate(0, 1.6, 0);
+    ROOM = new T.Mesh(geo, new T.MeshBasicMaterial({ map: tx, side: T.BackSide, fog: false }));
+  }
+  return ROOM.clone();
+}
+// a painted, hazy tree line all the way round, like the edge of a fairway on a summer morning
+function treeLine() {
+  if (!BACK) {
+    const W = 4096, H = 640, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+    let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const sky = x.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#9fc0de'); sky.addColorStop(0.7, '#dbe7ee'); sky.addColorStop(1, '#e6eee9'); x.fillStyle = sky; x.fillRect(0, 0, W, H);
+    // rows of trees: far rows paler and bluer, near rows darker and more detailed
+    const rows = [{ y: 0.80, h: 0.22, col: [150, 172, 168], n: 140, r: [10, 22] }, { y: 0.84, h: 0.30, col: [112, 140, 118], n: 120, r: [14, 30] }, { y: 0.88, h: 0.40, col: [72, 104, 70], n: 100, r: [18, 40] }, { y: 0.92, h: 0.46, col: [52, 82, 50], n: 80, r: [22, 48] }];
+    for (const R of rows) {
+      for (let i = 0; i < R.n; i++) {
+        const cx = rnd() * W, base = H * R.y, th = H * R.h * (0.6 + rnd() * 0.5), r0 = R.r[0] + rnd() * (R.r[1] - R.r[0]);
+        const conifer = rnd() < 0.25;
+        for (let k = 0; k < 140; k++) {
+          const t = rnd(), yy = base - th * (0.25 + t * 0.75), w = conifer ? r0 * (1.1 - t) : r0 * (0.6 + 0.6 * Math.sin(t * Math.PI));
+          const xx = cx + (rnd() - 0.5) * w * 1.7, rr = w * (0.10 + rnd() * 0.16);
+          const l = (0.78 + rnd() * 0.32) * (1.08 - 0.25 * (yy - (base - th)) / th * 0); x.fillStyle = `rgb(${R.col[0] * l | 0},${R.col[1] * l | 0},${R.col[2] * l | 0})`;
+          x.beginPath(); x.arc(xx, yy, rr, 0, 7); x.fill();
+        }
+        x.fillStyle = `rgb(${R.col[0] * 0.7 | 0},${R.col[1] * 0.65 | 0},${R.col[2] * 0.6 | 0})`; x.fillRect(cx - 2, base - th * 0.3, 4, th * 0.3);
+      }
+      // haze over each row so distance reads
+      x.fillStyle = 'rgba(214,228,234,0.18)'; x.fillRect(0, 0, W, H * R.y + 4);
+    }
+    const g = x.createLinearGradient(0, H * 0.9, 0, H); g.addColorStop(0, 'rgba(96,140,70,0)'); g.addColorStop(1, 'rgba(96,140,70,1)'); x.fillStyle = g; x.fillRect(0, H * 0.9, W, H * 0.1);
+    // soft focus, as a camera focused on the golfer would see it
+    const c2 = document.createElement('canvas'); c2.width = W; c2.height = H; const x2 = c2.getContext('2d'); x2.filter = 'blur(2.5px)'; x2.drawImage(c, 0, 0);
+    if (!x2.filter || x2.filter === 'none') x2.drawImage(c, 0, 0);
+    const tx = new T.CanvasTexture(c2); tx.encoding = T.sRGBEncoding; tx.wrapS = T.RepeatWrapping; tx.anisotropy = 4;
+    const geo = new T.CylinderGeometry(46, 46, 22, 96, 1, true); geo.translate(0, 9, 0);
+    BACK = new T.Mesh(geo, new T.MeshBasicMaterial({ map: tx, side: T.BackSide, fog: false, depthWrite: false }));
+    BACK.renderOrder = -1;
+  }
+  return BACK.clone();
+}
 // ---------- props ----------
 function cyl(r, mat, seg) { const g = new T.CylinderGeometry(r, r, 1, seg || 14); g.translate(0, 0.5, 0); const m = new T.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true; return m; }
 function box(w, h, d, mat, pos) { const m = new T.Mesh(new T.BoxGeometry(w, h, d), mat); m.castShadow = true; m.receiveShadow = true; if (pos) m.position.set(pos[0], pos[1], pos[2]); return m; }
@@ -271,7 +345,7 @@ function propMats() {
   if (PM) return PM;
   return (PM = { stick: std(0xffb020, { roughness: 0.4 }), stick2: std(0xff5fa2, { roughness: 0.4 }), white: std(0xffffff, { roughness: 0.35 }), black: std(0x161616, { roughness: 0.4, metalness: 0.3 }),
     steel: std(0xd0d4d8, { roughness: 0.22, metalness: 0.9 }), wood: std(0x8a5a32, { roughness: 0.7 }), wood2: std(0x6e4526, { roughness: 0.7 }), wall: std(0xdcd3c4, { roughness: 0.95 }),
-    towel: std(0xf3f3ee, { roughness: 1 }), bag: std(0x1d5a34, { roughness: 0.7 }), red: std(0xc8372b, { roughness: 0.7 }), cover: std(0x283a8c, { roughness: 0.8 }), bottle: new T.MeshStandardMaterial({ color: 0x8fd0ff, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.75 }),
+    towel: std(0xf3f3ee, { roughness: 1 }), bag: std(0x1d5a34, { roughness: 0.7 }), red: std(0xc8372b, { roughness: 0.7 }), cover: std(0x283a8c, { roughness: 0.8 }), bottle: std(0x8fd0ff, { roughness: 0.1, metalness: 0, transparent: true, opacity: 0.75 }),
     cap: std(0x2a6fd6, { roughness: 0.5 }), umb: std(0x2a2a2a), umbC: std(0xe03a3a, { roughness: 0.6, side: T.DoubleSide }), mat: std(0x2d5a3a, { roughness: 0.95 }), glove: std(0xffffff, { roughness: 0.6 }),
     line: std(0xffffff, { roughness: 0.8 }), mirror: std(0xbfd6de, { roughness: 0.05, metalness: 0.85 }), frame: std(0xf4f1ea, { roughness: 0.8 }) });
 }
@@ -326,24 +400,39 @@ function scene(dr) {
   prep(dr);
   const S = new T.Scene(), TXs = textures(), home = dr.scene === 'home';
   S.background = home ? TXs.home : TXs.sky;
-  S.add(new T.HemisphereLight(0xffffff, home ? 0x9a8468 : 0x6f8a62, 0.5));
-  const key = new T.DirectionalLight(0xffffff, 0.8);
+  S.environment = envMap();
+  S.add(new T.HemisphereLight(0xe4eef6, home ? 0x8a7458 : 0x56704a, home ? 0.45 : 0.35));
+  const key = new T.DirectionalLight(0xfff2e2, home ? 1.6 : 2.1);
   if (dr.light === 'behind') key.position.set(-0.1, 4.4, -2.2); else key.position.set(2.2, 4.6, 3.4);
   key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
-  Object.assign(key.shadow.camera, { left: -2.6, right: 2.6, top: 2.6, bottom: -2.6, near: 0.5, far: 14 }); key.shadow.bias = -0.0006; key.shadow.radius = 3; S.add(key);
-  const fill = new T.DirectionalLight(0xfff1e2, 0.38); fill.position.set(-3, 2.2, 2.5); S.add(fill);
-  const rim = new T.DirectionalLight(0xdfe9ff, 0.45); rim.position.set(-1.5, 3, -3.5); S.add(rim);
+  Object.assign(key.shadow.camera, { left: -2.6, right: 2.6, top: 2.6, bottom: -2.6, near: 0.5, far: 14 }); key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02; key.shadow.radius = 3; S.add(key);
+  const fill = new T.DirectionalLight(0xfff1e2, 0.25); fill.position.set(-3, 2.2, 2.5); S.add(fill);
+  const rim = new T.DirectionalLight(0xdfe9ff, 0.6); rim.position.set(-1.5, 3, -3.5); S.add(rim);
   const groundTex = home ? TXs.wood : TXs.grass;
-  const ground = new T.Mesh(new T.PlaneGeometry(14, 14), new T.MeshStandardMaterial({ map: groundTex, roughness: 0.95 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; S.add(ground);
-  if (!home) { const mat = box(1.5, 0.012, 1.5, propMats().mat, [0.05, 0.006, 0.3]); mat.castShadow = false; S.add(mat); }
+  let ground;
+  if (home) { ground = new T.Mesh(new T.PlaneGeometry(14, 14), new T.MeshStandardMaterial({ map: groundTex, roughness: 0.6 })); S.add(roomBack()); }
+  else {
+    S.fog = new T.Fog(new T.Color(0xd9e5ec).convertSRGBToLinear(), 20, 60);
+    const gm = new T.MeshStandardMaterial({ map: groundTex, roughness: 1 });
+    gm.onBeforeCompile = sh => { sh.uniforms.stripes = { value: TX_STRIPES }; sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D stripes;').replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= mix(0.86, 1.0, texture2D(stripes, vUv * vec2(0.5, 0.1)).r);'); };
+    ground = new T.Mesh(new T.PlaneGeometry(120, 120), gm); S.add(treeLine());
+  }
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; S.add(ground);
+  if (!home) {
+    if (!TX.turf) { const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d'); x.fillStyle = '#3f7a4a'; x.fillRect(0, 0, 512, 512);
+      for (let i = 0; i < 40000; i++) { const l = 50 + Math.random() * 60; x.fillStyle = `rgba(${l * 0.6 | 0},${l * 1.45 | 0},${l * 0.75 | 0},0.35)`; x.fillRect(Math.random() * 512, Math.random() * 512, 1, 2); }
+      x.strokeStyle = 'rgba(20,40,25,.5)'; x.lineWidth = 10; x.strokeRect(5, 5, 502, 502); TX.turf = new T.CanvasTexture(c); TX.turf.encoding = T.sRGBEncoding; TX.turf.anisotropy = 4; }
+    const mat = new T.Mesh(new T.BoxGeometry(1.5, 0.014, 1.5), new T.MeshStandardMaterial({ map: TX.turf, roughness: 0.95 })); mat.position.set(0.05, 0.007, 0.3); mat.receiveShadow = true; S.add(mat); }
   if (home && dr.rug !== false) { const rug = new T.Mesh(new T.CircleGeometry(1.1, 48), std(0x5d6a62, { roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.004, 0.15); rug.receiveShadow = true; S.add(rug); }
   // target line: a dashed line on the ground toward the target, so every view shows which way the ball goes
   const tg = new T.Group(); for (let i = 0; i < 8; i++) { const d = box(0.16, 0.003, 0.018, std(0xffffff, { roughness: 0.8 }), [0.55 + i * 0.26, 0.004, dr._ball[2]]); d.castShadow = false; tg.add(d); }
   const arr = new T.Mesh(new T.ConeGeometry(0.05, 0.14, 3), std(0xffffff)); arr.rotation.z = -Math.PI / 2; arr.position.set(2.75, 0.01, dr._ball[2]); arr.scale.set(1, 1, 0.15); tg.add(arr); S.add(tg);
-  const fig = figure(false), ghost = figure(true); S.add(fig.G); S.add(ghost.G); ghost.G.visible = false;
+  const real = typeof CCGolfer !== 'undefined' && CCGolfer.ready();
+  const fig = real ? CCGolfer.make(false) : figure(false), ghost = real ? CCGolfer.make(true) : figure(true); fig.real = real; ghost.real = real; S.add(fig.G); S.add(ghost.G); ghost.G.visible = false;
   const M = propMats();
-  const club = new T.Group(); const hd = new T.Mesh(ell(0.048, 0.016, 0.022, 16), M.black); hd.castShadow = true; club.add(cyl(0.0065, M.steel), cyl(0.0135, M.black), hd); S.add(club);
-  const gclub = new T.Group(); const gm = ghost.P.chest.material; gclub.add(cyl(0.007, gm), cyl(0.014, gm), new T.Mesh(ell(0.048, 0.016, 0.022, 12), gm)); gclub.children.forEach(c => { c.castShadow = false; }); S.add(gclub);
+  const club = new T.Group(); const hd = new T.Mesh(ironHead(), M.chrome || (M.chrome = std(0xe2e5e8, { roughness: 0.18, metalness: 1 }))); hd.castShadow = true;
+  const gr = cyl(0.0125, M.grip || (M.grip = std(0x1c1d20, { roughness: 0.75 })), 18); club.add(cyl(0.0058, M.steel, 12), gr, hd); S.add(club);
+  const gclub = new T.Group(); const gm = ghost.real ? ghost.mats[0] : ghost.P.chest.material; gclub.add(cyl(0.007, gm), cyl(0.014, gm), new T.Mesh(ell(0.048, 0.016, 0.022, 12), gm)); gclub.children.forEach(c => { c.castShadow = false; }); S.add(gclub);
   const stick = cyl(0.01, M.stick); S.add(stick); stick.visible = false;      // a stick across the chest, or a club down the spine
   let ball = null; if (dr.ball) { const b = new T.Mesh(new T.SphereGeometry(0.021, 20, 14), M.white); b.castShadow = true; b.position.set(dr._ball[0], 0.042, dr._ball[2]); S.add(b); const t = cyl(0.006, M.white); t.position.set(dr._ball[0], 0, dr._ball[2]); t.scale.y = 0.022; S.add(t); ball = b; }
   const props = buildProps(S, dr);
@@ -351,13 +440,37 @@ function scene(dr) {
   const sc = { S, fig, ghost, club, gclub, stick, ball, props, cam, key };
   SCN.set(dr.id, sc); return sc;
 }
+// swap the simple figure for the realistic golfer as soon as he has loaded
+function upgrade(sc) {
+  const f = CCGolfer.make(false), g = CCGolfer.make(true); f.real = g.real = true;
+  sc.S.remove(sc.fig.G); sc.S.remove(sc.ghost.G); sc.S.add(f.G); sc.S.add(g.G); g.G.visible = false; sc.fig = f; sc.ghost = g;
+  const gm = g.mats[0]; sc.gclub.children.forEach(c => { c.material = gm; });
+}
 function poseClub(cg, club, J) {
   if (!club) { cg.visible = false; return; } cg.visible = true;
   const [a, b] = club, d = norm(sub(b, a)), L = len(sub(b, a));
-  between(cg.children[0], a, b); between(cg.children[1], a, add(a, mul(d, 0.26)));
-  const h = cg.children[2], side = norm(cross(d, [0, 1, 0])), toe = len(side) > 0.1 ? norm(add(mul(d, 0.35), side)) : d; h.position.copy(v3(add(b, mul(toe, 0.035)))); h.quaternion.setFromUnitVectors(new T.Vector3(1, 0, 0), v3(toe)); void L;
+  between(cg.children[0], a, b); between(cg.children[1], a, add(a, mul(d, 0.27)));
+  const h = cg.children[2];
+  if (h.geometry === IRON) {
+    // hosel at the end of the shaft; the blade runs out toward the toe, square to the swing, sole down the shaft line
+    const up = mul(d, -1), sw = J && J.sd ? norm(cross(d, cross([0, 1, 0], d))) : [0, 0, 1];
+    let face = norm(sub(sw, mul(d, dot(sw, d)))); if (!isFinite(face[0])) face = [0, 0, 1];
+    const toeD = norm(cross(up, face));
+    const lie = 0.62, toeX = norm(add(mul(toeD, Math.cos(lie)), mul(d, Math.sin(lie))));
+    const ux = toeX, uy = norm(sub(up, mul(ux, dot(up, ux)))), uz = norm(cross(ux, uy));
+    h.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(v3(ux), v3(uy), v3(uz))); h.position.copy(v3(add(b, mul(d, -0.012))));
+  } else { const side = norm(cross(d, [0, 1, 0])), toe = len(side) > 0.1 ? norm(add(mul(d, 0.35), side)) : d; h.position.copy(v3(add(b, mul(toe, 0.035)))); h.quaternion.setFromUnitVectors(new T.Vector3(1, 0, 0), v3(toe)); }
+  void L;
 }
 
+// an iron's head: a blade with a sole, built along +x (toe) with the face toward +z
+let IRON = null;
+function ironHead() {
+  if (IRON) return IRON;
+  const sh = new T.Shape(); sh.moveTo(-0.012, 0); sh.lineTo(0.062, 0.004); sh.quadraticCurveTo(0.078, 0.008, 0.074, 0.03); sh.quadraticCurveTo(0.068, 0.05, 0.05, 0.052); sh.lineTo(-0.004, 0.036); sh.quadraticCurveTo(-0.014, 0.03, -0.012, 0);
+  const g = new T.ExtrudeGeometry(sh, { depth: 0.016, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.002, bevelSegments: 2, curveSegments: 8 });
+  g.translate(0, -0.006, -0.012); g.computeVertexNormals(); return (IRON = g);
+}
 // ---------- the 2D layer: labels, arrows, hand path, tick/cross ----------
 function roundRect(x, X, Yy, w, h, r) { x.beginPath(); x.moveTo(X + r, Yy); x.arcTo(X + w, Yy, X + w, Yy + h, r); x.arcTo(X + w, Yy + h, X, Yy + h, r); x.arcTo(X, Yy + h, X, Yy, r); x.arcTo(X, Yy, X + w, Yy, r); x.closePath(); }
 function toneCol(t) { return t === 'bad' ? C.bad : t === 'info' ? C.info : C.good; }
@@ -496,12 +609,12 @@ function Player(wrap, dr, opt) {
     if (gl) {
       const P0 = mx(cp.pos), T0 = mx(cp.tg); sc.S.scale.x = MIR ? -1 : 1; sc.S.updateMatrixWorld();
       sc.cam.position.set(P0[0], P0[1], P0[2]); sc.cam.lookAt(T0[0], T0[1], T0[2]); sc.cam.updateMatrixWorld();
-      poseFigure(sc.fig, J); setTone(sc.fig, key.hl, st.t);
+      if (!sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) upgrade(sc); poseAny(sc.fig, J); setTone(sc.fig, key.hl, st.t);
       poseClub(sc.club, (dr.noclub || s.p.noclub) ? null : J.club, J);
       // the red "not this" ghost
       const gw = key.G ? (s.inHold ? 1 : s.raw) : 0;
       sc.ghost.G.visible = gw > 0.05; sc.gclub.visible = false;
-      if (gw > 0.05) { const GJ = rig(key.G); poseFigure(sc.ghost, GJ); sc.ghost.P.chest.material.opacity = 0.3 * gw; if (GJ.club) { poseClub(sc.gclub, GJ.club, GJ); sc.gclub.visible = true; } }
+      if (gw > 0.05) { const GJ = rig(key.G); poseAny(sc.ghost, GJ); ghostOpacity(sc.ghost, 0.3 * gw); if (GJ.club) { poseClub(sc.gclub, GJ.club, GJ); sc.gclub.visible = true; } }
       const across = J.stickAcross || J.spineClub; sc.stick.visible = !!across; if (across) between(sc.stick, across[0], across[1]);
       if (sc.ball) { const hit = key.hit && (s.inHold || s.raw > 0.5); sc.ball.visible = !hit && !(dr.seq.slice(0, s.i).some(k => k.hit) && !key.reset); }
       updateProps(sc.props, J, key, dr, s);
@@ -532,19 +645,19 @@ function Player(wrap, dr, opt) {
 const POSTERS = new Map();
 function poster(dr, w, h) {
   prep(dr); const keyI = dr.poster != null ? dr.poster : Math.min(dr.seq.length - 1, 2), k = dr._tl[keyI].e + 0.01, id = dr.id + ':' + w + 'x' + h + (MIR ? ':L' : '');
-  if (POSTERS.has(id)) return POSTERS.get(id);
+  if (POSTERS.has(id) && (POSTERS.get(id + ':real') || typeof CCGolfer === 'undefined' || !CCGolfer.ready())) return POSTERS.get(id);
   const c = document.createElement('canvas'); c.width = w; c.height = h; const s = sampleAt(dr, k), J = rig(s.p), key = s.key;
   const cp = camPos(camState(key.cam || dr.view || 'face', key.camo || dr.camo));
   if (webgl()) {
     const sc = scene(dr); R.setPixelRatio(1); R.setSize(w, h, false); sc.cam.aspect = w / h; sc.cam.updateProjectionMatrix();
     const P0 = mx(cp.pos), T0 = mx(cp.tg); sc.S.scale.x = MIR ? -1 : 1; sc.S.updateMatrixWorld();
     sc.cam.position.set(P0[0], P0[1], P0[2]); sc.cam.lookAt(T0[0], T0[1], T0[2]); sc.cam.updateMatrixWorld();
-    poseFigure(sc.fig, J); setTone(sc.fig, [], 0); poseClub(sc.club, (dr.noclub || s.p.noclub) ? null : J.club, J); sc.ghost.G.visible = false; sc.gclub.visible = false;
+    if (!sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) upgrade(sc); poseAny(sc.fig, J); setTone(sc.fig, [], 0); poseClub(sc.club, (dr.noclub || s.p.noclub) ? null : J.club, J); sc.ghost.G.visible = false; sc.gclub.visible = false;
     const across = J.stickAcross || J.spineClub; sc.stick.visible = !!across; if (across) between(sc.stick, across[0], across[1]);
     if (sc.ball) sc.ball.visible = true; updateProps(sc.props, J, {}, dr, s);
     R.render(sc.S, sc.cam); const x = c.getContext('2d'); x.drawImage(R.domElement, 0, 0, w, h);
   } else { const x = c.getContext('2d'), yaw = (VIEWS[dr.view] || VIEWS.face).yaw * D2R, Rr = [Math.cos(yaw), 0, -Math.sin(yaw)], kk = h * 0.42; flat(x, w, h, p => [w / 2 + (MIR ? -1 : 1) * dot(p, Rr) * kk, h * 0.9 - p[1] * kk, 0], J, dr); }
-  const url = c.toDataURL('image/jpeg', 0.86); POSTERS.set(id, url); return url;
+  const url = c.toDataURL('image/jpeg', 0.86); POSTERS.set(id, url); if (typeof CCGolfer !== 'undefined' && CCGolfer.ready()) POSTERS.set(id + ':real', true); return url;
 }
 const api = { Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror };
 root.DrillStudio = api;
