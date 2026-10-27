@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Caddy Coach">
 <style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}#ccSplash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;align-content:center;gap:18px;background:radial-gradient(120% 80% at 50% 35%,#16553c,#0b2f21);color:#f3f6f1;transition:opacity .35s ease}#ccSplash img{width:96px;height:96px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.35)}#ccSplash b{font:760 30px/1 Archivo,'Instrument Sans',system-ui,sans-serif;font-stretch:72%;letter-spacing:.01em}#ccSplash i{display:block;width:120px;height:3px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}#ccSplash i::after{content:'';display:block;height:100%;width:40%;background:#f3c43a;animation:ccLd 1s ease-in-out infinite alternate}@keyframes ccLd{from{transform:translateX(-10%)}to{transform:translateX(160%)}}@media (prefers-reduced-motion:reduce){#ccSplash i::after{animation:none}}#ccSplash.out{opacity:0;pointer-events:none}</style>
-<script>window.CC_VER='e53b2d59dc'</script></head><body>
+<script>window.CC_VER='0f33006aef'</script></head><body>
 <div id="ccSplash" aria-hidden="true"><img src="icons/icon-192.png" alt=""><b>Caddy Coach</b><i></i></div>
 <script>(function(){let done=0;const go=d=>{if(done++)return;const s=document.getElementById('ccSplash');if(!s)return;setTimeout(()=>{s.classList.add('out');setTimeout(()=>s.remove(),400)},d)};addEventListener('DOMContentLoaded',()=>go(350));addEventListener('load',()=>go(0));setTimeout(()=>go(0),4000)})()</script>
 <title>Caddy Coach</title>
@@ -5446,7 +5446,7 @@ function privacyHTML(){const back=PROF.me?'to-me':(PROF.privBack||'to-signup');
   <h3>Error reports</h3><ul><li>If something goes wrong in the app, a report of the error (the screen, your phone and browser type and the app version, but not your name, username, email, location or videos) is sent to Sentry so it can be fixed.</li></ul>
   <h3>Other services the app uses</h3><ul><li>OpenStreetMap (course search and course maps), Esri (satellite pictures) and the weather service (conditions at the course) receive the course or area you look at. Your location itself isn't stored by Caddy Coach.</li></ul>
   <h3>Your rights</h3><p>You can download everything Caddy Coach holds about you, and delete your account and all of it, below. Under UK data protection law you can also ask for a copy or a correction${APP_OWNER_EMAIL?` at <a href="mailto:${esc(APP_OWNER_EMAIL)}">${esc(APP_OWNER_EMAIL)}</a>`:' from the app owner'}.</p>
-  ${PROF.me?`<button type="button" class="pfBig" data-pf="data-download">Download all my data</button><button type="button" class="pfBig pfOut" data-pf="to-delacct">Delete my account</button>${PROF.note?`<p class="mut" role="status">${esc(PROF.note)}</p>`:''}`:''}</div>`}
+  ${PROF.me?`<button type="button" class="pfBig" data-pf="data-download">Download all my data</button><button type="button" class="pfBig" data-pf="data-import">Bring in data from a file</button><input type="file" id="pfImport" accept="application/json,.json" hidden><button type="button" class="pfBig pfOut" data-pf="to-delacct">Delete my account</button>${PROF.note?`<p class="mut" role="status">${esc(PROF.note)}</p>`:''}`:''}</div>`}
 function delAcctHTML(){return `<form class="pfCard" data-pf-form="delacct" novalidate><button type="button" class="link pfBack" data-pf="to-privacy">Back</button><h2>Delete your account</h2>${pErr('_form')}
   <p class="mut" style="margin:0">This deletes your profile, your login, your yardages and handicap record online, your leaderboard entries, and every round, swing and video of yours on this phone. It can't be undone. You can download your data first.</p>
   ${pIn('pfDelPw','Your password','type="password" autocomplete="current-password" required',PROF.f.pfDelPw)}
@@ -5457,6 +5457,27 @@ async function myDataBlob(){const me=Object.assign({},PROF.me);delete me.pw;let 
  const out={exported:new Date().toISOString(),app:'Caddy Coach',profile:me,accountEmail:typeof Auth!=='undefined'&&Auth.realEmail()||null,hand:Hand.get(),bag:await BagStore.load().catch(()=>BG.bag||null),handicap:HcpStore.rec||null,
   rounds,swings:swings.map(s=>Object.assign({},s,{thumb:undefined})),swingDetails:det,practicePlan:lsGet(planKey(),null),playingPartners:RT.pals||[],leaderboardPosts:Object.keys(lsGet('cc_lbp',{}))};
  return new Blob([JSON.stringify(out,null,1)],{type:'application/json'})}
+// bring in a file made with "Download all my data" (for example from the app's old web address, or another phone).
+// Adds what isn't here yet; never overwrites or removes anything.
+async function importMyData(file){
+ let j;try{j=JSON.parse(await file.text())}catch(_){throw Object.assign(new Error('bad'),{why:'That file isn\'t a Caddy Coach data file.'})}
+ if(!j||j.app!=='Caddy Coach'||!Array.isArray(j.rounds))throw Object.assign(new Error('bad'),{why:'That file isn\'t a Caddy Coach data file.'});
+ const who=j.profile&&j.profile.username;if(who&&PROF.me&&who!==PROF.me.username)throw Object.assign(new Error('other'),{why:`That file belongs to ${who}. Log in as ${who} to bring it in.`});
+ let nr=0,ns=0;
+ const haveR=new Set((await RStore.list().catch(()=>[])).map(r=>r.id));
+ for(const r of j.rounds){if(!r||!r.id||haveR.has(r.id))continue;try{await RStore.save(r);nr++}catch(e){console.error(e)}}
+ const haveS=await Store.list().catch(()=>[]),seen=new Set(haveS.map(x=>x.createdAt));
+ const det=new Map((j.swingDetails||[]).map(d=>[d.createdAt,d]));
+ for(const sw of j.swings||[]){if(!sw||!sw.createdAt||seen.has(sw.createdAt))continue;
+  const sum=Object.assign({},sw);delete sum.thumb;delete sum.id;sum.hasClip=false;
+  const d=Object.assign({keys:[]},det.get(sw.createdAt)||{});delete d.clip;
+  try{await Store.save(sw.id||('i'+sw.createdAt),sum,d);ns++}catch(e){console.error(e)}}
+ if(j.handicap){try{const cur=HcpStore.rec||await HcpStore.load(),m=hcpMerge(cur,hcpClean(j.handicap));if(m&&hcpSig(m)!==hcpSig(cur)){HcpStore.rec=m;await HcpStore.save()}}catch(e){console.error(e)}}
+ if(j.bag){try{const b=BG.bag||await BagStore.load();const has=b&&Object.values(b.yards||{}).some(y=>y&&y.carry);if(!has){BG.bag=bagClean(Object.assign({},j.bag,{updatedAt:Date.now()}));await BagStore.save(BG.bag)}}catch(e){console.error(e)}}
+ if(j.practicePlan&&!lsGet(planKey(),null))lsSet(planKey(),j.practicePlan);
+ if(Array.isArray(j.playingPartners)&&j.playingPartners.length){const cur=RT.pals||[],names=new Set(cur.map(x=>x.name));RT.pals=cur.concat(j.playingPartners.filter(x=>x&&x.name&&!names.has(x.name)));palKeep()}
+ if(Array.isArray(j.leaderboardPosts)){const m=lsGet('cc_lbp',{});j.leaderboardPosts.forEach(k=>{m[k]=m[k]||1});lsSet('cc_lbp',m)}
+ return {nr,ns}}
 async function deleteMyEverything(){const u=PROF.me.username;
  // online first: if that fails, nothing on the phone is touched
  if(HOSTED_IN_CLAUDE){const db=await PDir.db();if(db)await db.doc('profiles/'+u).delete()}else await sbRpc('delete_my_account');
@@ -5549,6 +5570,9 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-pf],[data-
  if(a==='to-privacy'){PROF.err={};PROF.note='';PROF.privBack=PROF.mode==='signup'?'to-signup-keep':null;return profShow('privacy')}
  if(a==='to-signup-keep'){return profShow('signup')}
  if(a==='to-delacct'){PROF.err={};PROF.f={};return profShow('delacct')}
+ if(a==='data-import'){const inp=$('pfImport');if(!inp)return;inp.value='';inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;t.disabled=true;PROF.note='Bringing in your data…';profRender();
+  try{const r=await importMyData(f);PROF.note=r.nr||r.ns?`Brought in ${r.nr} round${r.nr===1?'':'s'} and ${r.ns} swing${r.ns===1?'':'s'}. Your handicap record has been merged too.`:'Everything in that file was already here.';if(typeof loadHistory==='function')loadHistory()}
+  catch(e){console.error(e);PROF.note=e.why||'Couldn\'t bring that file in.'}finally{t.disabled=false;profRender()}};inp.click();return}
  if(a==='data-download'){t.disabled=true;myDataBlob().then(b=>saveFile(`caddy-coach-${PROF.me.username}-data.json`,b)).then(r=>{if(r==='saved'){PROF.note='Your data is saved as a file.';profRender()}}).catch(e=>{console.error(e);PROF.note='Couldn\'t gather your data just now.';profRender()}).finally(()=>{t.disabled=false});return}
  if(a==='to-settings'){PROF.err={};return profShow('settings')}
  if(a==='to-feedback'){PROF.err={};PROF.f={fbk:'bug'};return profShow('feedback')}
