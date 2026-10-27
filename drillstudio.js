@@ -405,7 +405,7 @@ function scene(dr) {
   const key = new T.DirectionalLight(0xfff2e2, home ? 1.6 : 2.1);
   if (dr.light === 'behind') key.position.set(-0.1, 4.4, -2.2); else key.position.set(2.2, 4.6, 3.4);
   key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
-  Object.assign(key.shadow.camera, { left: -2.6, right: 2.6, top: 2.6, bottom: -2.6, near: 0.5, far: 14 }); key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02; key.shadow.radius = 3; S.add(key);
+  Object.assign(key.shadow.camera, { left: -2.6, right: 2.6, top: 2.6, bottom: -2.6, near: 0.5, far: 14 }); key.shadow.bias = -0.0005; key.shadow.normalBias = 0.004; key.shadow.radius = 3; key.shadow.camera.updateProjectionMatrix(); S.add(key);
   const fill = new T.DirectionalLight(0xfff1e2, 0.25); fill.position.set(-3, 2.2, 2.5); S.add(fill);
   const rim = new T.DirectionalLight(0xdfe9ff, 0.6); rim.position.set(-1.5, 3, -3.5); S.add(rim);
   const groundTex = home ? TXs.wood : TXs.grass;
@@ -597,8 +597,11 @@ function Player(wrap, dr, opt) {
     if (st.playing) { st.t += dt * st.speed; if (st.t >= dr._dur) st.t = 0; }
     draw(); st.raf = requestAnimationFrame(frame);
   }
+  const _sz = gl ? new T.Vector2() : null;
   function draw() {
     if (!W) size();
+    // the card pictures share this renderer and may have shrunk it: put it back to the player's size
+    if (gl) { R.getSize(_sz); if (_sz.x !== W || _sz.y !== H || R.getPixelRatio() !== 1) { R.setPixelRatio(1); R.setSize(W, H, false); } if (Math.abs(sc.cam.aspect - W / H) > 1e-3) { sc.cam.aspect = W / H; sc.cam.updateProjectionMatrix(); } }
     const s = sampleAt(dr, st.t), J = rig(s.p), key = s.key;
     if (key.step !== st.step) { st.step = key.step; opt.onStep && opt.onStep(key.step); }
     // camera: ease toward this key's view
@@ -609,7 +612,7 @@ function Player(wrap, dr, opt) {
     if (gl) {
       const P0 = mx(cp.pos), T0 = mx(cp.tg); sc.S.scale.x = MIR ? -1 : 1; sc.S.updateMatrixWorld();
       sc.cam.position.set(P0[0], P0[1], P0[2]); sc.cam.lookAt(T0[0], T0[1], T0[2]); sc.cam.updateMatrixWorld();
-      if (!sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) upgrade(sc); poseAny(sc.fig, J); setTone(sc.fig, key.hl, st.t);
+      if (!sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) upgrade(sc); poseAny(sc.fig, J); if (sc.fig.real && sc.fig.elbows) { J.le = sc.fig.elbows.L; J.te = sc.fig.elbows.R; } setTone(sc.fig, key.hl, st.t);
       poseClub(sc.club, (dr.noclub || s.p.noclub) ? null : J.club, J);
       // the red "not this" ghost
       const gw = key.G ? (s.inHold ? 1 : s.raw) : 0;

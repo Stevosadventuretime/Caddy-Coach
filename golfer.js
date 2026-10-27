@@ -41,12 +41,12 @@ function load(base) {
 // ---------- materials ----------
 // every material gets: baked ambient occlusion, and a pulsing green glow on highlighted body parts
 function patch(m, opt) {
-  m.userData.hl = { value: 0 }; m.userData.hlB = { value: new Float32Array(64) }; m.userData.pulse = { value: 0 }; m.userData.ghost = !!opt.ghost;
+  m.userData.hl = { value: 0 }; m.userData.hlB = { value: Array.from({ length: 16 }, () => new T.Vector4()) }; m.userData.pulse = { value: 0 }; m.userData.ghost = !!opt.ghost;
   m.onBeforeCompile = sh => {
     sh.uniforms.hlMask = m.userData.hl; sh.uniforms.hlPulse = m.userData.pulse;
     sh.uniforms.hlB = m.userData.hlB;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float ao; varying float vAO; varying float vHL; uniform float hlB[64];')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvAO = ao; vHL = skinWeight.x * hlB[int(skinIndex.x)] + skinWeight.y * hlB[int(skinIndex.y)] + skinWeight.z * hlB[int(skinIndex.z)] + skinWeight.w * hlB[int(skinIndex.w)];');
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float ao; varying float vAO; varying float vHL; uniform vec4 hlB[16];\nfloat hlPick(float f){ int i = int(f + 0.5); vec4 v = hlB[i / 4]; int c = i - (i / 4) * 4; return c == 0 ? v.x : c == 1 ? v.y : c == 2 ? v.z : v.w; }')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvAO = ao; vHL = skinWeight.x * hlPick(skinIndex.x) + skinWeight.y * hlPick(skinIndex.y) + skinWeight.z * hlPick(skinIndex.z) + skinWeight.w * hlPick(skinIndex.w);');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vAO; varying float vHL; uniform float hlPulse;')
       .replace('#include <aomap_fragment>', '#include <aomap_fragment>\nfloat bao = mix(1.0, vAO, ' + (opt.aoK || 0.85).toFixed(2) + '); reflectedLight.indirectDiffuse *= bao; reflectedLight.directDiffuse *= mix(1.0, bao, 0.45); reflectedLight.indirectSpecular *= bao;')
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\nfloat rimK = pow(1.0 - clamp(dot(normalize(vViewPosition), -normal) * -1.0 + 0.0, 0.0, 1.0), 2.0); float hv = smoothstep(0.15, 0.85, vHL); totalEmissiveRadiance += hv * vec3(0.10, 0.80, 0.42) * hlPulse * (0.12 + 1.9 * rimK); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.66, 0.40), hv * 0.10 * hlPulse);');
@@ -115,7 +115,8 @@ function highlight(fig, parts, t) {
     else if (fig.meta.bi[b] != null) arr[fig.meta.bi[b]] = 1;
     any = true;
   }
-  for (const m of new Set(fig.mats)) { m.userData.hlB.value = arr; m.userData.pulse.value = any ? 0.55 + 0.25 * Math.sin((t || 0) * 5) : 0; }
+  const v4 = Array.from({ length: 16 }, (_, k) => new T.Vector4(arr[k * 4], arr[k * 4 + 1], arr[k * 4 + 2], arr[k * 4 + 3]));
+  for (const m of new Set(fig.mats)) { m.userData.hlB.value = v4; m.userData.pulse.value = any ? 0.55 + 0.25 * Math.sin((t || 0) * 5) : 0; }
 }
 
 // ---------- posing from the drill rig ----------
@@ -186,6 +187,9 @@ function poseGolfer(fig, J, o) {
     const f0 = ft.T.clone().sub(ft.H), fs0 = new T.Vector3().crossVectors(Yv, f0).normalize(), fs = new T.Vector3().crossVectors(Yv, fdir).normalize();
     setBone(fig, 'foot' + S, anV, anV.clone().add(fdir.normalize().multiplyScalar(f0.length())), fs, fs0, false);
   }
+  // where the elbows really are (the mesh's own arm lengths), so labels can point at them
+  const eL = new T.Vector3().setFromMatrixPosition(fig.bones[fig.meta.bi.farmL].matrix), eR = new T.Vector3().setFromMatrixPosition(fig.bones[fig.meta.bi.farmR].matrix);
+  fig.elbows = { L: [eL.x, eL.y, eL.z], R: [eR.x, eR.y, eR.z] };
   fig.mesh.updateMatrixWorld(true);
 }
 // hand: a grip frame worked out once from the rest hand (where a shaft would run through the curled fingers)

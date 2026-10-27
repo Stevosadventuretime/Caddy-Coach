@@ -51,11 +51,13 @@ async function open(o) {
     <div class="flyTop"><div><b>Hole ${o.hole.n}</b><span>Par ${o.hole.par}${o.hole.yds ? ` · ${o.hole.yds} yds` : ''}</span></div><button type="button" class="flyX" data-fly="close">Close</button></div>
     <p class="flyMsg" role="status">Loading the hole…</p>
     <div class="flyBot"><button type="button" data-fly="replay">Play again</button><p class="flySrc">Imagery © Esri, Maxar, Earthstar Geographics · ground heights Copernicus DEM via Open-Meteo</p></div>`;
+  const prevOverflow = document.body.style.overflow;
   document.body.appendChild(ov); document.body.style.overflow = 'hidden';
-  const st = FLY = { ov, dead: false, raf: 0 };
+  const st = FLY = { ov, dead: false, raf: 0, prevOverflow, disp: [] };
   const msg = ov.querySelector('.flyMsg');
   // area: tee and green with room round both
   const tee = o.tee, green = o.green, pin = o.pin || green;
+  if (distM(tee, green) > 1100) { close(); throw new Error('too far for a flyover'); }
   const pad = 160, lat0 = (tee.lat + green.lat) / 2, lon0 = (tee.lon + green.lon) / 2, c0 = Math.cos(lat0 * Math.PI / 180);
   const bb = { n: Math.max(tee.lat, green.lat) + pad / M_LAT, s: Math.min(tee.lat, green.lat) - pad / M_LAT, e: Math.max(tee.lon, green.lon) + pad / (M_LAT * c0), w: Math.min(tee.lon, green.lon) - pad / (M_LAT * c0) };
   const span = Math.max((bb.n - bb.s) * M_LAT, (bb.e - bb.w) * M_LAT * c0);
@@ -72,7 +74,9 @@ async function open(o) {
   if (st.dead) return;
   const toPx = p => [lon2px(p.lon, z) - img.px0, lat2px(p.lat, z) - img.py0];
   if (!img.ok) drawnHole(img.canvas, toPx, tee, green);
-  msg.textContent = img.ok ? '' : 'Satellite picture unavailable, showing a drawing of the hole.';
+  msg.textContent = img.ok ? '' : 'Satellite picture unavailable, showing a drawing of the hole.'; msg.classList.add('done');
+  if (!img.ok) ov.querySelector('.flySrc').textContent = H ? 'Drawing of the hole · ground heights Copernicus DEM via Open-Meteo' : 'Drawing of the hole';
+  else if (!H) ov.querySelector('.flySrc').textContent = 'Imagery © Esri, Maxar, Earthstar Geographics';
   // renderer and scene
   const cv = ov.querySelector('.flyCv');
   const R = new T.WebGLRenderer({ canvas: cv, antialias: true }); R.outputEncoding = T.sRGBEncoding; R.toneMapping = T.ACESFilmicToneMapping; R.toneMappingExposure = 1.0;
@@ -91,7 +95,7 @@ async function open(o) {
   for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const a = j * (NX + 1) + i, b = a + 1, c = a + NX + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
   const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2)); geo.setIndex(idx); geo.computeVertexNormals();
   const tex = new T.CanvasTexture(img.canvas); tex.encoding = T.sRGBEncoding; tex.anisotropy = R.capabilities.getMaxAnisotropy ? R.capabilities.getMaxAnisotropy() : 4;
-  S.add(new T.Mesh(geo, new T.MeshStandardMaterial({ map: tex, roughness: 1 })));
+  const tmat = new T.MeshStandardMaterial({ map: tex, roughness: 1 }); S.add(new T.Mesh(geo, tmat)); st.disp.push(geo, tex, tmat);
   // a skirt of grass beyond the picture so the edge isn't a cliff
   const skirt = new T.Mesh(new T.PlaneGeometry(4000, 4000), new T.MeshStandardMaterial({ color: new T.Color(0x56763f).convertSRGBToLinear(), roughness: 1 })); skirt.rotation.x = -Math.PI / 2; skirt.position.y = -0.3; S.add(skirt);
   // markers
@@ -136,7 +140,11 @@ async function open(o) {
     fl.rotation.y = Math.sin(now / 900) * 0.25;
     R.render(S, cam);
     const W = cv.clientWidth, Hh = cv.clientHeight;
-    marks.forEach((m, i) => { v.copy(m.v).project(cam); const s = spans[i]; const on = v.z < 1 && Math.abs(v.x) < 1.05 && v.y < 1.05 && v.y > -0.72; s.style.display = on ? '' : 'none'; if (on) s.style.transform = `translate(${(v.x + 1) / 2 * W}px,${(1 - v.y) / 2 * Hh}px) translate(-50%,-100%)`; });
+    // place the labels, hiding any that would sit on top of a nearer one (the pin label always wins)
+    const placed = [];
+    marks.map((m, i) => { v.copy(m.v).project(cam); return { i, x: (v.x + 1) / 2 * W, y: (1 - v.y) / 2 * Hh, z: v.z, on: v.z < 1 && Math.abs(v.x) < 1.05 && v.y < 1.05 && v.y > -0.72, pri: m.cls === 'pin' ? 0 : 1 }; })
+      .sort((a, b) => a.pri - b.pri || a.z - b.z)
+      .forEach(q => { const s = spans[q.i]; let on = q.on && !placed.some(r => Math.abs(r.x - q.x) < 60 && Math.abs(r.y - q.y) < 26); s.style.display = on ? '' : 'none'; if (on) { placed.push(q); s.style.transform = `translate(${q.x}px,${q.y}px) translate(-50%,-100%)`; } });
     st.raf = requestAnimationFrame(frame);
   }
   st.R = R; st.u = () => Math.min(1, (performance.now() - st.t0) / 1000 / dur); st.raf = requestAnimationFrame(frame);
@@ -144,8 +152,10 @@ async function open(o) {
 }
 function close() {
   const st = FLY; if (!st) return; st.dead = true; cancelAnimationFrame(st.raf); st.offR && st.offR();
-  try { st.R && st.R.dispose(); } catch (_) {}
-  st.ov.remove(); document.body.style.overflow = ''; FLY = null;
+  try { (st.disp || []).forEach(x => x.dispose && x.dispose()); } catch (_) {}
+  // give the graphics context back, or repeated flyovers would run the phone out of them
+  try { if (st.R) { st.R.dispose(); st.R.forceContextLoss(); } } catch (_) {}
+  st.ov.remove(); document.body.style.overflow = st.prevOverflow || ''; FLY = null;
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-fly]'); if (!b || !FLY) return; if (b.dataset.fly === 'close') close(); if (b.dataset.fly === 'replay') FLY.replay && FLY.replay(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && FLY) close(); });
