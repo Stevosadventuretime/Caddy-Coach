@@ -173,11 +173,14 @@ function poseGolfer(fig, J, o) {
   const fz = A(J.face), fx = new T.Vector3().crossVectors(Yv, fz).normalize(), fy = new T.Vector3().crossVectors(fz, fx).normalize();
   const hC = A(fig.meta.headC), hd = mb('head');
   const R = new T.Matrix4().makeBasis(fx, fy, fz);
-  const headM = R.clone(); headM.setPosition(A(J.head).sub(hC.clone().applyMatrix4(R)));
-  // the head bone's own matrix is world*restInverse: world(p) = R p + t, so matrix = R with translation t + R*restHead
-  const hM = R.clone(); const tr = new T.Vector3().setFromMatrixPosition(headM); hM.setPosition(tr.add(hd.H.clone().applyMatrix4(R)));
+  // the neck keeps its own length: the skull sits one neck-length from the base of the neck, along the neck as it
+  // would bend between the chest and the head (placing the head's centre exactly on J.head stretched the neck by half)
+  const restNeck = nk.T.clone().sub(nk.H), Lnk = restNeck.length();
+  const nDir = restNeck.clone().normalize().transformDirection(R).add(restNeck.clone().normalize().transformDirection(chM)).normalize();
+  const skull = neckP.clone().addScaledVector(nDir, Lnk);
+  // the head bone's own matrix is world*restInverse: world(p) = R (p - restHead) + skull
+  const hM = R.clone(); hM.setPosition(skull);
   setBoneM(fig, 'head', hM);
-  const skull = hd.H.clone().applyMatrix4(R).add(new T.Vector3().setFromMatrixPosition(headM));
   setBone(fig, 'neck', neckP, skull, fx.clone().add(Lt).normalize(), X);
   // arms and legs
   for (const [S, sh, el, hand, kn, an, toe, hip, hl, lead] of [['L', J.ls, J.le, J.lh, J.lk, J.la, J.lt, J.lhip, J.lhl, true], ['R', J.ts, J.te, J.th, J.tk, J.ta, J.tt, J.thip, J.thl, false]]) {

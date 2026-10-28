@@ -1,9 +1,9 @@
 Caddy Coach credits
 
-3D golfer (golfer-mesh.wasm, golfer-skin.jpg, golfer-eye.jpg)
+3D golfer (golfer-mesh.wasm and the golfer-*.jpg / golfer-hair.png textures)
   Body shape, skeleton, skin weights and eyes come from MakeHuman (makehumancommunity.org),
-  released under CC0 1.0 (public domain). The clothes, cap, skin texture, grip and posing
-  were made for Caddy Coach.
+  released under CC0 1.0 (public domain). The clothes, shoes, cap, hair, textures, grip and
+  posing were made for Caddy Coach.
 
 3D library
   three.js, MIT licence.
