@@ -117,7 +117,7 @@ function prep(dr) {
   // a "not this" moment: the golfer holds the right position while a red ghost shows the fault
   dr.seq.forEach((k, i) => {
     const bad = k.badge && k.badge.tone === 'bad' && !k.self;
-    if (bad && !k.ghost) { k.ghost = { k: k.k, o: k.o }; const pv = dr.seq[i - 1]; k.P = pv ? pv.P : pose(k.k); }
+    if (bad && !k.ghost) { k.ghost = { k: k.k, o: k.o }; const pv = dr.seq[i - 1]; k.P = pv ? pv.P : pose(k.k); k._held = !!pv; }
     else k.P = pose(k.k, k.o);
     if (k.ghost) k.G = pose(k.ghost.k || k.k, k.ghost.o);
   });
@@ -132,6 +132,63 @@ function sampleAt(dr, t) {
   const raw = i === 0 && t < k.s ? 1 : clamp((t - k.s) / ((k.e - k.s) || 1), 0, 1), u = key.lin ? raw : ease(raw);
   return { p: mix(prev.P, key.P, u), key, prev, i, u, raw, inHold: t >= k.e, t };
 }
+// ---------- real swing motion (swing-model.json): plain swing keys play motion-captured frames ----------
+// A key is "plain" when it's a standard swing position with no overrides; moving forward between two plain keys plays
+// the captured frames in between. Everything else (special poses, overrides, backwards or skipped moves) blends joints.
+const MOTION_PH = ['address', 'takeaway', 'half', 'top', 'down', 'impact', 'through', 'finish'];
+const MOTION_VEC = { s: 1, H: 1, Lt: 1, F: 1, face: 1, Fh: 1, sd: 1, lkp: 1, tkp: 1 };
+let SWING = null;
+function setSwing(m) {
+  let ok = !!(m && m.v === 1 && Array.isArray(m.frames) && m.frames.length > 10 && m.phases && Array.isArray(m.ball));
+  if (ok) for (const k of MOTION_PH) { const f = m.phases[k]; if (!(f >= 0 && f < m.frames.length)) ok = false; }
+  if (ok) for (const f of [m.frames[0], m.frames[m.frames.length - 1]]) for (const n of ['pel', 'neck', 'ls', 'lh', 'th', 'la', 'ta', 'club', 'sd']) if (!f || !f[n]) ok = false;
+  SWING = ok ? m : null; POSTERS.clear(); if (typeof SCN !== 'undefined') SCN.clear();
+  return ok;
+}
+function loadSwing(base) {
+  if (typeof fetch === 'undefined') return Promise.resolve(false);
+  return fetch((base || '') + 'swing-model.json').then(r => r.ok ? r.json() : null).then(m => setSwing(m)).catch(() => false);
+}
+function ballOf(dr) { prep(dr); return SWING ? SWING.ball.slice() : dr._ball; }
+const lerp3 = (a, b, u) => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u];
+function lerpJ(A, B, u) {
+  const J = {};
+  for (const k in A) {
+    const a = A[k], b = B[k];
+    if (b === undefined) { if (u < 0.5) J[k] = a; continue; }
+    if (Array.isArray(a) && Array.isArray(b) && a.length === 3 && typeof a[0] === 'number' && typeof b[0] === 'number') J[k] = MOTION_VEC[k] ? norm(lerp3(a, b, u)) : lerp3(a, b, u);
+    else if (Array.isArray(a) && Array.isArray(b) && a.length === 2 && Array.isArray(a[0])) J[k] = [lerp3(a[0], b[0], u), lerp3(a[1], b[1], u)];
+    else J[k] = u < 0.5 ? a : b;
+  }
+  for (const k in B) if (!(k in A) && u >= 0.5) J[k] = B[k];
+  return J;
+}
+function motionFrame(f) {
+  const F = SWING.frames, i0 = Math.max(0, Math.min(F.length - 1, Math.floor(f))), i1 = Math.min(F.length - 1, i0 + 1), u = f - i0;
+  const J = u > 1e-6 ? lerpJ(F[i0], F[i1], u) : Object.assign({}, F[i0]);
+  J.arms = 'club'; J.tdrop = 0; return J;
+}
+// the motion frame a key stands for, or null (rig)
+function keyFrame(dr, i) {
+  const k = dr.seq[i]; if (!k) return null;
+  if (k._held) return keyFrame(dr, i - 1);
+  if (k.o || !MOTION_PH.includes(k.k) || dr.noclub) return null;
+  return SWING.phases[k.k];
+}
+function keyJoints(dr, i) { const f = keyFrame(dr, i); return f == null ? rig(dr.seq[i].P) : motionFrame(f); }
+function startJ(dr) { prep(dr); return SWING ? keyJoints(dr, 0) : rig(dr.seq[0].P); }
+function jointsAt(dr, t) {
+  prep(dr); const s = sampleAt(dr, t);
+  if (!SWING) return rig(s.p);
+  const n = dr.seq.length, i = s.i, pi = (i - 1 + n) % n, fi = keyFrame(dr, i), fp = keyFrame(dr, pi);
+  if (s.u >= 1 || s.inHold || (i === 0 && s.raw >= 1)) return keyJoints(dr, i);
+  // play the capture forward between the two positions; a move from the backswing straight to a point part-way
+  // through the downswing (e.g. address -> impact) isn't a real swing, so that blends instead
+  const top = SWING.phases.top, fin = SWING.phases.finish;
+  if (fi != null && fp != null && fi > fp && !(fp < top && fi > top && fi < fin)) return motionFrame(fp + (fi - fp) * s.raw);
+  return lerpJ(keyJoints(dr, pi), keyJoints(dr, i), s.u);
+}
+
 function stepStart(dr, step) { prep(dr); const i = dr.seq.findIndex(k => k.step === step); return i < 0 ? 0 : (i === 0 ? 0 : dr._tl[i].s); }
 
 // ---------- views ----------
@@ -350,8 +407,8 @@ function propMats() {
     line: std(0xffffff, { roughness: 0.8 }), mirror: std(0xbfd6de, { roughness: 0.05, metalness: 0.85 }), frame: std(0xf4f1ea, { roughness: 0.8 }) });
 }
 function buildProps(S, dr) {
-  const M = propMats(), out = [], ball = dr._ball, BX = ball[0], BZ = ball[2];
-  const J0 = rig(dr.seq[0].P), HZ = J0.head[2], HX = J0.head[0];
+  const M = propMats(), out = [], ball = ballOf(dr), BX = ball[0], BZ = ball[2];
+  const J0 = startJ(dr), HZ = J0.head[2], HX = J0.head[0];
   const res = v => typeof v === 'string' ? (v.startsWith('BX') ? BX + (parseFloat(v.slice(2)) || 0) : v.startsWith('BZ') ? BZ + (parseFloat(v.slice(2)) || 0) : v.startsWith('HZ') ? HZ + (parseFloat(v.slice(2)) || 0) : v.startsWith('HX') ? HX + (parseFloat(v.slice(2)) || 0) : 0) : v;
   const R3 = a => a.map(res);
   for (const q of dr.props || []) {
@@ -425,8 +482,8 @@ function scene(dr) {
     const mat = new T.Mesh(new T.BoxGeometry(1.5, 0.014, 1.5), new T.MeshStandardMaterial({ map: TX.turf, roughness: 0.95 })); mat.position.set(0.05, 0.007, 0.3); mat.receiveShadow = true; S.add(mat); }
   if (home && dr.rug !== false) { const rug = new T.Mesh(new T.CircleGeometry(1.1, 48), std(0x5d6a62, { roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.004, 0.15); rug.receiveShadow = true; S.add(rug); }
   // target line: a dashed line on the ground toward the target, so every view shows which way the ball goes
-  const tg = new T.Group(); for (let i = 0; i < 8; i++) { const d = box(0.16, 0.003, 0.018, std(0xffffff, { roughness: 0.8 }), [0.55 + i * 0.26, 0.004, dr._ball[2]]); d.castShadow = false; tg.add(d); }
-  const arr = new T.Mesh(new T.ConeGeometry(0.05, 0.14, 3), std(0xffffff)); arr.rotation.z = -Math.PI / 2; arr.position.set(2.75, 0.01, dr._ball[2]); arr.scale.set(1, 1, 0.15); tg.add(arr); S.add(tg);
+  const tg = new T.Group(); for (let i = 0; i < 8; i++) { const d = box(0.16, 0.003, 0.018, std(0xffffff, { roughness: 0.8 }), [0.55 + i * 0.26, 0.004, ballOf(dr)[2]]); d.castShadow = false; tg.add(d); }
+  const arr = new T.Mesh(new T.ConeGeometry(0.05, 0.14, 3), std(0xffffff)); arr.rotation.z = -Math.PI / 2; arr.position.set(2.75, 0.01, ballOf(dr)[2]); arr.scale.set(1, 1, 0.15); tg.add(arr); S.add(tg);
   const real = typeof CCGolfer !== 'undefined' && CCGolfer.ready();
   const fig = real ? CCGolfer.make(false) : figure(false), ghost = real ? CCGolfer.make(true) : figure(true); fig.real = real; ghost.real = real; S.add(fig.G); S.add(ghost.G); ghost.G.visible = false;
   const M = propMats();
@@ -434,7 +491,7 @@ function scene(dr) {
   const gr = cyl(0.0125, M.grip || (M.grip = std(0x1c1d20, { roughness: 0.75 })), 18); club.add(cyl(0.0058, M.steel, 12), gr, hd); S.add(club);
   const gclub = new T.Group(); const gm = ghost.real ? ghost.mats[0] : ghost.P.chest.material; gclub.add(cyl(0.007, gm), cyl(0.014, gm), new T.Mesh(ell(0.048, 0.016, 0.022, 12), gm)); gclub.children.forEach(c => { c.castShadow = false; }); S.add(gclub);
   const stick = cyl(0.01, M.stick); S.add(stick); stick.visible = false;      // a stick across the chest, or a club down the spine
-  let ball = null; if (dr.ball) { const b = new T.Mesh(new T.SphereGeometry(0.021, 20, 14), M.white); b.castShadow = true; b.position.set(dr._ball[0], 0.042, dr._ball[2]); S.add(b); const t = cyl(0.006, M.white); t.position.set(dr._ball[0], 0, dr._ball[2]); t.scale.y = 0.022; S.add(t); ball = b; }
+  let ball = null; if (dr.ball) { const b = new T.Mesh(new T.SphereGeometry(0.021, 20, 14), M.white); b.castShadow = true; b.position.set(ballOf(dr)[0], 0.042, ballOf(dr)[2]); S.add(b); const t = cyl(0.006, M.white); t.position.set(ballOf(dr)[0], 0, ballOf(dr)[2]); t.scale.y = 0.022; S.add(t); ball = b; }
   const props = buildProps(S, dr);
   const cam = new T.PerspectiveCamera(30, 0.8, 0.1, 60);
   const sc = { S, fig, ghost, club, gclub, stick, ball, props, cam, key };
@@ -475,12 +532,12 @@ function ironHead() {
 function roundRect(x, X, Yy, w, h, r) { x.beginPath(); x.moveTo(X + r, Yy); x.arcTo(X + w, Yy, X + w, Yy + h, r); x.arcTo(X + w, Yy + h, X, Yy + h, r); x.arcTo(X, Yy + h, X, Yy, r); x.arcTo(X, Yy, X + w, Yy, r); x.closePath(); }
 function toneCol(t) { return t === 'bad' ? C.bad : t === 'info' ? C.info : C.good; }
 function at3(J, a, dr) {
-  if (Array.isArray(a)) return a.map(v => typeof v === 'string' ? (v.startsWith('BX') ? dr._ball[0] + (parseFloat(v.slice(2)) || 0) : dr._ball[2] + (parseFloat(v.slice(2)) || 0)) : v);
-  if (a === 'ball') return dr._ball;
+  if (Array.isArray(a)) return a.map(v => typeof v === 'string' ? (v.startsWith('BX') ? ballOf(dr)[0] + (parseFloat(v.slice(2)) || 0) : ballOf(dr)[2] + (parseFloat(v.slice(2)) || 0)) : v);
+  if (a === 'ball') return ballOf(dr);
   if (a === 'knees') return mul(add(J.lk, J.tk), 0.5);
   if (a === 'feet') return mul(add(J.la, J.ta), 0.5);
   if (a === 'shoulders') return mul(add(J.ls, J.ts), 0.5);
-  if (a === 'shHead' || a === 'shBelt') { const j = rig(dr.seq[0].P)[a === 'shHead' ? 'head' : 'pel']; return [j[0] + 0.1 * j[1] / 4.4, 0.03, j[2] + 0.5 * j[1]]; }
+  if (a === 'shHead' || a === 'shBelt') { const j = startJ(dr)[a === 'shHead' ? 'head' : 'pel']; return [j[0] + 0.1 * j[1] / 4.4, 0.03, j[2] + 0.5 * j[1]]; }
   return J[a] || J.pel;
 }
 function overlay(x, W, Hh, proj, J, key, st, dr, dpr, path, GJ, cf, cpitch) {
@@ -568,10 +625,10 @@ function flat(x, W, Hh, proj, J, dr) {
 function pathFor(dr, i) {
   // the clubhead (or hands) path from the previous key to this one
   const key = dr.seq[i]; if (!key.trail) return null;
-  if (key._path) return key._path;
-  const prev = dr.seq[(i - 1 + dr.seq.length) % dr.seq.length], pts = [];
-  for (let k = 0; k <= 30; k++) { const J = rig(mix(prev.P, key.P, key.lin ? k / 30 : ease(k / 30))); pts.push(key.trail === 'hands' ? J.hands : J.clubhead); }
-  return (key._path = pts);
+  if (key._path && key._pathM === SWING) return key._path;
+  const tl = dr._tl[i], pts = [];
+  for (let k = 0; k <= 30; k++) { const J = jointsAt(dr, tl.s + (tl.e - tl.s) * k / 30 - (k === 30 ? 1e-6 : 0)); pts.push(key.trail === 'hands' ? J.hands : J.clubhead); }
+  key._pathM = SWING; return (key._path = pts);
 }
 // Left-handed golfers see every demo mirrored: the whole world flips across the target line's normal,
 // the camera with it, and labels are projected from the mirrored points so text still reads normally.
@@ -602,7 +659,7 @@ function Player(wrap, dr, opt) {
     if (!W) size();
     // the card pictures share this renderer and may have shrunk it: put it back to the player's size
     if (gl) { R.getSize(_sz); if (_sz.x !== W || _sz.y !== H || R.getPixelRatio() !== 1) { R.setPixelRatio(1); R.setSize(W, H, false); } if (Math.abs(sc.cam.aspect - W / H) > 1e-3) { sc.cam.aspect = W / H; sc.cam.updateProjectionMatrix(); } }
-    const s = sampleAt(dr, st.t), J = rig(s.p), key = s.key;
+    const s = sampleAt(dr, st.t), J = jointsAt(dr, st.t), key = s.key;
     if (key.step !== st.step) { st.step = key.step; opt.onStep && opt.onStep(key.step); }
     // camera: ease toward this key's view
     const want = camState(viewFor(key), key.camo || dr.camo);
@@ -649,7 +706,7 @@ const POSTERS = new Map();
 function poster(dr, w, h) {
   prep(dr); const keyI = dr.poster != null ? dr.poster : Math.min(dr.seq.length - 1, 2), k = dr._tl[keyI].e + 0.01, id = dr.id + ':' + w + 'x' + h + (MIR ? ':L' : '');
   if (POSTERS.has(id) && (POSTERS.get(id + ':real') || typeof CCGolfer === 'undefined' || !CCGolfer.ready())) return POSTERS.get(id);
-  const c = document.createElement('canvas'); c.width = w; c.height = h; const s = sampleAt(dr, k), J = rig(s.p), key = s.key;
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const s = sampleAt(dr, k), J = jointsAt(dr, k), key = s.key;
   const cp = camPos(camState(key.cam || dr.view || 'face', key.camo || dr.camo));
   if (webgl()) {
     const sc = scene(dr); R.setPixelRatio(1); R.setSize(w, h, false); sc.cam.aspect = w / h; sc.cam.updateProjectionMatrix();
@@ -662,6 +719,6 @@ function poster(dr, w, h) {
   } else { const x = c.getContext('2d'), yaw = (VIEWS[dr.view] || VIEWS.face).yaw * D2R, Rr = [Math.cos(yaw), 0, -Math.sin(yaw)], kk = h * 0.42; flat(x, w, h, p => [w / 2 + (MIR ? -1 : 1) * dot(p, Rr) * kk, h * 0.9 - p[1] * kk, 0], J, dr); }
   const url = c.toDataURL('image/jpeg', 0.86); POSTERS.set(id, url); if (typeof CCGolfer !== 'undefined' && CCGolfer.ready()) POSTERS.set(id + ':real', true); return url;
 }
-const api = { Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror };
+const api = { Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, jointsAt, ballOf };
 root.DrillStudio = api;
 })(this);
