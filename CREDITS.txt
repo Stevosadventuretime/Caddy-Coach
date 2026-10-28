@@ -5,6 +5,10 @@ Caddy Coach credits
   released under CC0 1.0 (public domain). The clothes, shoes, cap, hair, textures, grip and
   posing were made for Caddy Coach.
 
+Real swing motion (swing-model.json)
+  The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding
+  from NSF EIA-0196217. (CMU Graphics Lab Motion Capture Database, subject 64; adjusted for Caddy Coach.)
+
 3D library
   three.js, MIT licence.
 

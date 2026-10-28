@@ -90,9 +90,42 @@ def ball_for(J, ph):
     return np.array([A[0], BALL_Y, A[2] + np.sqrt(max(CLEN ** 2 - (A[1] - BALL_Y) ** 2, 0))])
 
 def reach(J, ph, B, out_fps=60):
+    """let the club reach the ball at impact: a little more bend from the hips (not a squat) to bring the hands down,
+    then a small slide of the body (not the feet) for what's left; both blended in and out around impact"""
+    J = {k: v.copy() for k, v in J.items()}; n = len(J['pel']); fr = np.arange(n); i = ph['impact']
+    ball = ball_for(J, ph); X = np.array([1.0, 0, 0])
+    w = _ss(1 - np.abs(fr - i) / (0.15 * out_fps))
+    def bent(th):
+        p = J['pel'][i]; R = _rot(X, th); return p + R @ (J['lh'][i] - p)
+    lo, hi = -15.0, 25.0                                   # extra bend (deg) so the hands are at club length from the ball
+    for _ in range(30):
+        mid = (lo + hi) / 2
+        if np.linalg.norm(ball - bent(mid)) > CLEN: lo = mid
+        else: hi = mid
+    th = (lo + hi) / 2
+    for j in np.where(w > 0)[0]:
+        p = J['pel'][j]; R = _rot(X, th * w[j])
+        for k in UPPER: J[k][j] = p + R @ (J[k][j] - p)
+    v = ball - J['lh'][i]; need = (v - _unit(v) * CLEN) * [1, 0, 1]
+    for k in UPPER + ['pel', 'lhip', 'thip']: J[k] = J[k] + w[:, None] * need
+    _legs(J, B)
+    return J
+
+HINGE = dict(address=28, takeaway=45, half=85, top=80, down=85, impact=24, through=-80, finish=-115)   # negative: the wrists re-hinge the other way after impact   # forearm-to-shaft angle
+
+BALL_Y = 0.03
+BEND = 32.0         # spine forward bend at address (pelvis to neck, from vertical)
+
+def ball_for(J, ph):
+    """the ball sits where the club rests at address, on the ground straight out toward the ball (+z)"""
+    A = J['lh'][ph['address']]
+    return np.array([A[0], BALL_Y, A[2] + np.sqrt(max(CLEN ** 2 - (A[1] - BALL_Y) ** 2, 0))])
+
+def reach(J, ph, B, out_fps=60):
     """move the body (not the feet) a little toward the ball through impact so the club can reach it"""
     J = {k: v.copy() for k, v in J.items()}; n = len(J['pel']); fr = np.arange(n); i = ph['impact']
     ball = ball_for(J, ph); v = ball - J['lh'][i]; need = v - _unit(v) * CLEN
+    print('reach correction at impact (m):', np.round(need, 3)) if False else None
     w = _ss(1 - np.abs(fr - i) / (0.12 * out_fps))[:, None]
     for k in UPPER + ['pel', 'lhip', 'thip']: J[k] = J[k] + w * need
     _legs(J, B)
@@ -121,23 +154,25 @@ def club(J, ph, out_fps=60):
     J['clubhead'] = J['club'][:, 1]; J['hands'] = (J['lh'] + J['th']) / 2
     return J, ball
 
-def _posture_apply(J, ph, B, delta):
+def _bend(J):
+    sp = J['neck'] - J['pel']; return np.degrees(np.arctan2(np.hypot(sp[:, 0], sp[:, 2]), sp[:, 1]))
+
+def posture(J, ph, B):
+    """bend from the hips like a golfer and keep that spine angle through impact (the capture stands nearly upright
+    and stands up further through the ball); the bend eases off into the finish"""
     J = {k: v.copy() for k, v in J.items()}; n = len(J['pel']); fr = np.arange(n)
-    w = 1 - 0.6 * _ss((fr - ph['impact']) / max(ph['finish'] - ph['impact'], 1))   # golfers stand up into the finish
-    drop = np.stack([np.zeros(n), -0.06 * w * delta / 25, -0.05 * w * delta / 25], 1)
+    rise = _ss((fr - ph['impact']) / max(ph['finish'] - ph['impact'], 1))
+    target = BEND * (1 - rise) + 12.0 * rise                                  # golfers stand up into the finish
+    delta = np.maximum(0.0, target - _bend(J))
+    delta = gaussian_filter1d(delta, 3.0)
+    drop = np.stack([np.zeros(n), -0.06 * delta / 25, -0.05 * delta / 25], 1)
     for k in UPPER + ['pel', 'lhip', 'thip']: J[k] = J[k] + drop
     X = np.array([1.0, 0, 0])
     for j in range(n):
-        R = _rot(X, delta * w[j]); p = J['pel'][j]
+        R = _rot(X, delta[j]); p = J['pel'][j]
         for k in UPPER: J[k][j] = p + R @ (J[k][j] - p)
     _legs(J, B)
     return J
-
-def posture(J, ph, B):
-    """bend from the hips like a golfer at address (the capture stands nearly upright)"""
-    a = ph['address']; sp = J['neck'][a] - J['pel'][a]
-    bend = np.degrees(np.arctan2(np.hypot(sp[0], sp[2]), sp[1]))
-    return _posture_apply(J, ph, B, max(0.0, BEND - bend))
 
 def frames(J, ph, ball):
     J = {k: v.copy() for k, v in J.items()}
