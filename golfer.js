@@ -33,7 +33,17 @@ function load(base) {
     fetch(base + 'golfer-mesh.wasm').then(r => { if (!r.ok) throw new Error('golfer ' + r.status); return r.arrayBuffer(); }),
     new Promise((ok, no) => new T.TextureLoader().load(base + 'golfer-skin.jpg', ok, undefined, no)),
     new Promise(ok => new T.TextureLoader().load(base + 'golfer-eye.jpg', ok, undefined, () => ok(null))),
-  ]).then(([buf, skin, eye]) => { skin.encoding = T.sRGBEncoding; skin.flipY = true; skin.anisotropy = 4; if (eye) eye.encoding = T.sRGBEncoding; TEX = { skin, eye }; DATA = parse(buf); return DATA; })
+    new Promise(ok => new T.TextureLoader().load(base + 'golfer-shoe.jpg', ok, undefined, () => ok(null))),
+    new Promise(ok => new T.TextureLoader().load(base + 'golfer-shoe-n.jpg', ok, undefined, () => ok(null))),
+    new Promise(ok => new T.TextureLoader().load(base + 'golfer-cap.jpg', ok, undefined, () => ok(null))),
+    new Promise(ok => new T.TextureLoader().load(base + 'golfer-cap-n.jpg', ok, undefined, () => ok(null))),
+    new Promise(ok => new T.TextureLoader().load(base + 'golfer-hair.png', ok, undefined, () => ok(null))),
+    ...['pique', 'twill', 'pores'].map(n => new Promise(ok => new T.TextureLoader().load(base + 'golfer-' + n + '.jpg', t => { t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = 4; ok(t); }, undefined, () => ok(null)))),
+  ]).then(([buf, skin, eye, shoe, shoeN, cap, capN, hair, pique, twill, pores]) => { skin.encoding = T.sRGBEncoding; skin.flipY = true; skin.anisotropy = 4; if (eye) eye.encoding = T.sRGBEncoding;
+    if (shoe) { shoe.encoding = T.sRGBEncoding; shoe.flipY = false; shoe.anisotropy = 4; } if (shoeN) shoeN.flipY = false;
+    if (cap) { cap.encoding = T.sRGBEncoding; cap.flipY = false; cap.anisotropy = 4; } if (capN) capN.flipY = false;
+    if (hair) { hair.encoding = T.sRGBEncoding; hair.anisotropy = 4; }
+    TEX = { skin, eye, shoe, shoeN, cap, capN, hair, pique, twill, pores }; DATA = parse(buf); return DATA; })
     .catch(e => { LOADING = null; throw e; });
   return LOADING;
 }
@@ -42,7 +52,16 @@ function load(base) {
 // every material gets: baked ambient occlusion, and a pulsing green glow on highlighted body parts
 function patch(m, opt) {
   m.userData.hl = { value: 0 }; m.userData.hlB = { value: Array.from({ length: 16 }, () => new T.Vector4()) }; m.userData.pulse = { value: 0 }; m.userData.ghost = !!opt.ghost;
+  const det = opt.detail && opt.detail.tex ? opt.detail : null;
+  if (det) { m.extensions = { derivatives: true }; if (!m.map && !m.normalMap) m.defines = Object.assign(m.defines || {}, { USE_UV: '' }); }
   m.onBeforeCompile = sh => {
+    if (det) {
+      sh.uniforms.detN = { value: det.tex }; sh.uniforms.detK = { value: det.k }; sh.uniforms.detS = { value: det.s };
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D detN; uniform float detK; uniform float detS;\n' +
+        // micro detail (knit, twill, pores) from a tiled normal map, with a tangent frame from screen derivatives
+        'vec3 ccDetail(vec3 p, vec3 n, vec2 uv){ vec3 q0 = dFdx(p), q1 = dFdy(p); vec2 s0 = dFdx(uv), s1 = dFdy(uv); vec3 q1p = cross(q1, n), q0p = cross(n, q0); vec3 Tn = q1p * s0.x + q0p * s1.x; vec3 Bn = q1p * s0.y + q0p * s1.y; float d = max(dot(Tn, Tn), dot(Bn, Bn)); if (d <= 0.0) return n; float sc = inversesqrt(d); vec3 mN = texture2D(detN, uv).xyz * 2.0 - 1.0; mN.xy *= detS; return normalize(Tn * (mN.x * sc) + Bn * (mN.y * sc) + n * mN.z); }')
+        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\nnormal = ccDetail(-vViewPosition, normal, vUv * detK);');
+    }
     sh.uniforms.hlMask = m.userData.hl; sh.uniforms.hlPulse = m.userData.pulse;
     sh.uniforms.hlB = m.userData.hlB;
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float ao; varying float vAO; varying float vHL; uniform vec4 hlB[16];\nfloat hlPick(float f){ int i = int(f + 0.5); vec4 v = hlB[i / 4]; int c = i - (i / 4) * 4; return c == 0 ? v.x : c == 1 ? v.y : c == 2 ? v.z : v.w; }')
@@ -54,21 +73,32 @@ function patch(m, opt) {
       // a soft red bleed where light falls off (cheap subsurface look)
       'reflectedLight.directDiffuse += diffuseColor.rgb * vec3(0.20, 0.05, 0.03) * clamp(1.0 - abs(dot(normal, normalize(vec3(0.3, 0.8, 0.5)))), 0.0, 1.0) * 0.6;');
   };
-  m.customProgramCacheKey = () => 'ccg' + (opt.sss ? 's' : '') + (opt.aoK || 0.85);
+  m.customProgramCacheKey = () => 'ccg' + (opt.sss ? 's' : '') + (det ? 'd' : '') + (opt.aoK || 0.85);
   return m;
 }
 function materials(ghost) {
   if (ghost) { const g = patch(new T.MeshStandardMaterial({ color: 0xff3b2b, emissive: 0x8a1408, transparent: true, opacity: 0.45, roughness: 0.6, depthWrite: false, skinning: true }), { ghost: true, aoK: 0.3 }); g.color.convertSRGBToLinear(); return () => g; }
   const P = (o, x) => { const m = new T.MeshPhysicalMaterial(Object.assign({ skinning: true }, o)); if (o.color !== undefined) m.color.convertSRGBToLinear(); if (o.sheen) m.sheen.convertSRGBToLinear(); return patch(m, x || {}); };
   const M = {
-    skin: P({ map: TEX.skin, roughness: 0.52, clearcoat: 0.08, clearcoatRoughness: 0.5, sheen: new T.Color(0x3a1d14) }, { sss: true, aoK: 0.9 }),
-    shirt: P({ color: 0x23395a, roughness: 0.88, sheen: new T.Color(0x3a5070) }),
-    trousers: P({ color: 0x34383f, roughness: 0.8, sheen: new T.Color(0x2b2f36) }),
+    skin: P({ map: TEX.skin, roughness: 0.5, clearcoat: 0.12, clearcoatRoughness: 0.45, sheen: new T.Color(0x3a1d14) }, { sss: true, aoK: 0.9, detail: { tex: TEX.pores, k: 46, s: 0.28 } }),
+    shirt: P({ color: 0x23395a, roughness: 0.88, sheen: new T.Color(0x3a5070) }, { detail: { tex: TEX.pique, k: 90, s: 0.6 } }),
+    trousers: P({ color: 0x34383f, roughness: 0.8, sheen: new T.Color(0x2b2f36) }, { detail: { tex: TEX.twill, k: 70, s: 0.45 } }),
     belt: P({ color: 0x2a1a12, roughness: 0.45, clearcoat: 0.3 }),
-    shoe: P({ color: 0xf2f1ec, roughness: 0.38, clearcoat: 0.4, clearcoatRoughness: 0.3 }),
-    sole: P({ color: 0x23252a, roughness: 0.7 }),
+    shoe: P(Object.assign({ color: 0xffffff, roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.35 }, TEX.shoe ? { map: TEX.shoe } : { color: 0xf2f1ec }, TEX.shoeN ? { normalMap: TEX.shoeN, normalScale: new T.Vector2(0.8, 0.8) } : {})),
+    sole: P({ color: 0x2b2d31, roughness: 0.75 }),
+    mid: P({ color: 0xe9e7e0, roughness: 0.55 }),
+    shoeacc: P({ color: 0x1d2c44, roughness: 0.45, clearcoat: 0.3, clearcoatRoughness: 0.35 }),
+    hair1: P({ map: TEX.hair, alphaTest: 0.12, visible: !!TEX.hair, roughness: 0.62, sheen: new T.Color(0x3a2c22) }, { aoK: 0.9 }),
+    hair2: P({ map: TEX.hair, alphaTest: 0.32, visible: !!TEX.hair, roughness: 0.62, sheen: new T.Color(0x3a2c22) }, { aoK: 0.9 }),
+    hair3: P({ map: TEX.hair, alphaTest: 0.52, visible: !!TEX.hair, roughness: 0.62, sheen: new T.Color(0x3a2c22) }, { aoK: 0.9 }),
+    hair4: P({ map: TEX.hair, alphaTest: 0.72, visible: !!TEX.hair, roughness: 0.62, sheen: new T.Color(0x3a2c22) }, { aoK: 0.9 }),
+    cuff: P({ color: 0x1f3352, roughness: 0.9, sheen: new T.Color(0x3a5070) }, { detail: { tex: TEX.twill, k: 6, s: 0.8 } }),
+    buckle: P({ color: 0xc9c6bf, metalness: 1, roughness: 0.28 }, { aoK: 0.5 }),
+    button: P({ color: 0xf3f0e8, roughness: 0.25, clearcoat: 0.8, clearcoatRoughness: 0.15 }),
+    lace: P({ color: 0xf4f4f0, roughness: 0.8, side: T.DoubleSide }),
+    sock: P({ color: 0x1f2329, roughness: 0.9, sheen: new T.Color(0x30343c) }),
     glove: P({ color: 0xf7f7f3, roughness: 0.62, sheen: new T.Color(0x666666) }),
-    cap: P({ color: 0x15233a, roughness: 0.8, sheen: new T.Color(0x22324e), side: T.DoubleSide }),
+    cap: P(Object.assign({ color: 0xffffff, roughness: 0.82, sheen: new T.Color(0x22324e) }, TEX.cap ? { map: TEX.cap } : { color: 0x15233a }, TEX.capN ? { normalMap: TEX.capN, normalScale: new T.Vector2(0.7, 0.7) } : {})),
     cornea: P({ color: 0xffffff, transparent: true, opacity: 0.08, roughness: 0.02, clearcoat: 1, clearcoatRoughness: 0.0, depthWrite: false }, { aoK: 0.0 }),
     eye: P({ map: TEX.eye || null, color: TEX.eye ? 0xffffff : 0xe8e4de, roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05 }, { aoK: 0.4 }),
   };
