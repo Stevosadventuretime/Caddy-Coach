@@ -26,7 +26,6 @@ A test that drove the golfer from Owen's own phone videos showed that the simple
 ## Anti-goals (a failure even if it works)
 
 - Copying a named player's swing or using broadcast footage.
-- Drills loading noticeably slower: the motion file stays under 100 KB.
 - Breaking the drills that use special poses (club down the spine, arms crossed, chair, wall, walking, hanging arm).
 
 ## Source motion
@@ -90,7 +89,7 @@ Reads the CMU BVH files and writes `swing-model.json` for the site.
 ## Constraints
 
 - Plain JS, no new libraries; works offline (the file is cached by the service worker like the other golfer files).
-- Motion file under 100 KB.
+- No size limit for now (Owen's call, 28 Oct): get it looking right first; making the file smaller and faster to load is later work.
 - Existing tests pass; drill screenshots are compared before and after.
 
 ## How we'll know it worked
@@ -103,4 +102,4 @@ Reads the CMU BVH files and writes `swing-model.json` for the site.
 ## Left to the builder
 
 - Exact phase detection thresholds, smoothing, and how the wrist correction is weighted.
-- The 60 fps sampling and rounding, if the size budget allows more or needs less.
+- The sampling rate and rounding: whatever looks best (no size budget for now).
