@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Caddy Coach">
 <style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}#ccSplash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;align-content:center;gap:18px;background:radial-gradient(120% 80% at 50% 35%,#16553c,#0b2f21);color:#f3f6f1;transition:opacity .35s ease}#ccSplash img{width:96px;height:96px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.35)}#ccSplash b{font:760 30px/1 Archivo,'Instrument Sans',system-ui,sans-serif;font-stretch:72%;letter-spacing:.01em}#ccSplash i{display:block;width:120px;height:3px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}#ccSplash i::after{content:'';display:block;height:100%;width:40%;background:#f3c43a;animation:ccLd 1s ease-in-out infinite alternate}@keyframes ccLd{from{transform:translateX(-10%)}to{transform:translateX(160%)}}@media (prefers-reduced-motion:reduce){#ccSplash i::after{animation:none}}#ccSplash.out{opacity:0;pointer-events:none}</style>
-<script>window.CC_VER='f27a8d63e5'</script></head><body>
+<script>window.CC_VER='75a1ce5157'</script></head><body>
 <div id="ccSplash" aria-hidden="true"><img src="icons/icon-192.png" alt=""><b>Caddy Coach</b><i></i></div>
 <script>(function(){let done=0;const go=d=>{if(done++)return;const s=document.getElementById('ccSplash');if(!s)return;setTimeout(()=>{s.classList.add('out');setTimeout(()=>s.remove(),400)},d)};addEventListener('DOMContentLoaded',()=>go(350));addEventListener('load',()=>go(0));setTimeout(()=>go(0),4000)})()</script>
 <title>Caddy Coach</title>
@@ -1295,9 +1295,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
 .gpsBig span{font:600 18px var(--f-ui);opacity:.8}
 .gpsP{margin:0;font-size:14.5px;line-height:1.4;color:rgba(243,246,239,.85)}
 .gpsP.sm,.gpsNote{font-size:13px;color:rgba(243,246,239,.65);margin:0}
-.gpsActs{display:flex;gap:8px;margin-top:6px}
+.gpsActs{display:flex;gap:8px;margin-top:6px}.gpsActs.wrap{display:grid;grid-template-columns:1fr 1fr;flex-direction:row}.gpsActs.wrap>.hrBtn{flex:none;width:100%;min-height:44px;height:auto}#homeMap .later{background:none;border:0;color:var(--mut);font:inherit;text-decoration:underline;padding:8px 4px;cursor:pointer}
 .cmPt i{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#fbfaf3;color:#0f3a22;font:700 12px/1 var(--f-ui);font-style:normal;box-shadow:0 1px 4px rgba(0,0,0,.5)}
-.cmPt.sm i{width:20px;height:20px;font-size:10px}.cmPt.mid i{width:16px;height:16px;margin:5px;background:#d23a2f;border:2px solid #fff}.cmPt.fb i{width:20px;height:20px;margin:3px;font-size:10px}.cmPt.sug i{background:#e6d7aa}
+.cmPt.sm i{width:20px;height:20px;font-size:10px}.cmPt.mid i{width:16px;height:16px;margin:5px;background:#d23a2f;border:2px solid #fff}.cmPt.fb i{width:20px;height:20px;margin:3px;font-size:10px}.cmPt.sug i{background:#e6d7aa}.cmPt.fw i{width:16px;height:16px;margin:5px;background:#f5c518;border:2px solid #fff}.gpsDist.cmc{border:1px solid rgba(245,197,24,.55)}
 .fbRow{display:flex;gap:18px;font:500 14.5px var(--f-ui);color:rgba(243,246,239,.8)}.fbRow b{font:600 20px var(--f-ui);color:#fbfaf3;margin-left:4px;font-variant-numeric:lining-nums}
 .cmLink{background:none;border:0;color:var(--sand);font:500 14px var(--f-ui);text-decoration:underline;text-underline-offset:3px;padding:8px 0 0;text-align:left;cursor:pointer}
 .cmCode{width:100%;box-sizing:border-box;font:12.5px/1.35 ui-monospace,Menlo,monospace;border-radius:10px;padding:10px;border:1px solid rgba(255,255,255,.25);background:#0a2a18;color:#f3f6ef}
@@ -1898,6 +1898,7 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
  <div class="card" id="homeNews" hidden aria-live="polite"></div>
  <div class="card" id="homeStart" hidden></div>
  <div class="card" id="homeHcp" hidden></div>
+ <div id="homeMapSlot"></div>
  <div class="card" id="homeGoals" hidden></div>
  <div class="card" id="homePlan" hidden></div>
  <div class="card" id="homeGame"></div>
@@ -2249,8 +2250,27 @@ function renderHomeHcp(){const el=$('homeHcp');if(!el)return;const r=typeof HcpS
 const hcpChartPts=(c,r,n)=>c.hist.map((h,i)=>({y:h.hi,lab:i===0&&r.start&&r.start.hi!=null?'Start':hcpShortDate(h.date),tip:i===0&&r.start&&r.start.hi!=null?'Starting index '+WHS.fmt(h.hi):'After your score on '+hcpShortDate(h.date)+': '+WHS.fmt(h.hi)})).slice(-n);
 const hcpShortDate=d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})}catch(_){return d}};
 document.addEventListener('click',e=>{const b=e.target.closest('[data-pf-open]');if(!b||typeof PROF==='undefined'||!PROF.me)return;PROF.note='';PROF.err={};if(b.dataset.pfOpen==='hcp-start'){PROF.hcArm=null;PROF.f={hcNone:false}}profShow(b.dataset.pfOpen)});
+// testers map their home course first: like TheGrint, every course gets mapped once by golfers who know it
+async function renderHomeMap(){const el=$('homeMapSlot');if(!el)return;el.innerHTML='';const me=typeof PROF!=='undefined'&&PROF.me,cr=me&&me.course;
+ if(HOSTED_IN_CLAUDE||!cr||!cr.key)return;const k=keyBase(cr.key),st=lsGet('cc_homemap_'+k,null);if(st&&(st.done||(st.later&&Date.now()-st.later<14*864e5)))return;
+ const kn=KNOWN_COURSES.find(x=>keyBase(x.key)===k),n=(kn&&kn.tees&&kn.tees[0].holes.length)||18;let m=0;
+ try{const saved=await RStore.getCourse(cr.key).catch(()=>null);const hs=new Set(Object.entries(saved&&saved.greens||{}).filter(([,g])=>g&&g.tee).map(([h])=>+h));
+  if(SB.on())(await sbRows('hole_maps',k).catch(()=>[])).forEach(r=>{if(r.tee_lat!=null)hs.add(+r.hole)});m=hs.size}catch(_){}
+ if(m>=n)return;const name=String(cr.name||'your course').replace(/\s+golf (club|course)$/i,'');
+ el.innerHTML=`<div class="card" id="homeMap"><b>Map ${esc(name)} for everyone</b><p class="mut" style="margin:4px 0 0">${m?`${m} of ${n} holes are mapped. `:''}Tap the tee, the front, middle and back of each green, and a fairway target on the satellite map: about 15 minutes, at home or as you play. Every golfer there then gets exact distances.</p>
+  <div class="gpsActs" style="margin-top:12px"><button type="button" class="pri" data-cm-home="go">${m?'Carry on mapping':'Map my home course'}</button><button type="button" class="later" data-cm-home="later">Not now</button></div></div>`}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-cm-home]');if(!b)return;const cr=PROF.me&&PROF.me.course;if(!cr)return;
+ if(b.dataset.cmHome==='later'){lsSet('cc_homemap_'+keyBase(cr.key),{later:Date.now()});return renderHomeMap()}cmMapCourse(cr)});
+// map a course without playing it: the hole map opens on its own, with no round started
+async function cmMapCourse(cr){if(RT.live&&!RT.live.mapOnly&&keyBase(RT.live.course.key)===keyBase(cr.key)){await gpsOpen();return cmOpen()}
+ let c=await RStore.getCourse(cr.key).catch(()=>null);const kn=KNOWN_COURSES.find(x=>keyBase(x.key)===keyBase(cr.key));if(!c&&kn)c=JSON.parse(JSON.stringify(kn));
+ if(!c||!c.tees||!c.tees.length){tab(8);return rtOpenCourse(Object.assign({},cr))}// no scorecard yet: get the course first
+ const t=c.tees.find(x=>/yellow/i.test(x.name))||c.tees[0];GPS.mapPrev=RT.live&&!RT.live.mapOnly?RT.live:null;
+ RT.live={id:'map',mapOnly:true,course:{key:c.key,name:c.name,club:c.club||'',town:c.town||'',lat:c.lat??cr.lat??null,lon:c.lon??cr.lon??null,osm:c.osm||null},tee:{name:t.name,colour:t.colour},
+  holes:t.holes.map(h=>({n:h.n,par:h.par,yards:h.yards,si:h.si,score:null})),i:0,others:[],notes:{}};
+ GPS.course=null;await gpsOpen();cmOpen()}
 async function renderHome(){
- renderHomeRound();renderHomeHcp();if(typeof renderHomePlan==='function')renderHomePlan().catch(()=>{});
+ renderHomeRound();renderHomeHcp();renderHomeMap().catch(()=>{});if(typeof renderHomePlan==='function')renderHomePlan().catch(()=>{});
  if(typeof renderHomeStart==='function'){renderHomeStart().catch(()=>{});renderHomeGoals().catch(()=>{});renderHomeNews();if(typeof coachNews==='function')coachNews().catch(()=>{});inboxCheck().catch(()=>{})}
  let rows=[];try{rows=await Store.list()}catch(_){}
  rows=(rows||[]).slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
@@ -3379,7 +3399,7 @@ function rtNewLive(){const {t,hs}=rtHoles(),c=RT.course;const pk=RT.pick&&keyBas
  return{id,status:'live',createdAt:Date.now(),date:hcpToday(),course:{key:c.key,name:c.name,club:c.club||'',town:c.town||'',lat:c.lat??(pk&&pk.lat)??null,lon:c.lon??(pk&&pk.lon)??null,osm:c.osm||(pk&&pk.osm)||null},tee:{name:t.name,colour:t.colour},range:c.tees[0].holes.length===9?'9':RT.range,
   holes:hs.map(h=>({n:h.n,par:h.par,yards:h.yards,si:h.si,score:null})),i:0,cardSource:c.source,...(()=>{const hc=rtCourseHcp(hs,t);return hc?{ch:hc.ch,hi:hc.hi,cr:hc.cr,sl:hc.sl}:{}})(),
   notes:Object.assign({},c.notes||{}),others:(RT.pals||[]).map(p=>({name:p.name,hi:p.hi,ch:palCh(p,hs,t),sc:hs.map(()=>null)})),grp:RT.grp||null,wx:WX.now?Object.assign({},WX.now):null}}
-let _liveT=0;function rtSaveLive(){clearTimeout(_liveT);const r=RT.live;if(r&&r.grp&&typeof grpPush==='function')grpPush(r);_liveT=setTimeout(()=>{RStore.setLive(r).catch(e=>console.error(e))},350)}
+let _liveT=0;function rtSaveLive(){clearTimeout(_liveT);const r=RT.live;if(r&&r.mapOnly)return;if(r&&r.grp&&typeof grpPush==='function')grpPush(r);_liveT=setTimeout(()=>{RStore.setLive(r).catch(e=>console.error(e))},350)}
 function tally(holes){let total=0,par=0,thru=0;const k={e:0,b:0,p:0,o:0,d:0};for(const h of holes){if(h.score==null)continue;thru++;total+=h.score;par+=h.par;const d=h.score-h.par;if(d<=-2)k.e++;else if(d===-1)k.b++;else if(d===0)k.p++;else if(d===1)k.o++;else k.d++}
  const fullPar=holes.reduce((a,h)=>a+h.par,0);return{total,par,toPar:total-par,thru,k,fullPar}}
 const mkCls=(s,p)=>s==null?'n':s-p<=-2?'e':s-p===-1?'b':s===p?'':s-p===1?'o':'d';
@@ -3806,7 +3826,8 @@ async function gpsOpen(){const ov=$('gpsOv');ov.hidden=false;if(!BG.bag)BagStore
  GPS.framed=false;gpsDrawSite();gpsStartWatch();gpsDrawHole(true);
  if(!site)gpsSite(GPS.course).then(st=>{if(st&&!$('gpsOv').hidden&&GPS.map){gpsDrawSite();if(!GPS.framed||!gpsOnSite())gpsDrawHole(true)}});
  try{if(navigator.wakeLock&&!GPS.wake)GPS.wake=await navigator.wakeLock.request('screen')}catch(_){}}
-function gpsClose(){GL.open=false;PINS.mark=false;PINS.pend=null;glanceRender();if(GPS.cm){const cm=GPS.cm;GPS.cm=null;if(cm.back!=null){RT.live.i=cm.back;rtSaveLive()}if(GPS.cmL){GPS.map.removeLayer(GPS.cmL);GPS.cmL=null}}$('gpsOv').hidden=true;document.documentElement.style.overflow='';if(GPS.watch!=null){navigator.geolocation.clearWatch(GPS.watch);GPS.watch=null}GPS.pos=null;GPS.framed=false;
+function gpsClose(){GL.open=false;PINS.mark=false;PINS.pend=null;glanceRender();if(GPS.cm){const cm=GPS.cm;GPS.cm=null;if(cm.back!=null){RT.live.i=cm.back;rtSaveLive()}if(GPS.cmL){GPS.map.removeLayer(GPS.cmL);GPS.cmL=null}}
+ if(RT.live&&RT.live.mapOnly){RT.live=GPS.mapPrev||null;GPS.mapPrev=null;GPS.course=null;if(typeof renderHome==='function')setTimeout(()=>renderHome().catch(()=>{}),0)}$('gpsOv').hidden=true;document.documentElement.style.overflow='';if(GPS.watch!=null){navigator.geolocation.clearWatch(GPS.watch);GPS.watch=null}GPS.pos=null;GPS.framed=false;
  try{GPS.wake&&GPS.wake.release()}catch(_){}GPS.wake=null;GPS.setMode=false;rtRender()}
 function gpsTop(){const h=gpsHole(),r=RT.live;$('gpsTop').innerHTML=`<button type="button" class="gpsIc" data-gps="prev" aria-label="Previous hole" ${r.i===0?'disabled':''}><svg viewBox="0 0 24 24" width="22" height="22"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
  <div class="gpsH"><b>Hole ${h.n}</b><span>Par ${h.par}${h.yards?` · ${h.yards} yds`:''}${h.si?` · SI ${h.si}`:''}</span></div>
@@ -3839,7 +3860,8 @@ function gpsDrawLines(){const L=window.L;if(!GPS.lines)return;GPS.lines.clearLay
  const me=GPS.pos?[GPS.pos.lat,GPS.pos.lng]:null,gr=g?[g.lat,g.lon]:null,tp=GPS.tap?[GPS.tap.lat,GPS.tap.lng]:null;
  if(tp){L.circleMarker(tp,{radius:9,color:'#fff',weight:3,fillColor:'#0f3a22',fillOpacity:.6,interactive:false}).addTo(GPS.lines);
   if(me){line(me,tp);lab(me,tp,ydsBetween(GPS.pos,GPS.tap))}if(gr){line(tp,gr,true);lab(tp,gr,ydsBetween(GPS.tap,{lat:g.lat,lon:g.lon}))}}
- else if(me&&gr)line(me,gr,true)}
+ else if(me&&gr){const fw=g.fair&&mBetween({lat:me[0],lon:me[1]},g)>mBetween(g.fair,g)+20?[g.fair.lat,g.fair.lon]:null;
+  if(fw){line(me,fw);lab(me,fw,ydsBetween(GPS.pos,g.fair));line(fw,gr,true);L.circleMarker(fw,{radius:6,color:'#fff',weight:2,fillColor:'#f5c518',fillOpacity:.9,interactive:false}).addTo(GPS.lines)}else line(me,gr,true)}}
 function gpsTap(ll){if(GPS.cm)return cmTap(ll);if(PINS.mark){PINS.pend=ll;pinDraw();return gpsPanel()}if(!GPS.setMode&&!greenOf(gpsHole())&&!(GPS.course&&GPS.course.greenPool&&GPS.course.greenPool.length)&&!gfOptions(gpsHole()).length)GPS.setMode=true;if(GPS.setMode){GPS.pendingGreen={lat:ll.lat,lon:ll.lng};const L=window.L;if(GPS.green)GPS.map.removeLayer(GPS.green);
   GPS.green=L.marker([ll.lat,ll.lng],{icon:L.divIcon({className:'gpsFlag pend',html:'<svg viewBox="0 0 24 34" width="28" height="40"><path d="M5 2v30" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><path d="M6 3l15 5.5L6 14z" fill="#e6d7aa"/></svg>',iconSize:[28,40],iconAnchor:[6,38]})}).addTo(GPS.map);return gpsPanel()}
  GPS.tap=GPS.tap&&GPS.map.latLngToContainerPoint(ll).distanceTo(GPS.map.latLngToContainerPoint(GPS.tap))<30?null:ll;gpsDrawLines();gpsPanel()}
@@ -3853,7 +3875,7 @@ function gpsPanel(){const p=$('gpsPanel');if(!p||HOSTED_IN_CLAUDE)return;if(GPS.
  wxMaybe();if(dist!=null&&dist<=400)elevMaybe(g);const pl=dist!=null&&dist<=400?playsLike(dist,GPS.pos,{lat:g.lat,lon:g.lon}):null;
  if(GL.open)glanceRender();
  const pool=GPS.course&&GPS.course.greenPool&&GPS.course.greenPool.length||gfOptions(h).length;
- p.innerHTML=pinPanelHTML(h,g)+`<div class="gpsDist">${g?`<span class="gpsK">To the middle of the green${g.shared?` (mapped by ${g.votes} golfer${g.votes===1?'':'s'})`:g.sat?' (found automatically)':g.likely?' (matched from the map)':''}</span>${dist!=null&&dist>2000?`<p class="gpsP">You're ${(dist/1760).toFixed(1)} miles from this green. Distances appear when you're on the course.</p>`:dist!=null?`<div class="gpsBig"><b>${dist}</b><span>yds</span></div>${g.front&&g.back?`<div class="fbRow"><span>Front <b>${ydsBetween(GPS.pos,g.front)}</b></span><span>Back <b>${ydsBetween(GPS.pos,g.back)}</b></span></div>`:''}${pl?`<p class="plays"><b>Plays like ${pl.yds}</b> <span>${esc(pl.parts.join(', '))}</span></p>`:''}${dist<=330?clubHTML(pl?pl.yds:dist):''}${dist<=330&&!(BG.bag&&BG.bag.clubs.some(id=>(BG.bag.yards[id]||{}).carry))?`<button type="button" class="cmLink" data-gps="bag">Add your yardages for a club pick that fits your game</button>`:''}`:`<p class="gpsP">${esc(GPS.posErr||'Finding your position…')}</p>`}`
+ p.innerHTML=pinPanelHTML(h,g)+cmcHTML(h,g)+`<div class="gpsDist">${g?`<span class="gpsK">To the middle of the green${g.shared?` (mapped by ${g.votes} golfer${g.votes===1?'':'s'})`:g.sat?' (found automatically)':g.likely?' (matched from the map)':''}</span>${dist!=null&&dist>2000?`<p class="gpsP">You're ${(dist/1760).toFixed(1)} miles from this green. Distances appear when you're on the course.</p>`:dist!=null?`<div class="gpsBig"><b>${dist}</b><span>yds</span></div>${g.front&&g.back?`<div class="fbRow"><span>Front <b>${ydsBetween(GPS.pos,g.front)}</b></span><span>Back <b>${ydsBetween(GPS.pos,g.back)}</b></span></div>`:''}${g.fair&&mBetween({lat:GPS.pos.lat,lon:GPS.pos.lng},g)>mBetween(g.fair,g)+20?`<p class="gpsP sm">To the fairway target <b>${ydsBetween(GPS.pos,g.fair)}</b> yds, then ${ydsBetween(g.fair,{lat:g.lat,lon:g.lon})} to the middle.</p>`:''}${pl?`<p class="plays"><b>Plays like ${pl.yds}</b> <span>${esc(pl.parts.join(', '))}</span></p>`:''}${dist<=330?clubHTML(pl?pl.yds:dist):''}${dist<=330&&!(BG.bag&&BG.bag.clubs.some(id=>(BG.bag.yards[id]||{}).carry))?`<button type="button" class="cmLink" data-gps="bag">Add your yardages for a club pick that fits your game</button>`:''}`:`<p class="gpsP">${esc(GPS.posErr||'Finding your position…')}</p>`}`
   :GF.status&&!pool?`<span class="gpsK">${esc(GF.status)}</span><p class="gpsP">Caddy Coach is finding this course's greens on the satellite map. It takes a few seconds the first time, then it's saved on your phone.</p>`:pool?`<span class="gpsK">Hole ${h.n}: tap the flag of the green you're playing</span><p class="gpsP">White flags are this course's greens, with your distance to each. Tap one to use it for hole ${h.n}, or it's picked automatically when you walk onto it.</p>`:`<span class="gpsK">Hole ${h.n} green not saved yet</span><p class="gpsP">${GPS.course&&GPS.course.gf&&GPS.course.gf.failed?'The satellite picture didn\'t load, so Caddy Coach couldn\'t find the greens this time. It tries again next time you open the map. ':GPS.course&&GPS.course.gf&&GPS.course.gf.cands&&GPS.course.gf.cands.length?'Caddy Coach found greens on the satellite map but isn\'t sure which is this hole\'s yet. It picks it once you\'re on the tee. ':GPS.course&&GPS.course._mapChecked?'This course\'s greens aren\'t on the free course map yet. ':''}Tap the middle of the green on the map to save it, or just play: Caddy Coach saves each green automatically from where you putt when you enter your score.</p>`}
   ${GPS.tap?`<p class="gpsP">Tapped point: ${GPS.pos?`${ydsBetween(GPS.pos,GPS.tap)} yds from you`:''}${GPS.pos&&g?' · ':''}${g?`${ydsBetween(GPS.tap,{lat:g.lat,lon:g.lon})} yds to the green`:''}. Tap it again to clear.</p>${GPS.pos&&ydsBetween(GPS.pos,GPS.tap)<=330?clubHTML(ydsBetween(GPS.pos,GPS.tap),'To that spot'):''}`:g?`<p class="gpsP sm">Tap anywhere on the map to measure to it.</p>`:''}
   <div class="gpsActs">${g&&!g.likely?`<button type="button" class="hrBtn ghost sm" data-gps="set">Move green</button>`:g&&g.likely?`<button type="button" class="hrBtn sm" data-gps="keep">Use this green</button>`:`<button type="button" class="hrBtn" data-gps="set">Set the green</button>`}<button type="button" class="hrBtn ghost sm" data-gps="score">Enter score</button></div>
@@ -4061,6 +4083,14 @@ async function osmAttachGreens0(course){// adds green positions from the map to 
   await RStore.saveCourse(course).catch(()=>{});if(GPS.course&&GPS.course.key===course.key){GPS.course.greens=course.greens;GPS.course.greenPool=course.greenPool;if(!$('gpsOv').hidden)gpsDrawHole(true)}}catch(e){console.error(e);course._mapErr=1}
  return course}
 
+// the next golfer at a course checks a hole someone else mapped: "looks right" adds a vote, "fix it" opens mapping on that hole
+const cmcKey=n=>'cc_cmc_'+sbKey(GPS.course)+':'+n;
+function cmcHTML(h,g){if(!g||!g.shared||g.mine||(g.votes||1)>=3||GPS.cm||lsGet(cmcKey(h.n),0))return'';
+ return`<div class="gpsDist cmc"><p class="gpsP"><b>Does hole ${h.n}'s map look right?</b> Another golfer mapped it. Check the tee and green are where they should be.</p>
+ <div class="gpsActs"><button type="button" class="hrBtn sm" data-cmc="yes">Looks right</button><button type="button" class="hrBtn ghost sm" data-cmc="fix">Fix it</button></div></div>`}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-cmc]');if(!b||!GPS.course||!RT.live)return;const h=gpsHole(),c=GPS.course,g=c.greens&&c.greens[h.n];lsSet(cmcKey(h.n),1);
+ if(b.dataset.cmc==='yes'){if(g){const v=Object.assign({},g);delete v.shared;sbShareHole(c,h.n,v,'confirmed');g.votes=(g.votes||1)+1;g.mine=true}gpsNote('Thanks: that hole now has '+((g&&g.votes)||2)+' golfers agreeing.');return gpsPanel()}
+ GPS.cm={n:h.n,step:'tee',back:RT.live.i,done:0};cmPrefill();cmFrame();cmDraw();gpsPanel()});
 // greens that are on the map but not yet tied to a hole number
 function gpsLikely(h){const c=GPS.course;if(!c||!c.greenPool||!c.greenPool.length)return null;
  const used=new Set(Object.values(c.greens||{}).map(g=>g.lat.toFixed(5)+','+g.lon.toFixed(5)));
@@ -4360,7 +4390,7 @@ function cmSuggest(tee,h){const c=GPS.course,gf=c&&c.gf;if(!gf||!gf.cands||!gf.c
  return sc[0]?sc[0].g:null}
 function cmOpen(){GPS.cm={intro:true};GPS.setMode=false;GPS.tap=null;gpsDrawLines();cmDraw();gpsPanel()}
 function cmPrefill(){const cm=GPS.cm,c=GPS.course,gf=c&&c.gf;if(!cm||cm.step!=='tee')return;const have=cmHoleData(c,cm.n);
- if(have&&have.tee){cm.tee=have.tee;cm.green={lat:have.lat,lon:have.lon};cm.step='check';cm.auto=false;return}
+ if(have&&have.tee){cm.tee=have.tee;cm.green={lat:have.lat,lon:have.lon};cm.gf=have.front||null;cm.gb=have.back||null;cm.fbEst=!!have.fbEst;cm.fair=have.fair||null;cm.step='check';cm.auto=false;return}
  const rt=gf&&gf.route&&gf.route[cm.n],g=rt&&rt.i>=0&&gf.cands[rt.i];if(rt&&rt.tee&&g){cm.tee=rt.tee;cm.green={lat:g.lat,lon:g.lon};cm.poly=g.poly||null;cm.step='check';cm.auto=true}}
 function cmBegin(){const r=RT.live;GPS.cm={n:r.holes[r.i].n,step:'tee',back:r.i,done:0};cmPrefill();cmFrame();cmDraw();gpsPanel()}
 function cmGo(i){const r=RT.live;r.i=Math.max(0,Math.min(r.holes.length-1,i));rtSaveLive();const h=r.holes[r.i];GPS.cm={n:h.n,step:'tee',back:GPS.cm.back,done:GPS.cm.done};cmPrefill();GPS.framed=false;gpsTop();cmFrame();cmDraw();gpsPanel()}
@@ -4371,23 +4401,36 @@ function cmFrame(){const L=window.L,c=GPS.course,cm=GPS.cm;if(!GPS.map||!cm||cm.
  gpsFrameSite()}
 function cmTap(ll){const cm=GPS.cm;if(!cm||cm.intro)return;const p={lat:+ll.lat.toFixed(6),lon:+ll.lng.toFixed(6)},h=gpsHole();
  if(cm.step==='tee'){cm.tee=p;cm.step='green';cm.sug=cmSuggest(p,h);if(cm.sug)GPS.map.fitBounds(window.L.latLngBounds([[p.lat,p.lon],[cm.sug.lat,cm.sug.lon]]).pad(.25),{maxZoom:18,animate:false})}
- else{cm.green=p;cm.poly=null;const gf=GPS.course&&GPS.course.gf;if(gf&&gf.cands){const near=gf.cands.find(g=>g.poly&&inPoly(p,g.poly));if(near)cm.poly=near.poly}cm.step='check'}
+ else if(cm.step==='front'){cm.gf=p;cm.fbEst=false;cm.step='back'}
+ else if(cm.step==='back'){cm.gb=p;cm.fbEst=false;cm.step=cmWantsFair()?'fair':'check'}
+ else if(cm.step==='fair'){cm.fair=p;cm.step='check'}
+ else{cm.green=p;cm.poly=null;const gf=GPS.course&&GPS.course.gf;if(gf&&gf.cands){const near=gf.cands.find(g=>g.poly&&inPoly(p,g.poly));if(near)cm.poly=near.poly}cm.gf=cm.gb=null;cm.step='front'}
  cmDraw();gpsPanel()}
-function cmUseSug(){const cm=GPS.cm;if(!cm||!cm.sug)return;cm.green={lat:cm.sug.lat,lon:cm.sug.lon};cm.poly=cm.sug.poly||null;cm.step='check';cmDraw();gpsPanel()}
-async function cmSave(){const cm=GPS.cm,c=GPS.course;if(!cm||!cm.tee||!cm.green)return;const fb=cmFB(cm.tee,cm.green,cm.poly);
- c.greens=c.greens||{};c.greens[cm.n]={lat:cm.green.lat,lon:cm.green.lon,tee:cm.tee,front:fb.front,back:fb.back,mapped:1};if(fb.est)c.greens[cm.n].fbEst=1;sbShareHole(c,cm.n,c.greens[cm.n],'mapped');
+// like TheGrint: par 4s and 5s get a fairway target (where a good drive finishes, or the corner of a dogleg)
+const cmWantsFair=()=>{const h=gpsHole();return !!h&&(h.par||4)>=4};
+// front and back still to be set: use the green's outline, or 12 m either side of the middle along the line from the tee
+function cmUseFB(){const cm=GPS.cm;if(!cm||!cm.tee||!cm.green)return;const fb=cmFB(cm.tee,cm.green,cm.poly);
+ if(cm.step==='back'&&cm.gf){const m=cm.green;cm.gb={lat:+(2*m.lat-cm.gf.lat).toFixed(6),lon:+(2*m.lon-cm.gf.lon).toFixed(6)};cm.fbEst=true}
+ else{cm.gf=fb.front;cm.gb=fb.back;cm.fbEst=fb.est}
+ cm.step=cmWantsFair()&&!cm.fair?'fair':'check';cmDraw();gpsPanel()}
+// standing on the spot: use the phone's position
+const cmCanHere=()=>!!(GPS.pos&&gpsOnSite()&&(GPS.pos.acc||0)<=15);
+function cmUseSug(){const cm=GPS.cm;if(!cm||!cm.sug)return;cm.green={lat:cm.sug.lat,lon:cm.sug.lon};cm.poly=cm.sug.poly||null;cm.gf=cm.gb=null;cm.step='front';cmDraw();gpsPanel()}
+async function cmSave(){const cm=GPS.cm,c=GPS.course;if(!cm||!cm.tee||!cm.green)return;const fb=cm.gf&&cm.gb?{front:cm.gf,back:cm.gb,est:!!cm.fbEst}:cmFB(cm.tee,cm.green,cm.poly);
+ c.greens=c.greens||{};c.greens[cm.n]={lat:cm.green.lat,lon:cm.green.lon,tee:cm.tee,front:fb.front,back:fb.back,mapped:1};if(fb.est)c.greens[cm.n].fbEst=1;if(cm.fair)c.greens[cm.n].fair=cm.fair;sbShareHole(c,cm.n,c.greens[cm.n],'mapped');
  if(GPS.pick)delete GPS.pick[c.key+':'+cm.n];cm.done++;if(!cm.auto)gfRechain(c,cm.n,c.greens[cm.n]);try{await RStore.saveCourse(c)}catch(e){console.error(e)}
- const r=RT.live;if(r.i<r.holes.length-1)return cmGo(r.i+1);GPS.cm={finished:true,back:cm.back,done:cm.done};cmDraw();gpsPanel()}
+ const r=RT.live;if(r.i<r.holes.length-1)return cmGo(r.i+1);lsSet('cc_homemap_'+sbKey(c),{done:Date.now()});GPS.cm={finished:true,back:cm.back,done:cm.done};cmDraw();gpsPanel()}
 function cmEnd(){const cm=GPS.cm;GPS.cm=null;if(cm&&cm.back!=null){RT.live.i=cm.back;rtSaveLive();gpsTop()}if(GPS.cmL){GPS.map.removeLayer(GPS.cmL);GPS.cmL=null}GPS.framed=false;gpsDrawHole(true)}
 function cmDraw(){const L=window.L;if(!GPS.map)return;if(GPS.cmL){GPS.map.removeLayer(GPS.cmL);GPS.cmL=null}const cm=GPS.cm;if(!cm||cm.intro||cm.finished)return;
  GPS.cmL=L.layerGroup().addTo(GPS.map);if(GPS.green){GPS.map.removeLayer(GPS.green);GPS.green=null}if(GPS.gOut){GPS.map.removeLayer(GPS.gOut);GPS.gOut=null}if(GPS.poolL){GPS.map.removeLayer(GPS.poolL);GPS.poolL=null}GPS.lines&&GPS.lines.clearLayers();
  const dot=(p,cls,txt)=>L.marker([p.lat,p.lon],{icon:L.divIcon({className:'cmPt '+cls,html:`<i>${txt||''}</i>`,iconSize:[26,26]}),interactive:false,keyboard:false}).addTo(GPS.cmL);
  if(cm.tee)dot(cm.tee,'tee','T');
  if(cm.step==='green'&&cm.sug){L.polygon((cm.sug.poly||[]).map(p=>[p.lat,p.lon]),{color:'#fff',weight:1.5,dashArray:'3 4',fill:false,interactive:false}).addTo(GPS.cmL);dot(cm.sug,'sug','?')}
- if(cm.green){const fb=cmFB(cm.tee,cm.green,cm.poly);if(cm.poly)L.polygon(cm.poly.map(p=>[p.lat,p.lon]),{color:'#fff',weight:1.5,fill:false,interactive:false}).addTo(GPS.cmL);
-  L.polyline([[cm.tee.lat,cm.tee.lon],[cm.green.lat,cm.green.lon]],{color:'#fff',weight:2,dashArray:'6 7',interactive:false}).addTo(GPS.cmL);dot(fb.front,'fb','F');dot(cm.green,'mid','');dot(fb.back,'fb','B')}}
+ if(cm.green){const est=cmFB(cm.tee,cm.green,cm.poly),fr=cm.gf||(cm.step==='check'?est.front:null),bk=cm.gb||(cm.step==='check'?est.back:null);if(cm.poly)L.polygon(cm.poly.map(p=>[p.lat,p.lon]),{color:'#fff',weight:1.5,fill:false,interactive:false}).addTo(GPS.cmL);
+  const path=[[cm.tee.lat,cm.tee.lon]].concat(cm.fair?[[cm.fair.lat,cm.fair.lon]]:[],[[cm.green.lat,cm.green.lon]]);
+  L.polyline(path,{color:'#fff',weight:2,dashArray:'6 7',interactive:false}).addTo(GPS.cmL);if(cm.fair)dot(cm.fair,'fw','');if(fr)dot(fr,'fb','F');dot(cm.green,'mid','');if(bk)dot(bk,'fb','B')}}
 function cmPanel(p){const cm=GPS.cm,c=GPS.course,h=gpsHole(),r=RT.live,mapped=Object.values(c&&c.greens||{}).filter(g=>g.tee).length;
- if(cm.intro){p.innerHTML=`<div class="gpsDist"><span class="gpsK">Map this course</span><p class="gpsP">This is how TheGrint and 18Birdies get their distances: each hole is mapped once in advance. Caddy Coach fills in every hole for you from the satellite map; you just check each one and save it, or move the tee or green if it's off. Front and back are worked out for you, and once it's saved every golfer gets the distances.</p>
+ if(cm.intro){p.innerHTML=`<div class="gpsDist"><span class="gpsK">Map this course</span><p class="gpsP">This is how TheGrint and 18Birdies get their distances: golfers map each hole once. For each hole you tap the back tee, the middle, front and back of the green, and on par 4s and 5s a fairway target. Caddy Coach suggests what it can from the satellite map, and if you're on the course you can use where you're standing. Once it's saved, every golfer here gets the distances.</p>
   ${mapped?`<p class="gpsP sm">${mapped} of ${r.holes.length} holes are mapped so far.</p>`:''}
   <div class="gpsActs"><button type="button" class="hrBtn" data-cm="begin">${mapped?'Carry on mapping':'Start mapping'}</button><button type="button" class="hrBtn ghost sm" data-cm="end">Cancel</button></div>
   <div class="gpsActs"><button type="button" class="hrBtn ghost sm" data-cm="paste">Add a shared map</button>${mapped?`<button type="button" class="hrBtn ghost sm" data-cm="share">Share this map</button>`:''}</div>
@@ -4397,18 +4440,27 @@ function cmPanel(p){const cm=GPS.cm,c=GPS.course,h=gpsHole(),r=RT.live,mapped=Ob
   <div class="gpsActs"><button type="button" class="hrBtn" data-cm="share">Share this map</button><button type="button" class="hrBtn ghost sm" data-cm="end">Done</button></div>${cm.msg?`<p class="gpsP" role="status">${esc(cm.msg)}</p>`:''}</div>`;return}
  const head=`<span class="gpsK">Mapping hole ${h.n} of ${r.holes.length}${h.yards?` · ${h.yards} yds on the card`:''}</span>`;
  const nav=`<div class="gpsActs"><button type="button" class="hrBtn ghost sm" data-cm="skip">${r.i<r.holes.length-1?'Skip hole':'Finish'}</button><button type="button" class="hrBtn ghost sm" data-cm="end">Stop mapping</button></div>`;
- if(cm.step==='tee'){p.innerHTML=`<div class="gpsDist">${head}<p class="gpsP">Tap the tee. Zoom in with two fingers; drag the map to find it.</p>${nav}</div>`;return}
+ const here=cmCanHere()?`<button type="button" class="hrBtn ghost sm" data-cm="here">I'm standing on it</button>`:'';
+ if(cm.step==='tee'){p.innerHTML=`<div class="gpsDist">${head}<p class="gpsP">Tap the back tee (the one furthest from the green). Zoom in with two fingers; drag the map to find it.</p>${here?`<div class="gpsActs">${here}</div>`:''}${nav}</div>`;return}
+ if(cm.step==='front'||cm.step==='back'){const out=!!cm.poly&&!cmFB(cm.tee,cm.green,cm.poly).est;
+  p.innerHTML=`<div class="gpsDist">${head}<p class="gpsP">${cm.step==='front'?'Now tap the <b>front</b> edge of the green, the edge nearest the tee.':'And the <b>back</b> edge of the green, furthest from the tee.'}</p>
+  <div class="gpsActs"><button type="button" class="hrBtn ghost sm" data-cm="usefb">${cm.step==='back'?'Same depth as the front':out?'Use the green\'s outline':'Estimate it for me'}</button>${here}<button type="button" class="hrBtn ghost sm" data-cm="regreen">Move the middle</button></div>${nav}</div>`;return}
+ if(cm.step==='fair'){p.innerHTML=`<div class="gpsDist">${head}<p class="gpsP">Par ${h.par}: tap the middle of the fairway where a good drive finishes. On a dogleg, tap the corner. It gives golfers a target off the tee and a distance to it.</p>
+  <div class="gpsActs"><button type="button" class="hrBtn ghost sm" data-cm="skipfair">Skip the fairway</button>${here}</div>${nav}</div>`;return}
  if(cm.step==='green'){const d=cm.sug?Math.round(mBetween(cm.tee,cm.sug)*1.09361):null;
   p.innerHTML=`<div class="gpsDist">${head}<p class="gpsP">Now tap the middle of the green.${cm.sug?` The dashed outline is the green Caddy Coach found on the satellite picture, ${d} yds from this tee.`:''}</p>
-  <div class="gpsActs">${cm.sug?`<button type="button" class="hrBtn" data-cm="usesug">Use the green it found</button>`:''}<button type="button" class="hrBtn ghost sm" data-cm="retee">Move the tee</button></div>${nav}</div>`;return}
- const d=Math.round(mBetween(cm.tee,cm.green)*1.09361),off=h.yards?d-h.yards:0;
- p.innerHTML=`<div class="gpsDist">${head}${cm.auto?'<p class="gpsP">Caddy Coach found this hole on the satellite map: <b>T</b> is the tee and the red dot is the middle of the green. If they look right, save it.</p>':''}<p class="gpsP">Tee to the middle of the green: <b>${d} yds</b>${h.yards?` (card says ${h.yards}${Math.abs(off)>Math.max(25,h.yards*.12)?`; that's ${Math.abs(off)} yds ${off>0?'longer':'shorter'}, so check the tee and green, or it may be a dogleg`:''})`:''}.</p>
-  <div class="gpsActs"><button type="button" class="hrBtn" data-cm="save">${r.i<r.holes.length-1?'Save and next hole':'Save and finish'}</button><button type="button" class="hrBtn ghost sm" data-cm="regreen">Move the green</button><button type="button" class="hrBtn ghost sm" data-cm="retee">Move the tee</button></div>${nav}</div>`}
-function cmCode(c){const h={};Object.entries(c.greens||{}).forEach(([n,g])=>{if(!g.tee)return;const f=v=>Math.round(v*1e6);h[n]=[f(g.tee.lat),f(g.tee.lon),f(g.lat),f(g.lon),f(g.front.lat),f(g.front.lon),f(g.back.lat),f(g.back.lon),g.fbEst?1:0]});
+  <div class="gpsActs">${cm.sug?`<button type="button" class="hrBtn" data-cm="usesug">Use the green it found</button>`:''}${here}<button type="button" class="hrBtn ghost sm" data-cm="retee">Move the tee</button></div>${nav}</div>`;return}
+ const d=Math.round(mBetween(cm.tee,cm.green)*1.09361),off=h.yards?d-h.yards:0,yd=(a,b)=>Math.round(mBetween(a,b)*1.09361);
+ const fbq=cm.gf&&cm.gb?{front:cm.gf,back:cm.gb,est:!!cm.fbEst}:cmFB(cm.tee,cm.green,cm.poly);
+ const extra=`<p class="gpsP sm">Front <b>${yd(cm.tee,fbq.front)}</b> · back <b>${yd(cm.tee,fbq.back)}</b> yds from the tee${fbq.est?' (estimated)':''}.${cm.fair?` Fairway target <b>${yd(cm.tee,cm.fair)}</b> yds from the tee, then <b>${yd(cm.fair,cm.green)}</b> to the middle.`:''}</p>`;
+ p.innerHTML=`<div class="gpsDist">${head}${cm.auto?'<p class="gpsP">Caddy Coach found this hole on the satellite map: <b>T</b> is the tee and the red dot is the middle of the green. If they look right, save it.</p>':''}<p class="gpsP">Tee to the middle of the green: <b>${d} yds</b>${h.yards?` (card says ${h.yards}${Math.abs(off)>Math.max(25,h.yards*.12)?`; that's ${Math.abs(off)} yds ${off>0?'longer':'shorter'}, so check the tee and green, or it may be a dogleg`:''})`:''}.</p>${extra}
+  <div class="gpsActs"><button type="button" class="hrBtn" data-cm="save">${r.i<r.holes.length-1?'Save and next hole':'Save and finish'}</button></div>
+  <div class="gpsActs wrap"><button type="button" class="hrBtn ghost sm" data-cm="retee">Move the tee</button><button type="button" class="hrBtn ghost sm" data-cm="regreen">Move the green</button><button type="button" class="hrBtn ghost sm" data-cm="refb">Front and back</button>${cmWantsFair()?`<button type="button" class="hrBtn ghost sm" data-cm="refair">${cm.fair?'Move':'Add'} fairway target</button>`:''}</div>${nav}</div>`}
+function cmCode(c){const h={};Object.entries(c.greens||{}).forEach(([n,g])=>{if(!g.tee)return;const f=v=>Math.round(v*1e6);h[n]=[f(g.tee.lat),f(g.tee.lon),f(g.lat),f(g.lon),f(g.front.lat),f(g.front.lon),f(g.back.lat),f(g.back.lon),g.fbEst?1:0].concat(g.fair?[f(g.fair.lat),f(g.fair.lon)]:[])});
  return CM_PREFIX+btoa(unescape(encodeURIComponent(JSON.stringify({k:c.key,n:c.name,h}))))}
 function cmRead(code){const s=String(code||'').trim().replace(/\s+/g,'');if(!s.startsWith(CM_PREFIX))throw new Error('That isn\'t a Caddy Coach course map code.');
  const o=JSON.parse(decodeURIComponent(escape(atob(s.slice(CM_PREFIX.length)))));if(!o||!o.h)throw new Error('That code is incomplete.');
- const greens={};Object.entries(o.h).forEach(([n,a])=>{const f=v=>+(v/1e6).toFixed(6);if(!Array.isArray(a)||a.length<8)return;greens[n]={tee:{lat:f(a[0]),lon:f(a[1])},lat:f(a[2]),lon:f(a[3]),front:{lat:f(a[4]),lon:f(a[5])},back:{lat:f(a[6]),lon:f(a[7])},mapped:1};if(a[8])greens[n].fbEst=1});
+ const greens={};Object.entries(o.h).forEach(([n,a])=>{const f=v=>+(v/1e6).toFixed(6);if(!Array.isArray(a)||a.length<8)return;greens[n]={tee:{lat:f(a[0]),lon:f(a[1])},lat:f(a[2]),lon:f(a[3]),front:{lat:f(a[4]),lon:f(a[5])},back:{lat:f(a[6]),lon:f(a[7])},mapped:1};if(a[8])greens[n].fbEst=1;if(a.length>=11)greens[n].fair={lat:f(a[9]),lon:f(a[10])}});
  return{key:o.k,name:o.n,greens}}
 async function cmShare(){const c=GPS.course,code=cmCode(c),txt=`Caddy Coach course map for ${c.name}:\n${code}`;
  try{if(navigator.share){await navigator.share({title:`${c.name} course map`,text:txt});GPS.cm.msg='Shared.';return gpsPanel()}}catch(e){if(e&&e.name==='AbortError')return}
@@ -4423,9 +4475,13 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-cm]');if(!
  if(a==='begin')return cmBegin();if(a==='end')return cmEnd();
  if(a==='paste'){cm.paste=true;cm.msg='';gpsPanel();const t=$('cmCode');t&&t.focus();return}
  if(a==='import')return cmImport();if(a==='share')return cmShare();
- if(a==='usesug')return cmUseSug();if(a==='save')return cmSave();
+ if(a==='usesug')return cmUseSug();if(a==='save')return cmSave();if(a==='usefb')return cmUseFB();
+ if(a==='skipfair'){cm.fair=null;cm.step='check';cmDraw();return gpsPanel()}
+ if(a==='refb'){cm.gf=cm.gb=null;cm.step='front';cmDraw();return gpsPanel()}
+ if(a==='refair'){cm.fair=null;cm.step='fair';cmDraw();return gpsPanel()}
+ if(a==='here'){if(GPS.pos)cmTap({lat:GPS.pos.lat,lng:GPS.pos.lng});return}
  if(a==='retee'){cm.step='tee';cm.tee=null;cm.green=null;cm.sug=null;cm.auto=false;cmDraw();return gpsPanel()}
- if(a==='regreen'){cm.step='green';cm.green=null;cm.poly=null;cm.auto=false;cm.sug=cmSuggest(cm.tee,gpsHole());cmDraw();return gpsPanel()}
+ if(a==='regreen'){cm.step='green';cm.green=null;cm.poly=null;cm.gf=cm.gb=null;cm.auto=false;cm.sug=cmSuggest(cm.tee,gpsHole());cmDraw();return gpsPanel()}
  if(a==='skip'){const r=RT.live;if(r.i<r.holes.length-1)return cmGo(r.i+1);GPS.cm={finished:true,back:cm.back,done:cm.done};cmDraw();return gpsPanel()}});
 
 // ---------- Shared course map (standalone app): greens and scorecards that golfers add reach everyone ----------
@@ -4453,7 +4509,7 @@ async function sbCheck(){try{await sbGet('hole_maps','select=id&limit=1');await 
 // share one hole's green (and tee, front and back when known)
 function sbShareHole(c,n,g,source){if(!SB.on()||!c||!g||g.shared||g.lat==null)return;
  sbSend('hole_maps',[{course_key:sbKey(c),hole:+n,tee_lat:sbN(g.tee&&g.tee.lat),tee_lon:sbN(g.tee&&g.tee.lon),green_lat:sbN(g.lat),green_lon:sbN(g.lon),
-  front_lat:sbN(g.front&&g.front.lat),front_lon:sbN(g.front&&g.front.lon),back_lat:sbN(g.back&&g.back.lat),back_lon:sbN(g.back&&g.back.lon),source,device:SB.device()}])}
+  front_lat:sbN(g.front&&g.front.lat),front_lon:sbN(g.front&&g.front.lon),back_lat:sbN(g.back&&g.back.lat),back_lon:sbN(g.back&&g.back.lon),fair_lat:sbN(g.fair&&g.fair.lat),fair_lon:sbN(g.fair&&g.fair.lon),source,device:SB.device()}])}
 function sbShareOsmCard(c,card){if(!SB.on()||!card)return;const k='cc_sbosm_'+sbKey(c);if(lsGet(k,0))return;
  const o={src:'osm',v:1,tees:card.tees||null,greens:card.greens||{},greenPool:(card.greenPool||[]).map(g=>({lat:g.lat,lon:g.lon,poly:g.poly})),mapped:card.mapped||0,confidence:card.confidence||null,source:card.source||'osm',osm:card.osm||null};
  if(JSON.stringify(o).length>17000)o.greenPool=o.greenPool.map(g=>({lat:g.lat,lon:g.lon}));if(JSON.stringify(o).length>19000)return;
@@ -4461,14 +4517,15 @@ function sbShareOsmCard(c,card){if(!SB.on()||!card)return;const k='cc_sbosm_'+sb
 function sbShareCard(c){if(!SB.on()||!c||!c.tees)return;const tees=c.tees.map(t=>({name:String(t.name||'Tees').slice(0,30),colour:t.colour||'',rating:t.rating||null,slope:t.slope||null,holes:t.holes.map(h=>({n:h.n,par:h.par,yards:h.yards??null,si:h.si??null}))}));
  sbSend('course_cards',[{course_key:sbKey(c),name:String(c.name||'').slice(0,120),card:{holes:(c.tees[0]&&c.tees[0].holes.length)||18,tees},device:SB.device()}])}
 // what golfers agree on for each hole: every phone gets one vote (its latest), the biggest group within 12 m wins
-const SB_W={mapped:3,tapped:2,learned:1.5,found:1};
+const SB_W={mapped:3,confirmed:2,tapped:2,learned:1.5,found:1};
 function sbConsensus(rows){const by={},out={};rows.forEach(r=>{(by[r.hole]=by[r.hole]||[]).push(r)});
  for(const[n,all]of Object.entries(by)){const seen=new Set(),rs=all.slice().sort((a,b)=>a.created_at<b.created_at?1:-1).filter(r=>!seen.has(r.device)&&seen.add(r.device));
   const P=r=>({lat:r.green_lat,lon:r.green_lon}),w=r=>SB_W[r.source]||1;let best=null,bs=-1;
   for(const r of rs){const s=rs.filter(q=>mBetween(P(r),P(q))<12).reduce((a,q)=>a+w(q),0);if(s>bs){bs=s;best=r}}
   const cl=rs.filter(q=>mBetween(P(best),P(q))<12),avg=(L,a,b)=>{const k=L.filter(q=>q[a]!=null&&q[b]!=null);if(!k.length)return null;const sw=k.reduce((s,q)=>s+w(q),0);return{lat:sbN(k.reduce((s,q)=>s+q[a]*w(q),0)/sw),lon:sbN(k.reduce((s,q)=>s+q[b]*w(q),0)/sw)}};
   const g=Object.assign(avg(cl,'green_lat','green_lon'),{shared:true,votes:cl.length});const tee=avg(cl,'tee_lat','tee_lon');if(tee)g.tee=tee;
-  const fr=avg(cl,'front_lat','front_lon'),bk=avg(cl,'back_lat','back_lon');if(fr&&bk){g.front=fr;g.back=bk}out[n]=g}
+  const fr=avg(cl,'front_lat','front_lon'),bk=avg(cl,'back_lat','back_lon');if(fr&&bk){g.front=fr;g.back=bk}
+  const fw=avg(cl,'fair_lat','fair_lon');if(fw)g.fair=fw;const me=SB.device();if(cl.some(q=>q.device===me))g.mine=true;out[n]=g}
  return out}
 async function sbRows(table,key,fresh){const ck=`cc_sb_${table}_${key}`,c=lsGet(ck,null);if(c&&Date.now()-c.t<(fresh||6e5))return c.rows;
  try{const rows=await sbGet(table,`course_key=eq.${encodeURIComponent(key)}&select=*&order=created_at.desc&limit=3000`);lsSet(ck,{t:Date.now(),rows});return rows}catch(e){if(c)return c.rows;throw e}}
