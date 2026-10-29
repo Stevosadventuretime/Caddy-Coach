@@ -41,6 +41,11 @@ with sync_playwright() as p:
     pg.evaluate("DP.player.pause()"); pg.wait_for_timeout(800); n3 = pg.evaluate("DrillStudio.stats().renders")
     pg.evaluate("DP.player.next()"); pg.wait_for_timeout(800); n4 = pg.evaluate("DrillStudio.stats().renders")
     chk(n4 > n3, 'stepping while paused redraws: %d' % (n4 - n3))
+    # every shader is ready before a drill plays: the first red ghost doesn't stall mid-drill
+    pg.evaluate("closeDrill(true)"); pg.wait_for_timeout(300); pg.evaluate('tab(3)'); pg.wait_for_timeout(300)
+    pg.evaluate("document.querySelector('#drillList [data-open=handhang]').click()"); pg.wait_for_timeout(2500)
+    p0 = pg.evaluate("DrillStudio.stats().programs"); pg.evaluate("DP.player.goStep(2);DP.player.play()"); pg.wait_for_timeout(9000); p1 = pg.evaluate("DrillStudio.stats().programs")
+    chk(p1 == p0, 'no shaders built mid-drill (red ghost included): %d -> %d' % (p0, p1))
     chk(not [e for e in errs if '401' not in e], 'no page errors %s' % errs[:3])
     b.close()
     # pictures missing: cards still get a picture, drawn live

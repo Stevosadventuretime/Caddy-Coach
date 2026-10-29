@@ -77,7 +77,7 @@ function rig(p) {
     const hands = add(SC, mul(add(mul(v, Math.cos(th)), mul(u, Math.sin(th))), p.reach));
     const an = (p.theta + p.hinge) * D2R, sd = norm(add(mul(vs, Math.cos(an)), mul(u, Math.sin(an))));
     J.lh = hands; J.th = add(hands, mul(sd, 0.08 + p.split)); J.club = [add(hands, mul(sd, -0.06)), add(hands, mul(sd, p.clen))]; J.sd = sd;
-    if (p.tdrop > 0) { const hang = add(add(J.ts, [-0.02, -0.56, 0.06]), mul(F, 0.06)); J.th = add(mul(J.th, 1 - p.tdrop), mul(hang, p.tdrop)); }
+    if (p.tdrop > 0) J.th = lerp3(J.th, hangPoint(J.ts, F), p.tdrop);
     J.le = ik(J.ls, J.lh, ua, fa, norm([0.2, -1, -0.3]));
     if (a === 'lead') { J.th = add(add(J.ls, mul(F, 0.07)), mul(s, -0.02)); J.te = ik(J.ts, J.th, ua, fa, norm([0, -1, 0.6])); }
     else if (a === 'trailonly') { J.th = hands; J.lh = add(add(J.ts, mul(F, 0.07)), mul(s, -0.02)); J.le = ik(J.ls, J.lh, ua, fa, norm([0, -1, 0.6])); J.te = ik(J.ts, J.th, ua, fa, norm([-0.2, -1, -0.6])); J.club = [add(hands, mul(sd, -0.06)), add(hands, mul(sd, p.clen))]; }
@@ -196,13 +196,18 @@ function keyInfo(dr, i) {
   if (MOTION_PH.includes(k.k)) return { f: SWING.phases[k.k], P: k.P, base: k.k };
   return { f: null, P: k.P };
 }
+// a let-go trail hand hangs straight down from the shoulder, wherever that shoulder is
+function hangPoint(ts, F) { return add(add(ts, [0, -0.575, 0]), mul(F, 0.03)); }
 function deltaOf(info) {
   const R = rig(info.P), B = baseRig(info.base), d = {};
+  // the hanging hand is placed from the captured shoulder in compose(), so the trail hand's delta leaves the drop out
+  const Rn = R.tdrop > 0 ? rig(Object.assign({}, info.P, { tdrop: 0 })) : R;
   for (const k in R) { const r = R[k], b = B[k]; if (isV(r) && isV(b)) d[k] = sub(r, b); else if (isPair(r) && isPair(b)) d[k] = [sub(r[0], b[0]), sub(r[1], b[1])]; }
+  if (Rn !== R) d.th = sub(Rn.th, B.th);
   const grip = R.club && R.arms === 'club' && !(R.tdrop > 0) ? 1 : 0;
-  return { d, R, B, grip, gl: grip ? len(sub(R.th, R.lh)) : null };
+  return { d, R, B, grip, drop: R.tdrop || 0, gl: grip ? len(sub(R.th, R.lh)) : null };
 }
-function lerpDelta(A, B, u) { const d = {}; for (const k in A.d) { const a = A.d[k], b = B.d[k]; if (!b) continue; d[k] = isPair(a) ? [lerp3(a[0], b[0], u), lerp3(a[1], b[1], u)] : lerp3(a, b, u); } return { d, R: u < 0.5 ? A.R : B.R, B: u < 0.5 ? A.B : B.B, grip: A.grip + (B.grip - A.grip) * u, gl: A.gl != null && B.gl != null ? A.gl + (B.gl - A.gl) * u : (A.gl != null ? A.gl : B.gl) }; }
+function lerpDelta(A, B, u) { const d = {}; for (const k in A.d) { const a = A.d[k], b = B.d[k]; if (!b) continue; d[k] = isPair(a) ? [lerp3(a[0], b[0], u), lerp3(a[1], b[1], u)] : lerp3(a, b, u); } return { d, R: u < 0.5 ? A.R : B.R, B: u < 0.5 ? A.B : B.B, grip: A.grip + (B.grip - A.grip) * u, drop: (A.drop || 0) + ((B.drop || 0) - (A.drop || 0)) * u, gl: A.gl != null && B.gl != null ? A.gl + (B.gl - A.gl) * u : (A.gl != null ? A.gl : B.gl) }; }
 // captured frame + override, then made whole again: unit vectors, a full-length club in the hands, elbows and knees re-solved
 function compose(f, D) {
   const C = motionFrame(f), J = {};
@@ -213,6 +218,7 @@ function compose(f, D) {
   // the trail hand sits on the shaft as much as this pose holds the club with both hands (blends between poses)
   const g = D.grip == null ? 0 : D.grip;
   if (g > 0) J.th = lerp3(J.th, add(J.lh, mul(J.sd, D.gl || 0.08)), g);
+  if (D.drop > 0) J.th = lerp3(J.th, hangPoint(J.ts, J.F), D.drop);
   if (R.club && R.arms === 'club') { const L = len(sub(R.club[1], R.club[0])); J.club = [sub(J.lh, mul(J.sd, 0.06)), add(J.lh, mul(J.sd, L - 0.06))]; }
   else if (!R.club) J.club = null;
   return finish(J);
@@ -723,6 +729,9 @@ function setMirror(on) { MIR = !!on; }
 // The 3D picture's resolution adapts to the phone: if frames take too long it renders a little smaller
 // (labels and lines stay sharp on their own layer). Shared by all drills for this visit.
 const QUAL = { s: 1, min: 0.7 };
+// remembered on this phone until the app updates, so the first drill of a visit starts at the right size
+try { const q = JSON.parse(localStorage.getItem('cc_q3d') || 'null'); if (q && q.v === root.CC_VER && q.s >= QUAL.min && q.s <= 1) QUAL.s = q.s; } catch (e) { }
+function saveQual() { try { localStorage.setItem('cc_q3d', JSON.stringify({ s: QUAL.s, v: root.CC_VER })); } catch (e) { } }
 function slowFrames(dts) { const d = dts.slice().sort((a, b) => a - b); return d[d.length >> 1] > 24; }
 function Player(wrap, dr, opt) {
   opt = opt || {}; prep(dr);
@@ -737,12 +746,12 @@ function Player(wrap, dr, opt) {
   function size() { const r = box3.getBoundingClientRect(); dpr = Math.min(2, window.devicePixelRatio || 1); W = Math.max(2, Math.round(r.width * dpr)); H = Math.max(2, Math.round(r.height * dpr));
     if (gl) { R.setPixelRatio(1); R.setSize(gw(), gh(), false); sc.cam.aspect = W / H; sc.cam.updateProjectionMatrix(); } else { cv.width = W; cv.height = H; } ov.width = W; ov.height = H; }
   const gw = () => Math.max(2, Math.round(W * QUAL.s)), gh = () => Math.max(2, Math.round(H * QUAL.s));
-  const dts = []; let warm = 20;
+  const dts = []; let warm = 10;
   function viewFor(key) { return st.view === 'auto' ? (key.cam || dr.view || 'face') : st.view; }
   function frame(now) {
     if (st.dead) return;
     const ms = now - st.last, dt = Math.min(0.1, ms / 1000); st.last = now;
-    if (gl && st.playing && !document.hidden && ms < 1000 && warm-- <= 0) { dts.push(ms); if (dts.length >= 45) { if (slowFrames(dts) && QUAL.s > QUAL.min) { QUAL.s = Math.max(QUAL.min, QUAL.s * 0.85); size(); } dts.length = 0; } }
+    if (gl && st.playing && !document.hidden && ms < 1000 && warm-- <= 0) { dts.push(ms); if (dts.length >= 30) { if (slowFrames(dts) && QUAL.s > QUAL.min) { QUAL.s = Math.max(QUAL.min, QUAL.s * 0.85); size(); saveQual(); } dts.length = 0; } }
     if (st.playing) { st.t += dt * st.speed; if (st.t >= dr._dur) st.t = 0; }
     // paused with the camera settled: the picture can't change, so don't redraw it (saves the battery and keeps the phone cool)
     if (gl && !sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) st.dirty = true;
@@ -800,7 +809,7 @@ function Player(wrap, dr, opt) {
 }
 // a still picture of the drill's key moment, for the library cards
 const POSTERS = new Map();
-function poster(dr, w, h) {
+function poster(dr, w, h, warm) {   // warm: also draw the red ghost, so its shaders are ready before a drill plays
   prep(dr); const keyI = dr.poster != null ? dr.poster : Math.min(dr.seq.length - 1, 2), k = dr._tl[keyI].e + 0.01, id = dr.id + ':' + w + 'x' + h + (MIR ? ':L' : '');
   if (POSTERS.has(id) && (POSTERS.get(id + ':real') || typeof CCGolfer === 'undefined' || !CCGolfer.ready())) return POSTERS.get(id);
   const c = document.createElement('canvas'); c.width = w; c.height = h; const s = sampleAt(dr, k), J = jointsAt(dr, k), key = s.key;
@@ -810,13 +819,14 @@ function poster(dr, w, h) {
     const P0 = mx(cp.pos), T0 = mx(cp.tg); sc.S.scale.x = MIR ? -1 : 1; sc.S.updateMatrixWorld();
     sc.cam.position.set(P0[0], P0[1], P0[2]); sc.cam.lookAt(T0[0], T0[1], T0[2]); sc.cam.updateMatrixWorld();
     if (!sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) upgrade(sc); poseAny(sc.fig, J); setTone(sc.fig, [], 0); poseClub(sc.club, (dr.noclub || s.p.noclub) ? null : J.club, J); sc.ghost.G.visible = false; sc.gclub.visible = false;
+    if (warm) { poseAny(sc.ghost, J); ghostOpacity(sc.ghost, 0.3); poseClub(sc.gclub, J.club, J); sc.ghost.G.visible = !!J; sc.gclub.visible = !!J.club; }
     const across = J.stickAcross || J.spineClub; sc.stick.visible = !!across; if (across) between(sc.stick, across[0], across[1]);
     if (sc.ball) sc.ball.visible = true; updateProps(sc.props, J, {}, dr, s);
-    R.render(sc.S, sc.cam); STATS.shared++; const x = c.getContext('2d'); x.drawImage(R.domElement, 0, 0, w, h);
+    R.render(sc.S, sc.cam); STATS.shared++; if (warm) { sc.ghost.G.visible = false; sc.gclub.visible = false; } const x = c.getContext('2d'); x.drawImage(R.domElement, 0, 0, w, h);
   } else { const x = c.getContext('2d'), yaw = (VIEWS[dr.view] || VIEWS.face).yaw * D2R, Rr = [Math.cos(yaw), 0, -Math.sin(yaw)], kk = h * 0.42; flat(x, w, h, p => [w / 2 + (MIR ? -1 : 1) * dot(p, Rr) * kk, h * 0.9 - p[1] * kk, 0], J, dr); }
   const url = c.toDataURL('image/jpeg', 0.86); POSTERS.set(id, url); if (typeof CCGolfer !== 'undefined' && CCGolfer.ready()) POSTERS.set(id + ':real', true); return url;
 }
-function stats() { return { scenes: SCN.size, renders: STATS.renders, scale: QUAL.s }; }
+function stats() { return { scenes: SCN.size, renders: STATS.renders, scale: QUAL.s, programs: R && R.info.programs ? R.info.programs.length : 0 }; }
 const api = { stats, slowFrames, QUAL, Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, ballOf, propPoint };
 root.DrillStudio = api;
 })(this);
