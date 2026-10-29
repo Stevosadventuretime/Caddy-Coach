@@ -102,46 +102,49 @@ def reach(J, ph, B, out_fps=60):
         mid = (lo + hi) / 2
         if np.linalg.norm(ball - bent(mid)) > CLEN: lo = mid
         else: hi = mid
-    th = (lo + hi) / 2
+    th = min((lo + hi) / 2, 9.0)                           # no more than a little extra bend; the body slides for the rest
     for j in np.where(w > 0)[0]:
         p = J['pel'][j]; R = _rot(X, th * w[j])
         for k in UPPER: J[k][j] = p + R @ (J[k][j] - p)
-    v = ball - J['lh'][i]; need = (v - _unit(v) * CLEN) * [1, 0, 1]
+    v = ball - J['lh'][i]; need = v - _unit(v) * CLEN; need[1] = max(need[1], -0.018)   # sink at most 1.8 cm (no squat)
     for k in UPPER + ['pel', 'lhip', 'thip']: J[k] = J[k] + w[:, None] * need
     _legs(J, B)
     return J
 
-HINGE = dict(address=28, takeaway=45, half=85, top=80, down=85, impact=24, through=-80, finish=-115)   # negative: the wrists re-hinge the other way after impact   # forearm-to-shaft angle
-
-BALL_Y = 0.03
-BEND = 32.0         # spine forward bend at address (pelvis to neck, from vertical)
-
-def ball_for(J, ph):
-    """the ball sits where the club rests at address, on the ground straight out toward the ball (+z)"""
-    A = J['lh'][ph['address']]
-    return np.array([A[0], BALL_Y, A[2] + np.sqrt(max(CLEN ** 2 - (A[1] - BALL_Y) ** 2, 0))])
-
-def reach(J, ph, B, out_fps=60):
-    """move the body (not the feet) a little toward the ball through impact so the club can reach it"""
-    J = {k: v.copy() for k, v in J.items()}; n = len(J['pel']); fr = np.arange(n); i = ph['impact']
-    ball = ball_for(J, ph); v = ball - J['lh'][i]; need = v - _unit(v) * CLEN
-    print('reach correction at impact (m):', np.round(need, 3)) if False else None
-    w = _ss(1 - np.abs(fr - i) / (0.12 * out_fps))[:, None]
-    for k in UPPER + ['pel', 'lhip', 'thip']: J[k] = J[k] + w * need
-    _legs(J, B)
-    return J
-
-def club(J, ph, out_fps=60):
-    J = {k: v.copy() for k, v in J.items()}; n = len(J['lh']); fr = np.arange(n)
+def _shaft(J, ph):
+    """shaft direction: the lead forearm turned about the swing plane's normal by the wrist hinge for each phase"""
+    n = len(J['lh']); fr = np.arange(n)
     seg = slice(ph['address'], ph['finish'] + 1); P = J['lh'][seg] - J['lh'][seg].mean(0)
-    N = np.linalg.svd(P, full_matrices=False)[2][2]                      # normal of the plane the hands swing in
-    keys = [ph[k] for k in PH]; hv = [HINGE[k] for k in PH]
-    hinge = np.interp(fr, keys, hv)
+    N = np.linalg.svd(P, full_matrices=False)[2][2]
+    hinge = np.interp(fr, [ph[k] for k in PH], [HINGE[k] for k in PH])
     fa = _unit(J['lw'] - J['le'])
     def dirs(sg): return np.array([_rot(N, sg * hinge[j]) @ fa[j] for j in range(n)])
     h = ph['half']; dp, dm = dirs(1), dirs(-1)
     d = dp if (J['lh'][h] + dp[h] * CLEN)[1] > (J['lh'][h] + dm[h] * CLEN)[1] else dm
-    d = _unit(gaussian_filter1d(d, 1.5, axis=0))
+    return _unit(gaussian_filter1d(d, 1.5, axis=0))
+
+def grip(J, ph, B):
+    """both hands on the grip: centred where the captured hands are, 8 cm apart along the shaft, arms bent to reach
+    (if the grip is out of reach it comes in toward the shoulders until both arms reach it)"""
+    from retarget import _ik
+    J = {k: v.copy() for k, v in J.items()}; d = _shaft(J, ph); L = B['uarm'] + B['forearm'] - 0.005
+    off = {sd: J[sd + 'h'] - J[sd + 'w'] for sd in 'lt'}
+    g = (J['lh'] + J['th']) / 2; mid = (J['ls'] + J['ts']) / 2
+    for j in range(len(g)):
+        for _ in range(40):
+            lw = g[j] - d[j] * 0.04 - off['l'][j]; tw = g[j] + d[j] * 0.04 - off['t'][j]
+            if np.linalg.norm(lw - J['ls'][j]) <= L and np.linalg.norm(tw - J['ts'][j]) <= L: break
+            g[j] = g[j] + (mid[j] - g[j]) * 0.05
+    g = gaussian_filter1d(g, 1.0, axis=0)
+    for sd, sg in (('l', -1), ('t', 1)):
+        J[sd + 'h'] = g + d * 0.04 * sg; J[sd + 'w'] = J[sd + 'h'] - off[sd]
+        pole = _unit(gaussian_filter1d(J[sd + 'e'] - (J[sd + 's'] + J[sd + 'w']) / 2, 2.0, axis=0))
+        J[sd + 'e'], _ = _ik(J[sd + 's'], J[sd + 'w'], B['uarm'], B['forearm'], pole)
+    return J
+
+def club(J, ph, out_fps=60):
+    J = {k: v.copy() for k, v in J.items()}; n = len(J['lh']); fr = np.arange(n)
+    d = _shaft(J, ph)
     ball = ball_for(J, ph)
     # the wrists set the clubhead on the ball at address and impact (blended in and out)
     for k, win in ((ph['address'], 0.25), (ph['impact'], 0.08)):
@@ -151,6 +154,11 @@ def club(J, ph, out_fps=60):
         w = _ss(1 - np.abs(fr - k) / (win * out_fps))
         for j in np.where(w > 0)[0]: d[j] = _rot(ax, full * w[j]) @ d[j]
     J['sd'] = d; J['club'] = np.stack([J['lh'] - d * 0.06, J['lh'] + d * CLEN], 1)
+    # keep the trail hand on the shaft after the wrist correction (the trail arm follows it)
+    from retarget import _ik
+    ua = np.linalg.norm(J['te'][0] - J['ts'][0]); fa = np.linalg.norm(J['tw'][0] - J['te'][0])
+    hand = J['th'] - J['tw']; J['th'] = J['lh'] + d * 0.08; J['tw'] = J['th'] - hand
+    J['te'], _ = _ik(J['ts'], J['tw'], ua, fa, _unit(J['te'] - (J['ts'] + J['tw']) / 2))
     J['clubhead'] = J['club'][:, 1]; J['hands'] = (J['lh'] + J['th']) / 2
     return J, ball
 

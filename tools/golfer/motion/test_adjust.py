@@ -2,7 +2,7 @@ import os, json, unittest, subprocess, sys, tempfile
 import numpy as np
 import bvh, measure, retarget, adjust
 HERE = os.path.dirname(os.path.abspath(__file__))
-MESH = os.environ.get('GOLFER_MESH', '/tmp/claude-0/-home-claude/2adf77d1-861f-56c4-a071-a71d0d17c501/scratchpad/site/golfer-mesh.wasm')
+MESH = os.environ.get('GOLFER_MESH', os.path.join(HERE, '..', '..', '..', 'golfer-mesh.wasm'))
 NAMES = ['pel', 's', 'H', 'Lt', 'F', 'neck', 'head', 'face', 'ls', 'le', 'lh', 'ts', 'te', 'th', 'lhip', 'thip', 'lk', 'tk', 'la', 'ta', 'lt', 'tt',
          'lhl', 'thl', 'club', 'hands', 'clubhead', 'seat', 'bum', 'Fh', 'belt']
 
@@ -17,8 +17,10 @@ class T(unittest.TestCase):
         names, pos, ft = bvh.load(os.path.join(HERE, 'cmu', '64_08.bvh')); fps = 1 / ft
         ph = measure.phases(names, pos, fps); W = retarget.to_world(names, pos, ph); B = retarget.golfer_bones(MESH)
         J = retarget.to_golfer(W, names, B, ph, fps)
-        J, ph = adjust.retime(J, ph, fps); J = adjust.posture(J, ph, B); J = adjust.turns(J, ph, B); J = adjust.reach(J, ph, B); J, ball = adjust.club(J, ph); J = adjust.frames(J, ph, ball)
+        J, ph = adjust.retime(J, ph, fps); J = adjust.posture(J, ph, B); J = adjust.turns(J, ph, B); J = adjust.grip(J, ph, B); J = adjust.reach(J, ph, B); J, ball = adjust.club(J, ph); J = adjust.frames(J, ph, ball)
         cls.J, cls.ph, cls.ball = J, ph, ball
+        J0, ph0 = adjust.retime(retarget.to_golfer(W, names, B, measure.phases(names, pos, fps), fps), measure.phases(names, pos, fps), fps)
+        cls.noreach = adjust.turns(adjust.posture(J0, ph0, B), ph0, B)
         a = ph['address']; spine = J['neck'][a] - J['pel'][a]; spine /= np.linalg.norm(spine)
         sl = J['ls'] - J['ts']; hl = J['lhip'] - J['thip']
         cls.S = ang(sl, spine, sl[a]); cls.Hh = ang(hl, np.array([0, 1.0, 0]), hl[a])
@@ -51,6 +53,19 @@ class T(unittest.TestCase):
 
     def test_clubhead_up_at_the_top(self):
         t = self.ph['top']; self.assertGreater(self.J['clubhead'][t][1], self.J['hands'][t][1] - 0.2)
+
+    def test_reach_doesnt_squat(self):
+        i = self.ph['impact']; self.assertLess(abs(self.J['pel'][i][1] - self.noreach['pel'][i][1]), 0.02)
+
+    def test_trail_hand_on_the_club(self):
+        a, b = self.J['club'][:, 0], self.J['club'][:, 1]; d = (b - a) / np.linalg.norm(b - a, axis=1, keepdims=True)
+        r = self.J['th'] - a; off = np.linalg.norm(r - d * (r * d).sum(1, keepdims=True), axis=1)
+        self.assertLess(off.max(), 0.01)
+        L = np.linalg.norm(self.J['th'] - self.J['ts'], axis=1); self.assertLess(L.max(), 0.262 + 0.266 + 0.07)
+
+    def test_paths_are_in_the_repo(self):
+        import make_swing; root = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
+        self.assertTrue(os.path.abspath(make_swing.MESH).startswith(root), make_swing.MESH)
 
     def test_no_jumps(self):
         for n in ['pel', 'neck', 'head', 'ls', 'ts', 'le', 'te', 'lk', 'tk', 'la', 'ta', 'lt', 'tt']:

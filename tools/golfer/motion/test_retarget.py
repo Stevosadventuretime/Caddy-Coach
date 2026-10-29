@@ -2,7 +2,7 @@ import os, unittest
 import numpy as np
 import bvh, measure, retarget
 HERE = os.path.dirname(os.path.abspath(__file__))
-MESH = os.environ.get('GOLFER_MESH', '/tmp/claude-0/-home-claude/2adf77d1-861f-56c4-a071-a71d0d17c501/scratchpad/site/golfer-mesh.wasm')
+MESH = os.environ.get('GOLFER_MESH', os.path.join(HERE, '..', '..', '..', 'golfer-mesh.wasm'))
 
 class T(unittest.TestCase):
     @classmethod
@@ -24,6 +24,9 @@ class T(unittest.TestCase):
         for k in ('la', 'ta'): self.assertTrue(0.06 <= J[k][a, 1] <= 0.09, (k, J[k][a, 1]))
         for k in ('lt', 'tt'): self.assertLess(abs(J[k][a, 1] - 0.02), 0.01, (k, J[k][a, 1]))
 
+    def test_stance_is_square(self):
+        a = self.ph['address']; self.assertLess(abs(self.J['lt'][a, 2] - self.J['tt'][a, 2]), 0.03)
+
     def test_bone_lengths_constant(self):
         J, B = self.J, self.bones
         for s in 'lt':
@@ -39,7 +42,7 @@ class T(unittest.TestCase):
             return np.degrees(np.arccos(np.clip(c[moving], -1, 1))).max()
         self.assertLess(maxang(W[:, ix['LeftForeArm']] - W[:, ix['LeftArm']], self.J['le'] - self.J['ls']), 1.0)
         self.assertLess(maxang(W[:, ix['RightHand']] - W[:, ix['RightForeArm']], self.J['tw'] - self.J['te']), 1.0)
-        self.assertLess(maxang(W[:, ix['LeftFoot']] - W[:, ix['LeftLeg']], self.J['la'] - self.J['lk']), 15.0)
+        self.assertLess(maxang(W[:, ix['LeftFoot']] - W[:, ix['LeftLeg']], self.J['la'] - self.J['lk']), 20.0)
 
     def test_planted_feet_dont_slide(self):
         # the ball of each foot stays put from address to the top (the lead heel may lift, as it does in the capture)

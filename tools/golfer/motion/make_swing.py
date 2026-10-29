@@ -3,7 +3,7 @@ import os, sys, glob, json
 import numpy as np
 import bvh, measure, retarget, adjust
 HERE = os.path.dirname(os.path.abspath(__file__))
-MESH = os.environ.get('GOLFER_MESH', '/tmp/claude-0/-home-claude/2adf77d1-861f-56c4-a071-a71d0d17c501/scratchpad/site/golfer-mesh.wasm')
+MESH = os.environ.get('GOLFER_MESH', os.path.join(HERE, '..', '..', '..', 'golfer-mesh.wasm'))
 VEC = {'s', 'H', 'Lt', 'F', 'face', 'Fh', 'sd', 'lkp', 'tkp'}
 
 def build():
@@ -11,7 +11,7 @@ def build():
     names, pos, ft = bvh.load(path); fps = 1 / ft
     ph = measure.phases(names, pos, fps); W = retarget.to_world(names, pos, ph); B = retarget.golfer_bones(MESH)
     J = retarget.to_golfer(W, names, B, ph, fps)
-    J, ph = adjust.retime(J, ph, fps); J = adjust.posture(J, ph, B); J = adjust.turns(J, ph, B); J = adjust.reach(J, ph, B); J, ball = adjust.club(J, ph); J = adjust.frames(J, ph, ball)
+    J, ph = adjust.retime(J, ph, fps); J = adjust.posture(J, ph, B); J = adjust.turns(J, ph, B); J = adjust.grip(J, ph, B); J = adjust.reach(J, ph, B); J, ball = adjust.club(J, ph); J = adjust.frames(J, ph, ball)
     return path, J, ph, ball
 
 def to_json(path, J, ph, ball):

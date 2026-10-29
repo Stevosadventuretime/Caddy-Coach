@@ -47,6 +47,9 @@ def to_golfer(W, names, B, ph, fps):
     J['head'] = J['neck'] + _unit(g('Head') - g('Neck')) * 0.13
     Lt = g('LeftArm') - g('RightArm'); Lt = _unit(Lt - s * (Lt * s).sum(-1, keepdims=True)); F = _unit(np.cross(Lt, s))
     sh = B['shoulder']                                                     # rest offset of the lead shoulder from the pelvis
+    # square stance: the capture's trail foot stands ~20 cm nearer the ball (open); put both balls of the feet on one
+    # line parallel to the target line, at their mean distance from the ball, by sliding each foot toward/away from it
+    a0 = ph['address']; tz = {S: g(S + 'ToeBase')[a0, 2] for S in ('Left', 'Right')}; mz = (tz['Left'] + tz['Right']) / 2
     for side, sg, S in (('l', 1, 'Left'), ('t', -1, 'Right')):
         J[side + 'hip'] = hipC + H * B['hipw'] * sg
         J[side + 's'] = hipC + s * sh[1] + Lt * sh[0] * sg + F * sh[2]
@@ -55,14 +58,14 @@ def to_golfer(W, names, B, ph, fps):
         J[side + 'h'] = J[side + 'w'] + _unit(g(S + 'FingerBase') - g(S + 'Hand')) * B['hand'] * 0.55
         # feet: the ball of the foot stays put while it's planted (the heel may lift, as in the capture);
         # the ankle sits where the capture has it relative to the ball of the foot, and the leg bends to reach it
-        toe = g(S + 'ToeBase').copy()
+        toe = g(S + 'ToeBase').copy(); toe[:, 2] += mz - tz[S]
         # a golfer's feet don't slide: the lead foot's ball stays put the whole swing; the trail foot's until impact,
         # after which it follows the capture as the trail foot rolls up onto its toe (blended so it never jumps)
         n = len(toe); a0 = ph['address']; lock = toe.copy(); hold = toe[a0, [0, 2]]
         w = np.ones(n) if side == 'l' else np.clip(1 - (np.arange(n) - ph['impact']) / (0.15 * fps), 0, 1)
         follow = toe[:, [0, 2]] - (toe[ph['impact'], [0, 2]] - hold) if side == 't' else toe[:, [0, 2]]
         lock[:, [0, 2]] = w[:, None] * hold + (1 - w[:, None]) * follow
-        ankC = g(S + 'Foot'); fdir = _unit(toe - ankC)
+        ankC = g(S + 'Foot') + [0, 0, mz - tz[S]]; fdir = _unit(toe - ankC)
         tgt = lock - fdir * B['foot']
         pole = _unit(g(S + 'Leg') - (g(S + 'UpLeg') + ankC) / 2)
         J[side + 'k'], J[side + 'a'] = _ik(J[side + 'hip'], tgt, B['thigh'], B['shin'], pole)

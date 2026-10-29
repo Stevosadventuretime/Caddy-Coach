@@ -54,7 +54,7 @@ const DRILLS = [
     props: [{ type: 'stick', a: [-0.9, 0.012, 0.15], b: [0.9, 0.012, 0.15] }, { type: 'stick', a: ['BX', 0.012, 0.2], b: ['BX', 0.012, 1.15], alt: true }],
     seq: [
       { k: 'stand', o: { walk: -0.7 }, d: 0.4, hold: 1.0, step: 0, lab: [L([0.6, 0.02, 0.15], 'Toe line, parallel', 'info')] },
-      { k: 'stand', o: { walk: -0.7 }, d: 0.2, hold: 1.0, step: 1, lab: [L(['BX', 0.02, 1.0], 'Ball position', 'info')] },
+      { k: 'stand', o: { walk: -0.7 }, d: 0.2, hold: 1.0, step: 1, lab: [L(['BX', 0.02, 'BZ+0.03'], 'Ball position', 'info')] },
       { k: 'address', d: 1.3, hold: 1.6, step: 2, hl: ['feet', 'shoulders'], lab: [L('la', 'Feet on the line'), L('shoulders', 'Shoulders parallel too', 'good', 'r')] },
       ...swing({}, 2),
       { k: 'stand', o: { walk: -0.7 }, d: 1.2, hold: 0.8, step: 3, say: 'Reset', reset: true }] },
@@ -79,7 +79,7 @@ const DRILLS = [
     feel: ['Your backside just touching the seat.', 'Trail pocket turns back into the chair.', 'Lead cheek onto the chair, chest still over the ball.', 'Turning, not standing up.'],
     mistakes: ['Sitting back onto the chair with your weight in your heels.', 'Keeping your backside on the chair but standing up with your chest.', 'Going too fast too soon.'],
     view: 'dtl', scene: 'home', ball: true, poster: 3,
-    props: [{ type: 'chair', at: [0.0, 0, -0.3] }],
+    props: [{ type: 'chair', at: [0.0, 0, 'SZ-0.02'] }],
     seq: [
       { k: 'address', d: 0.5, hold: 1.4, step: 0, hl: ['bum'], lab: [L('seat', 'Just touching the chair', 'good', 'l')] },
       { k: 'top', d: 1.2, hold: 0.8, step: 1, hl: ['bum'], lab: [L('seat', 'Trail cheek stays on', 'good', 'l')], arr: [ROT('pel', 160, 280, 'good', 0.26, 0.02)] },
