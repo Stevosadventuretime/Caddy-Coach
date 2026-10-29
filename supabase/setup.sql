@@ -362,3 +362,10 @@ alter table public.coach_links add constraint coach_links_student_fk foreign key
 alter table public.shared_swings add constraint shared_swings_student_fk foreign key (student) references public.profiles (username) on delete cascade;
 alter table public.shared_swings add constraint shared_swings_coach_fk foreign key (coach) references public.profiles (username) on delete cascade;
 alter table public.club_admins add constraint club_admins_user_fk foreign key (username) references public.profiles (username) on delete cascade;
+
+-- 2026-10-29: course mapping like TheGrint: an optional fairway target per hole, and "looks right" confirmations
+alter table public.hole_maps add column if not exists fair_lat double precision, add column if not exists fair_lon double precision;
+alter table public.hole_maps add constraint hole_maps_fair_lat_check check (fair_lat is null or (fair_lat >= 49.8 and fair_lat <= 60.9));
+alter table public.hole_maps add constraint hole_maps_fair_lon_check check (fair_lon is null or (fair_lon >= -8.7 and fair_lon <= 1.8));
+alter table public.hole_maps drop constraint hole_maps_source_check;
+alter table public.hole_maps add constraint hole_maps_source_check check (source = any (array['mapped','learned','tapped','found','confirmed']));
