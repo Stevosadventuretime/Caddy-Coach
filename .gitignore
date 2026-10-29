@@ -1,2 +1,4 @@
 .netlify
 .DS_Store
+.superpowers/
+__pycache__/
