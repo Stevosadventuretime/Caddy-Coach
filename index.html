@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Caddy Coach">
 <style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}#ccSplash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;align-content:center;gap:18px;background:radial-gradient(120% 80% at 50% 35%,#16553c,#0b2f21);color:#f3f6f1;transition:opacity .35s ease}#ccSplash img{width:96px;height:96px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.35)}#ccSplash b{font:760 30px/1 Archivo,'Instrument Sans',system-ui,sans-serif;font-stretch:72%;letter-spacing:.01em}#ccSplash i{display:block;width:120px;height:3px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}#ccSplash i::after{content:'';display:block;height:100%;width:40%;background:#f3c43a;animation:ccLd 1s ease-in-out infinite alternate}@keyframes ccLd{from{transform:translateX(-10%)}to{transform:translateX(160%)}}@media (prefers-reduced-motion:reduce){#ccSplash i::after{animation:none}}#ccSplash.out{opacity:0;pointer-events:none}</style>
-<script>window.CC_VER='ae8143883b'</script></head><body>
+<script>window.CC_VER='38942b9e56'</script></head><body>
 <div id="ccSplash" aria-hidden="true"><img src="icons/icon-192.png" alt=""><b>Caddy Coach</b><i></i></div>
 <script>(function(){let done=0;const go=d=>{if(done++)return;const s=document.getElementById('ccSplash');if(!s)return;setTimeout(()=>{s.classList.add('out');setTimeout(()=>s.remove(),400)},d)};addEventListener('DOMContentLoaded',()=>go(350));addEventListener('load',()=>go(0));setTimeout(()=>go(0),4000)})()</script>
 <title>Caddy Coach</title>
@@ -1783,6 +1783,12 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 .nwList{list-style:none;margin:8px 0 0;padding:0}.nwList li{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line,rgba(127,127,127,.18))}.nwList li>div:first-child{flex:1}.nwList p{margin:2px 0}.nwAct{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 .grpBox{margin-top:14px;padding:12px;border-radius:12px;background:var(--card2,rgba(127,127,127,.08))}.grpBox p{margin:6px 0}.grpCode{font-weight:700;letter-spacing:.12em;font-size:1.15em}
 .grpJoin{display:flex;gap:6px}.grpJoin input{flex:1;min-width:0;text-transform:uppercase;letter-spacing:.1em;min-height:44px}
+/* start a group | code + join: the button keeps its words on one line and everything stays inside the card */
+.grpRow{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;min-width:0}
+.grpRow>button{flex:1 0 auto;white-space:nowrap;padding:0 16px;min-height:44px}
+.grpRow .grpJoin{flex:999 1 190px;min-width:0}
+.grpJoin button{flex:none;white-space:nowrap;padding:0 16px;min-height:44px}
+.grpJoin input{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:var(--r-m);padding:0 12px;font:inherit}
 .cpItem{padding:12px 0;border-top:1px solid var(--line,rgba(127,127,127,.18))}.cpHead b{display:block}
 .pfOk{margin:0;padding:12px;border-radius:10px;background:rgba(47,125,79,.12);line-height:1.45}
 .pinBox{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:rgba(245,197,24,.14)}.pinBox b{display:block}.gpsBig.pin b{color:#9a7400}.gpsP.bad{color:var(--pin,#b3261e)}
@@ -1869,7 +1875,7 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 .scoreHero .shBig small{color:#a8c3b2;font:700 22px/1 var(--f-disp);font-stretch:75%}
 .scoreHero .shWord{color:var(--flag)!important;font:760 24px/1 var(--f-disp);font-stretch:75%}
 
-.scoreHero .shPri{--ink:#10201a;--ink2:#2f3b35;--muted:#5a5a3a;color:#10201a}
+.scoreHero .shPri{--ink:#10201a;--ink2:#2f3b35;--muted:#5a5a3a;color:#10201a;background:#f4eedd;border-color:#d9c58c}
 .scoreHero .shPri b,.scoreHero .shPri p,.scoreHero .shPri span{color:#10201a}
 .scoreHero .tiles i.p{color:#eef4ef!important}
 </style>
