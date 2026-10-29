@@ -385,21 +385,100 @@ const HL = { hips: ['pelvis', 'lglute', 'tglute', 'lhipj', 'thipj'], head: ['hea
   trailknee: ['tknee', 'tthigh'], leadknee: ['lknee', 'lthigh'], feet: ['lfoot', 'tfoot'], trailfoot: ['tfoot', 'tsole'], leadfoot: ['lfoot', 'lsole'], bum: ['lglute', 'tglute', 'pelvis'] };
 
 // ---------- textures ----------
+// The painted pictures around the golfer (grass, wooden floor, tree line, living room). Painting them takes
+// half a second on a phone, so a background worker paints them while the list is read and the screen never stalls.
+// The same function paints on the page itself when a worker can't (older phones, or the build that makes the card pictures).
+function paintTex(name, mk) {
+  if (name === 'grass') {
+    const w = 1024, h = 1024, c = mk(w, h), x = c.getContext('2d');
+    x.fillStyle = '#5f9a47'; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 6000; i++) { const l = Math.random(); x.fillStyle = `rgba(${40 + l * 50},${90 + l * 70},${25 + l * 30},${0.05 + Math.random() * 0.06})`; const s = 6 + Math.random() * 30; x.beginPath(); x.arc(Math.random() * w, Math.random() * h, s, 0, 7); x.fill(); }
+    for (let i = 0; i < 60000; i++) { const g = 70 + Math.random() * 90; x.fillStyle = `rgba(${g * 0.5},${g * 1.1},${g * 0.38},${0.12 + Math.random() * 0.18})`; x.fillRect(Math.random() * w, Math.random() * h, 1, 2 + Math.random() * 3); }
+    return c;
+  }
+  if (name === 'wood') {
+    const w = 1024, h = 1024, c = mk(w, h), x = c.getContext('2d');
+    for (let i = 0; i < 24; i++) { const l = 205 + (i * 37 % 23) - 10; x.fillStyle = `rgb(${l},${l * 0.88 | 0},${l * 0.74 | 0})`; x.fillRect(0, i * h / 24, w, h / 24 - 2); x.fillStyle = 'rgba(90,60,30,.25)'; x.fillRect(0, (i + 1) * h / 24 - 2, w, 2); }
+    for (let i = 0; i < 400; i++) { x.strokeStyle = 'rgba(120,80,40,.06)'; x.beginPath(); const y = Math.random() * h; x.moveTo(0, y); x.bezierCurveTo(w / 3, y + 6, w * 2 / 3, y - 6, w, y + 2); x.stroke(); }
+    const r = x.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.5); r.addColorStop(0, 'rgba(236,232,226,0)'); r.addColorStop(1, 'rgba(236,232,226,1)'); x.fillStyle = r; x.fillRect(0, 0, w, h);
+    return c;
+  }
+  if (name === 'room') {   // a quiet living room: warm wall, a bright window, skirting board and a sofa
+    const W = 4096, H = 640, c = mk(W, H), x = c.getContext('2d');
+    const wall = x.createLinearGradient(0, 0, 0, H); wall.addColorStop(0, '#e9e1d6'); wall.addColorStop(1, '#ddd2c3'); x.fillStyle = wall; x.fillRect(0, 0, W, H);
+    for (let i = 0; i < 3000; i++) { x.fillStyle = `rgba(120,100,80,${Math.random() * 0.025})`; x.fillRect(Math.random() * W, Math.random() * H, 3, 3); }
+    const win = (cx, w) => { const g = x.createRadialGradient(cx, H * 0.42, 10, cx, H * 0.42, w * 1.2); g.addColorStop(0, 'rgba(255,252,240,.55)'); g.addColorStop(1, 'rgba(255,252,240,0)'); x.fillStyle = g; x.fillRect(cx - w * 1.5, 0, w * 3, H);
+      x.fillStyle = '#f7f5ee'; x.fillRect(cx - w / 2 - 14, H * 0.18 - 14, w + 28, H * 0.5 + 28); const sky = x.createLinearGradient(0, H * 0.18, 0, H * 0.68); sky.addColorStop(0, '#cfe3f1'); sky.addColorStop(1, '#eef4ec'); x.fillStyle = sky; x.fillRect(cx - w / 2, H * 0.18, w, H * 0.5);
+      x.save(); x.beginPath(); x.rect(cx - w / 2, H * 0.18, w, H * 0.5); x.clip(); x.fillStyle = 'rgba(110,150,100,.5)'; for (let i = 0; i < 60; i++) { x.beginPath(); x.arc(cx - w / 2 + Math.random() * w, H * 0.6 + Math.random() * 30, 14 + Math.random() * 22, 0, 7); x.fill(); } x.restore();
+      x.fillStyle = '#f7f5ee'; x.fillRect(cx - 6, H * 0.18, 12, H * 0.5); x.fillRect(cx - w / 2, H * 0.42, w, 10); };
+    win(W * 0.5, 360); win(W * 0.12, 300);
+    x.fillStyle = '#6f6458'; x.beginPath(); x.roundRect ? x.roundRect(W * 0.72, H * 0.6, 700, 200, 40) : x.rect(W * 0.72, H * 0.6, 700, 200); x.fill();
+    x.fillStyle = '#857a6d'; x.fillRect(W * 0.72 + 20, H * 0.66, 660, 60);
+    x.fillStyle = '#f2ede4'; x.fillRect(0, H * 0.93, W, H * 0.07); x.fillStyle = 'rgba(0,0,0,.08)'; x.fillRect(0, H * 0.93, W, 3);
+    return c;
+  }
+  if (name === 'tree') {   // a painted, hazy tree line all the way round, like the edge of a fairway on a summer morning
+    const W = 4096, H = 640, c = mk(W, H), x = c.getContext('2d');
+    let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const sky = x.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#9fc0de'); sky.addColorStop(0.7, '#dbe7ee'); sky.addColorStop(1, '#e6eee9'); x.fillStyle = sky; x.fillRect(0, 0, W, H);
+    // rows of trees: far rows paler and bluer, near rows darker and more detailed
+    const rows = [{ y: 0.80, h: 0.22, col: [150, 172, 168], n: 140, r: [10, 22] }, { y: 0.84, h: 0.30, col: [112, 140, 118], n: 120, r: [14, 30] }, { y: 0.88, h: 0.40, col: [72, 104, 70], n: 100, r: [18, 40] }, { y: 0.92, h: 0.46, col: [52, 82, 50], n: 80, r: [22, 48] }];
+    for (const R of rows) {
+      for (let i = 0; i < R.n; i++) {
+        const cx = rnd() * W, base = H * R.y, th = H * R.h * (0.6 + rnd() * 0.5), r0 = R.r[0] + rnd() * (R.r[1] - R.r[0]);
+        const conifer = rnd() < 0.25;
+        for (let k = 0; k < 140; k++) {
+          const t = rnd(), yy = base - th * (0.25 + t * 0.75), w = conifer ? r0 * (1.1 - t) : r0 * (0.6 + 0.6 * Math.sin(t * Math.PI));
+          const xx = cx + (rnd() - 0.5) * w * 1.7, rr = w * (0.10 + rnd() * 0.16);
+          const l = (0.78 + rnd() * 0.32) * 1.08; x.fillStyle = `rgb(${R.col[0] * l | 0},${R.col[1] * l | 0},${R.col[2] * l | 0})`;
+          x.beginPath(); x.arc(xx, yy, rr, 0, 7); x.fill();
+        }
+        x.fillStyle = `rgb(${R.col[0] * 0.7 | 0},${R.col[1] * 0.65 | 0},${R.col[2] * 0.6 | 0})`; x.fillRect(cx - 2, base - th * 0.3, 4, th * 0.3);
+      }
+      // haze over each row so distance reads
+      x.fillStyle = 'rgba(214,228,234,0.18)'; x.fillRect(0, 0, W, H * R.y + 4);
+    }
+    const g = x.createLinearGradient(0, H * 0.9, 0, H); g.addColorStop(0, 'rgba(96,140,70,0)'); g.addColorStop(1, 'rgba(96,140,70,1)'); x.fillStyle = g; x.fillRect(0, H * 0.9, W, H * 0.1);
+    // soft focus, as a camera focused on the golfer would see it
+    const c2 = mk(W, H), x2 = c2.getContext('2d'); x2.filter = 'blur(2.5px)'; x2.drawImage(c, 0, 0);
+    if (!x2.filter || x2.filter === 'none') x2.drawImage(c, 0, 0);
+    return c2;
+  }
+}
+const PAINTS = ['tree', 'grass', 'room', 'wood'], PAINTED = {};
+let PAINTP = null;
+// ask a background worker to paint every picture; resolves when they're ready (or straight away if it can't)
+function prepTextures(ms) {
+  if (PAINTP) return PAINTP;
+  PAINTP = new Promise(done => {
+    let w = null, url = null;
+    const fin = () => { if (w) w.terminate(); if (url) URL.revokeObjectURL(url); w = null; done(); };
+    try {
+      if (typeof Worker === 'undefined' || typeof OffscreenCanvas === 'undefined' || typeof createImageBitmap === 'undefined') return fin();
+      const src = 'const paintTex = ' + paintTex.toString() + ';\nonmessage = e => { const out = {}, keep = []; for (const n of e.data) { try { const b = paintTex(n, (w, h) => new OffscreenCanvas(w, h)).transferToImageBitmap(); out[n] = b; keep.push(b); } catch (err) {} } postMessage(out, keep); };';
+      url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' })); w = new Worker(url);
+      w.onmessage = e => { Object.assign(PAINTED, e.data || {}); fin(); }; w.onerror = fin;
+      w.postMessage(PAINTS); setTimeout(fin, ms || 15000);
+    } catch (e) { fin(); }
+  });
+  return PAINTP;
+}
+// the picture as a canvas: the worker's copy when it has one (a quick copy), otherwise painted here
+function painted(name) {
+  const b = PAINTED[name]; delete PAINTED[name];
+  if (b) { const c = document.createElement('canvas'); c.width = b.width; c.height = b.height; c.getContext('2d').drawImage(b, 0, 0); if (b.close) b.close(); return c; }
+  return paintTex(name, (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; });
+}
 let TX = null, TX_STRIPES = null;
 function textures() {
   if (TX) return TX;
-  const mkC = (w, h, f) => { const c = document.createElement('canvas'); c.width = w; c.height = h; f(c.getContext('2d'), w, h); const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4; return t; };
-  const grass = mkC(1024, 1024, (x, w, h) => {
-    x.fillStyle = '#5f9a47'; x.fillRect(0, 0, w, h);
-    for (let i = 0; i < 6000; i++) { const l = Math.random(); x.fillStyle = `rgba(${40 + l * 50},${90 + l * 70},${25 + l * 30},${0.05 + Math.random() * 0.06})`; const s = 6 + Math.random() * 30; x.beginPath(); x.arc(Math.random() * w, Math.random() * h, s, 0, 7); x.fill(); }
-    for (let i = 0; i < 60000; i++) { const g = 70 + Math.random() * 90; x.fillStyle = `rgba(${g * 0.5},${g * 1.1},${g * 0.38},${0.12 + Math.random() * 0.18})`; x.fillRect(Math.random() * w, Math.random() * h, 1, 2 + Math.random() * 3); } });
+  const tex = c => { const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4; return t; };
+  const mkC = (w, h, f) => { const c = document.createElement('canvas'); c.width = w; c.height = h; f(c.getContext('2d'), w, h); return tex(c); };
+  const grass = tex(painted('grass'));
   grass.wrapS = grass.wrapT = T.RepeatWrapping; grass.repeat.set(10, 10);
   const stripes = mkC(512, 512, (x, w, h) => { for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? '#e8f0e0' : '#c9d6c0'; x.fillRect(i * w / 8, 0, w / 8, h); } });
   stripes.wrapS = stripes.wrapT = T.RepeatWrapping; stripes.repeat.set(5, 1); TX_STRIPES = stripes;
-  const wood = mkC(1024, 1024, (x, w, h) => {
-    for (let i = 0; i < 24; i++) { const l = 205 + (i * 37 % 23) - 10; x.fillStyle = `rgb(${l},${l * 0.88 | 0},${l * 0.74 | 0})`; x.fillRect(0, i * h / 24, w, h / 24 - 2); x.fillStyle = 'rgba(90,60,30,.25)'; x.fillRect(0, (i + 1) * h / 24 - 2, w, 2); }
-    for (let i = 0; i < 400; i++) { x.strokeStyle = 'rgba(120,80,40,.06)'; x.beginPath(); const y = Math.random() * h; x.moveTo(0, y); x.bezierCurveTo(w / 3, y + 6, w * 2 / 3, y - 6, w, y + 2); x.stroke(); }
-    const r = x.createRadialGradient(w / 2, h / 2, w * 0.2, w / 2, h / 2, w * 0.5); r.addColorStop(0, 'rgba(236,232,226,0)'); r.addColorStop(1, 'rgba(236,232,226,1)'); x.fillStyle = r; x.fillRect(0, 0, w, h); });
+  const wood = tex(painted('wood'));
   const sky = mkC(16, 256, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#8fb6dc'); g.addColorStop(0.55, '#d5e4ee'); g.addColorStop(1, '#eef2ef'); x.fillStyle = g; x.fillRect(0, 0, w, h); });
   const home = mkC(16, 256, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#e7e2da'); g.addColorStop(0.62, '#f1ede7'); g.addColorStop(1, '#ece8e2'); x.fillStyle = g; x.fillRect(0, 0, w, h); });
   return (TX = { grass, wood, sky, home });
@@ -417,54 +496,17 @@ function envMap() {
   const pm = new T.PMREMGenerator(R); ENV = pm.fromScene(es, 0.03).texture; pm.dispose(); return ENV;
 }
 let BACK = null, ROOM = null;
-// a quiet living room: warm wall, a bright window, skirting board and a sofa
 function roomBack() {
   if (!ROOM) {
-    const W = 4096, H = 640, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
-    const wall = x.createLinearGradient(0, 0, 0, H); wall.addColorStop(0, '#e9e1d6'); wall.addColorStop(1, '#ddd2c3'); x.fillStyle = wall; x.fillRect(0, 0, W, H);
-    for (let i = 0; i < 3000; i++) { x.fillStyle = `rgba(120,100,80,${Math.random() * 0.025})`; x.fillRect(Math.random() * W, Math.random() * H, 3, 3); }
-    const win = (cx, w) => { const g = x.createRadialGradient(cx, H * 0.42, 10, cx, H * 0.42, w * 1.2); g.addColorStop(0, 'rgba(255,252,240,.55)'); g.addColorStop(1, 'rgba(255,252,240,0)'); x.fillStyle = g; x.fillRect(cx - w * 1.5, 0, w * 3, H);
-      x.fillStyle = '#f7f5ee'; x.fillRect(cx - w / 2 - 14, H * 0.18 - 14, w + 28, H * 0.5 + 28); const sky = x.createLinearGradient(0, H * 0.18, 0, H * 0.68); sky.addColorStop(0, '#cfe3f1'); sky.addColorStop(1, '#eef4ec'); x.fillStyle = sky; x.fillRect(cx - w / 2, H * 0.18, w, H * 0.5);
-      x.save(); x.beginPath(); x.rect(cx - w / 2, H * 0.18, w, H * 0.5); x.clip(); x.fillStyle = 'rgba(110,150,100,.5)'; for (let i = 0; i < 60; i++) { x.beginPath(); x.arc(cx - w / 2 + Math.random() * w, H * 0.6 + Math.random() * 30, 14 + Math.random() * 22, 0, 7); x.fill(); } x.restore();
-      x.fillStyle = '#f7f5ee'; x.fillRect(cx - 6, H * 0.18, 12, H * 0.5); x.fillRect(cx - w / 2, H * 0.42, w, 10); };
-    win(W * 0.5, 360); win(W * 0.12, 300);
-    x.fillStyle = '#6f6458'; x.beginPath(); x.roundRect ? x.roundRect(W * 0.72, H * 0.6, 700, 200, 40) : x.rect(W * 0.72, H * 0.6, 700, 200); x.fill();
-    x.fillStyle = '#857a6d'; x.fillRect(W * 0.72 + 20, H * 0.66, 660, 60);
-    x.fillStyle = '#f2ede4'; x.fillRect(0, H * 0.93, W, H * 0.07); x.fillStyle = 'rgba(0,0,0,.08)'; x.fillRect(0, H * 0.93, W, 3);
-    const tx = new T.CanvasTexture(c); tx.encoding = T.sRGBEncoding; tx.anisotropy = 4;
+    const tx = new T.CanvasTexture(painted('room')); tx.encoding = T.sRGBEncoding; tx.anisotropy = 4;
     const geo = new T.CylinderGeometry(7, 7, 3.2, 96, 1, true); geo.translate(0, 1.6, 0);
     ROOM = new T.Mesh(geo, new T.MeshBasicMaterial({ map: tx, side: T.BackSide, fog: false }));
   }
   return ROOM.clone();
 }
-// a painted, hazy tree line all the way round, like the edge of a fairway on a summer morning
 function treeLine() {
   if (!BACK) {
-    const W = 4096, H = 640, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
-    let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    const sky = x.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#9fc0de'); sky.addColorStop(0.7, '#dbe7ee'); sky.addColorStop(1, '#e6eee9'); x.fillStyle = sky; x.fillRect(0, 0, W, H);
-    // rows of trees: far rows paler and bluer, near rows darker and more detailed
-    const rows = [{ y: 0.80, h: 0.22, col: [150, 172, 168], n: 140, r: [10, 22] }, { y: 0.84, h: 0.30, col: [112, 140, 118], n: 120, r: [14, 30] }, { y: 0.88, h: 0.40, col: [72, 104, 70], n: 100, r: [18, 40] }, { y: 0.92, h: 0.46, col: [52, 82, 50], n: 80, r: [22, 48] }];
-    for (const R of rows) {
-      for (let i = 0; i < R.n; i++) {
-        const cx = rnd() * W, base = H * R.y, th = H * R.h * (0.6 + rnd() * 0.5), r0 = R.r[0] + rnd() * (R.r[1] - R.r[0]);
-        const conifer = rnd() < 0.25;
-        for (let k = 0; k < 140; k++) {
-          const t = rnd(), yy = base - th * (0.25 + t * 0.75), w = conifer ? r0 * (1.1 - t) : r0 * (0.6 + 0.6 * Math.sin(t * Math.PI));
-          const xx = cx + (rnd() - 0.5) * w * 1.7, rr = w * (0.10 + rnd() * 0.16);
-          const l = (0.78 + rnd() * 0.32) * (1.08 - 0.25 * (yy - (base - th)) / th * 0); x.fillStyle = `rgb(${R.col[0] * l | 0},${R.col[1] * l | 0},${R.col[2] * l | 0})`;
-          x.beginPath(); x.arc(xx, yy, rr, 0, 7); x.fill();
-        }
-        x.fillStyle = `rgb(${R.col[0] * 0.7 | 0},${R.col[1] * 0.65 | 0},${R.col[2] * 0.6 | 0})`; x.fillRect(cx - 2, base - th * 0.3, 4, th * 0.3);
-      }
-      // haze over each row so distance reads
-      x.fillStyle = 'rgba(214,228,234,0.18)'; x.fillRect(0, 0, W, H * R.y + 4);
-    }
-    const g = x.createLinearGradient(0, H * 0.9, 0, H); g.addColorStop(0, 'rgba(96,140,70,0)'); g.addColorStop(1, 'rgba(96,140,70,1)'); x.fillStyle = g; x.fillRect(0, H * 0.9, W, H * 0.1);
-    // soft focus, as a camera focused on the golfer would see it
-    const c2 = document.createElement('canvas'); c2.width = W; c2.height = H; const x2 = c2.getContext('2d'); x2.filter = 'blur(2.5px)'; x2.drawImage(c, 0, 0);
-    if (!x2.filter || x2.filter === 'none') x2.drawImage(c, 0, 0);
-    const tx = new T.CanvasTexture(c2); tx.encoding = T.sRGBEncoding; tx.wrapS = T.RepeatWrapping; tx.anisotropy = 4;
+    const tx = new T.CanvasTexture(painted('tree')); tx.encoding = T.sRGBEncoding; tx.wrapS = T.RepeatWrapping; tx.anisotropy = 4;
     const geo = new T.CylinderGeometry(46, 46, 22, 96, 1, true); geo.translate(0, 9, 0);
     BACK = new T.Mesh(geo, new T.MeshBasicMaterial({ map: tx, side: T.BackSide, fog: false, depthWrite: false }));
     BACK.renderOrder = -1;
@@ -827,6 +869,6 @@ function poster(dr, w, h, warm) {   // warm: also draw the red ghost, so its sha
   const url = c.toDataURL('image/jpeg', 0.86); POSTERS.set(id, url); if (typeof CCGolfer !== 'undefined' && CCGolfer.ready()) POSTERS.set(id + ':real', true); return url;
 }
 function stats() { return { scenes: SCN.size, renders: STATS.renders, scale: QUAL.s, programs: R && R.info.programs ? R.info.programs.length : 0 }; }
-const api = { stats, slowFrames, QUAL, Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, ballOf, propPoint };
+const api = { prepTextures, stats, slowFrames, QUAL, Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, ballOf, propPoint };
 root.DrillStudio = api;
 })(this);
