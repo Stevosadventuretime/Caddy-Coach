@@ -100,3 +100,22 @@ test('the ball follows the model in drills that use the capture', () => {
   const { DrillStudio: D } = load(); D.setSwing(MODEL); const dr = drill([{ k: 'address' }]); D.prep(dr);
   assert.deepStrictEqual(D.ballOf(dr), MODEL.ball);
 });
+test('a let-go trail hand hangs straight down from the captured shoulder', () => {
+  const { DrillStudio: D, DRILL_LIBRARY: L } = load(); D.setSwing(MODEL);
+  const dr = L.find(d => d.id === 'handhang'); D.prep(dr);
+  for (const i of [1, 2, 3]) {
+    const J = D.jointsAt(dr, dr._tl[i].e + 0.01), d = sub(J.th, J.ts);
+    assert.ok(Math.hypot(d[0], d[2]) < 0.1, 'key ' + i + ' hand off the shoulder line ' + d.map(x => x.toFixed(3)));
+    assert.ok(d[1] < -0.5, 'key ' + i + ' hand hangs ' + d[1].toFixed(3));
+  }
+  // the "too far away" fault is shown by the red ghost: lead hand further out, trail hand still hanging from its shoulder
+  const J = D.jointsAt(dr, dr._tl[3].e + 0.01), G = D.ghostAt(dr, 3), gd = sub(G.th, G.ts);
+  assert.ok(G.lh[2] - G.ts[2] > J.lh[2] - J.ts[2] + 0.05, 'ghost reach ' + (G.lh[2] - G.ts[2]).toFixed(3) + ' vs ' + (J.lh[2] - J.ts[2]).toFixed(3));
+  assert.ok(Math.hypot(gd[0], gd[2]) < 0.1 && gd[1] < -0.5, 'ghost hand hangs ' + gd.map(x => x.toFixed(3)));
+});
+test('blending into a let-go hand moves smoothly (no jumps)', () => {
+  const { DrillStudio: D, DRILL_LIBRARY: L } = load(); D.setSwing(MODEL);
+  const dr = L.find(d => d.id === 'handhang'); D.prep(dr);
+  let prev = null;
+  for (let t = 0; t < dr._dur; t += 1 / 120) { const J = D.jointsAt(dr, t); if (prev) assert.ok(dist(J.th, prev) < 0.03, 't ' + t.toFixed(3) + ' jump ' + dist(J.th, prev).toFixed(3)); prev = J.th; }
+});

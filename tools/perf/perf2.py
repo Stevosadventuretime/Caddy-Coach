@@ -15,4 +15,8 @@ with sync_playwright() as p:
     print(s)
     ok = s[-1][0] < 1 and s[-1][0] >= 0.7 and s[-1][2] < s[-1][3]
     print('PASS' if ok else 'FAIL', 'resolution adapted, overlay kept full size', s[-1]); print('errors', errs[:3])
+    pg.reload(); pg.wait_for_timeout(2000); pg.evaluate("document.getElementById('prof')&&(document.getElementById('prof').style.display='none')")
+    pg.evaluate('tab(3)'); pg.wait_for_timeout(300); pg.evaluate("document.querySelectorAll('#drillList [data-open]')[1].click()"); pg.wait_for_timeout(3000)
+    s2 = pg.evaluate("DrillStudio.stats().scale")
+    print('PASS' if s2 == s[-1][0] else 'FAIL', 'next visit starts at the learned size', s2)
     b.close()
