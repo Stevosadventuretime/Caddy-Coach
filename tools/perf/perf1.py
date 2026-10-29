@@ -1,0 +1,56 @@
+# Speed checks: old drill scenes are freed; the drill list draws no 3D when card pictures exist; a paused drill stops redrawing.
+import sys, os; sys.path.insert(0, '/tmp/claude-0/-home-claude/2adf77d1-861f-56c4-a071-a71d0d17c501/scratchpad'); os.chdir(sys.path[0])
+exec(open('sa15.py').read().split('with sync_playwright() as p:\n')[0])
+import sbmock
+F = []
+def chk(c, m):
+    print(('PASS ' if c else 'FAIL ') + m)
+    if not c: F.append(m)
+with sync_playwright() as p:
+    b = p.chromium.launch(args=['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'])
+    ctx = b.new_context(viewport={'width': 390, 'height': 844}, service_workers='block')
+    ctx.route('https://dhrzscyirgvjwnvgdpqt.supabase.co/**', sbmock.handler)
+    pg, errs = page(ctx); pg.wait_for_timeout(1500)
+    pg.evaluate("document.getElementById('prof')&&(document.getElementById('prof').style.display='none')")
+    # 1. drill list: pictures come from files, three.js is not even loaded
+    pg.evaluate('tab(3)'); pg.wait_for_timeout(2500)
+    srcs = pg.evaluate("[...document.querySelectorAll('img[data-poster]')].slice(0,4).map(i=>i.getAttribute('src')||'')")
+    chk(all(s.startswith('posters/') for s in srcs), 'card pictures load from posters/: %s' % [s[:30] for s in srcs])
+    for i in range(15): pg.evaluate("scrollBy(0,400)"); pg.wait_for_timeout(120)
+    pg.wait_for_timeout(4000)
+    chk(pg.evaluate("!window.DrillStudio||DrillStudio.stats().renders===0"), 'scrolling the drill list draws nothing in 3D')
+    chk(pg.evaluate("!!window.DrillStudio"), '3D is preloaded while the list is open')
+    pg.evaluate("scrollTo(0,0)")
+    nat = pg.evaluate("(()=>{const i=document.querySelector('img[data-poster]');return i&&i.complete?i.naturalWidth:0})()")
+    chk(nat > 0, 'first card picture decoded (%s px wide)' % nat)
+    # 2. open three drills one after another: at most two scenes kept
+    for i in [0, 3, 6]:
+        pg.evaluate('tab(3)'); pg.wait_for_timeout(300)
+        pg.evaluate("document.querySelectorAll('#drillList [data-open]')[%d].click()" % i); pg.wait_for_timeout(3500)
+        pg.evaluate("closeDrill(true)"); pg.wait_for_timeout(300)
+    st = pg.evaluate("DrillStudio.stats?DrillStudio.stats():null")
+    chk(st is not None and st['scenes'] <= 2, 'scenes kept after three drills: %s' % st)
+    # 3. paused and still: no new renders
+    pg.evaluate('tab(3)'); pg.wait_for_timeout(300)
+    pg.evaluate("document.querySelectorAll('#drillList [data-open]')[1].click()"); pg.wait_for_timeout(3500)
+    pg.evaluate("DP.player.pause()"); pg.wait_for_timeout(1500)
+    n0 = pg.evaluate("DrillStudio.stats().renders"); pg.wait_for_timeout(1500); n1 = pg.evaluate("DrillStudio.stats().renders")
+    chk(n1 - n0 <= 1, 'paused drill renders in 1.5 s: %d' % (n1 - n0))
+    pg.evaluate("DP.player.play()"); pg.wait_for_timeout(1500); n2 = pg.evaluate("DrillStudio.stats().renders")
+    chk(n2 - n1 >= 2, 'playing drill renders again: %d' % (n2 - n1))
+    pg.evaluate("DP.player.pause()"); pg.wait_for_timeout(800); n3 = pg.evaluate("DrillStudio.stats().renders")
+    pg.evaluate("DP.player.next()"); pg.wait_for_timeout(800); n4 = pg.evaluate("DrillStudio.stats().renders")
+    chk(n4 > n3, 'stepping while paused redraws: %d' % (n4 - n3))
+    chk(not [e for e in errs if '401' not in e], 'no page errors %s' % errs[:3])
+    b.close()
+    # pictures missing: cards still get a picture, drawn live
+    b = p.chromium.launch(args=['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'])
+    ctx = b.new_context(viewport={'width': 390, 'height': 844}, service_workers='block')
+    ctx.route('https://dhrzscyirgvjwnvgdpqt.supabase.co/**', sbmock.handler); ctx.route('**/posters/**', lambda r: r.fulfill(status=404, body=''))
+    pg, errs = page(ctx); pg.wait_for_timeout(1500)
+    pg.evaluate("document.getElementById('prof')&&(document.getElementById('prof').style.display='none')")
+    pg.evaluate('tab(3)'); pg.wait_for_timeout(1500); pg.evaluate("document.querySelector('img[data-poster]').parentElement.scrollIntoView()"); pg.wait_for_timeout(15000)
+    src = pg.evaluate("(document.querySelector('img[data-poster]').getAttribute('src')||'').slice(0,22)")
+    chk(src.startswith('data:image/jpeg'), 'missing picture falls back to a live drawing: %r' % src)
+    b.close()
+print('FAILURES', len(F))

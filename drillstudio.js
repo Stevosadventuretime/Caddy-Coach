@@ -147,7 +147,7 @@ function setSwing(m) {
   if (ok) for (const k of MOTION_PH) { const f = m.phases[k]; if (!(f >= 0 && f < m.frames.length)) ok = false; }
   if (ok) for (const f of [m.frames[0], m.frames[m.frames.length - 1]]) for (const n of ['pel', 'neck', 'ls', 'lh', 'th', 'la', 'ta', 'club', 'sd', 'seat']) if (!f || !f[n]) ok = false;
   SWING = ok ? m : null; BASE.clear();
-  if (SWING) { const c = [0]; for (let i = 1; i < m.frames.length; i++) c.push(c[i - 1] + len(sub(m.frames[i].lh, m.frames[i - 1].lh))); SWING._arc = c; } POSTERS.clear(); if (typeof SCN !== 'undefined') SCN.clear();
+  if (SWING) { const c = [0]; for (let i = 1; i < m.frames.length; i++) c.push(c[i - 1] + len(sub(m.frames[i].lh, m.frames[i - 1].lh))); SWING._arc = c; } POSTERS.clear(); if (typeof SCN !== 'undefined') dropScenes(0);
   return ok;
 }
 function hasSwing() { return !!SWING; }
@@ -529,9 +529,15 @@ function updateProps(props, J, key, dr, st) {
 }
 
 // ---------- scene per drill ----------
-const SCN = new Map();
+const GFILL = [0.95, 0.82, 1.8], GKEY = 1;   // grass: sky fill matched to the old full-PBR look (tools: perf/gtune.py)
+// Only the latest couple of drill scenes are kept: each has its own 2048px shadow map (16 MB on the GPU),
+// and keeping all thirty made phones run out of graphics memory.
+const SCN = new Map(), KEEP_SCENES = 2, STATS = { renders: 0, shared: 0 };
+function dropScene(sc) { const m = sc.key && sc.key.shadow && sc.key.shadow.map; if (m) { m.dispose(); sc.key.shadow.map = null; } }
+function dropScenes(keep) { while (SCN.size > keep) { const k = SCN.keys().next().value; dropScene(SCN.get(k)); SCN.delete(k); } }
 function scene(dr) {
-  if (SCN.has(dr.id)) return SCN.get(dr.id);
+  if (SCN.has(dr.id)) { const sc = SCN.get(dr.id); SCN.delete(dr.id); SCN.set(dr.id, sc); return sc; }
+  dropScenes(KEEP_SCENES - 1);
   prep(dr);
   const S = new T.Scene(), TXs = textures(), home = dr.scene === 'home';
   S.background = home ? TXs.home : TXs.sky;
@@ -548,7 +554,8 @@ function scene(dr) {
   if (home) { ground = new T.Mesh(new T.PlaneGeometry(14, 14), new T.MeshStandardMaterial({ map: groundTex, roughness: 0.6 })); S.add(roomBack()); }
   else {
     S.fog = new T.Fog(new T.Color(0xd9e5ec).convertSRGBToLinear(), 20, 60);
-    const gm = new T.MeshStandardMaterial({ map: groundTex, roughness: 1 });
+    // grass is fully rough, so simple diffuse lighting looks the same as the full PBR model at a fraction of the cost (it fills most of the screen)
+    const gm = new T.MeshLambertMaterial({ map: groundTex, emissiveMap: groundTex, emissive: new T.Color(GFILL[0], GFILL[1], GFILL[2]), color: new T.Color(GKEY, GKEY, GKEY) });   // emissive stands in for the sky's fill light
     gm.onBeforeCompile = sh => { sh.uniforms.stripes = { value: TX_STRIPES }; sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D stripes;').replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= mix(0.86, 1.0, texture2D(stripes, vUv * vec2(0.5, 0.1)).r);'); };
     ground = new T.Mesh(new T.PlaneGeometry(120, 120), gm); S.add(treeLine());
   }
@@ -713,6 +720,10 @@ function pathFor(dr, i) {
 let MIR = false;
 const mx = p => MIR ? [-p[0], p[1], p[2]] : p;
 function setMirror(on) { MIR = !!on; }
+// The 3D picture's resolution adapts to the phone: if frames take too long it renders a little smaller
+// (labels and lines stay sharp on their own layer). Shared by all drills for this visit.
+const QUAL = { s: 1, min: 0.7 };
+function slowFrames(dts) { const d = dts.slice().sort((a, b) => a - b); return d[d.length >> 1] > 24; }
 function Player(wrap, dr, opt) {
   opt = opt || {}; prep(dr);
   const gl = webgl();
@@ -721,27 +732,35 @@ function Player(wrap, dr, opt) {
   let cv; if (gl) { cv = R.domElement; cv.className = 'dsGl'; } else { cv = document.createElement('canvas'); cv.className = 'dsGl'; }
   box3.appendChild(cv); box3.appendChild(ov); wrap.innerHTML = ''; wrap.appendChild(box3);
   const sc = gl ? scene(dr) : null;
-  const st = { t: stepStart(dr, opt.step || 0), playing: !opt.paused, speed: 1, view: 'auto', last: performance.now(), step: -1, raf: 0, cam: null, dead: false };
+  const st = { t: stepStart(dr, opt.step || 0), playing: !opt.paused, speed: 1, view: 'auto', last: performance.now(), step: -1, raf: 0, cam: null, dead: false, still: false, dirty: true };
   let W = 0, H = 0, dpr = 1;
   function size() { const r = box3.getBoundingClientRect(); dpr = Math.min(2, window.devicePixelRatio || 1); W = Math.max(2, Math.round(r.width * dpr)); H = Math.max(2, Math.round(r.height * dpr));
-    if (gl) { R.setPixelRatio(1); R.setSize(W, H, false); sc.cam.aspect = W / H; sc.cam.updateProjectionMatrix(); } else { cv.width = W; cv.height = H; } ov.width = W; ov.height = H; }
+    if (gl) { R.setPixelRatio(1); R.setSize(gw(), gh(), false); sc.cam.aspect = W / H; sc.cam.updateProjectionMatrix(); } else { cv.width = W; cv.height = H; } ov.width = W; ov.height = H; }
+  const gw = () => Math.max(2, Math.round(W * QUAL.s)), gh = () => Math.max(2, Math.round(H * QUAL.s));
+  const dts = []; let warm = 20;
   function viewFor(key) { return st.view === 'auto' ? (key.cam || dr.view || 'face') : st.view; }
   function frame(now) {
     if (st.dead) return;
-    const dt = Math.min(0.1, (now - st.last) / 1000); st.last = now;
+    const ms = now - st.last, dt = Math.min(0.1, ms / 1000); st.last = now;
+    if (gl && st.playing && !document.hidden && ms < 1000 && warm-- <= 0) { dts.push(ms); if (dts.length >= 45) { if (slowFrames(dts) && QUAL.s > QUAL.min) { QUAL.s = Math.max(QUAL.min, QUAL.s * 0.85); size(); } dts.length = 0; } }
     if (st.playing) { st.t += dt * st.speed; if (st.t >= dr._dur) st.t = 0; }
-    draw(); st.raf = requestAnimationFrame(frame);
+    // paused with the camera settled: the picture can't change, so don't redraw it (saves the battery and keeps the phone cool)
+    if (gl && !sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) st.dirty = true;
+    if (st.gen !== STATS.shared) { st.gen = STATS.shared; st.dirty = true; }   // a card picture borrowed the shared canvas
+    if (st.playing || st.dirty || !st.still) { st.dirty = false; draw(); }
+    st.raf = requestAnimationFrame(frame);
   }
   const _sz = gl ? new T.Vector2() : null;
   function draw() {
     if (!W) size();
     // the card pictures share this renderer and may have shrunk it: put it back to the player's size
-    if (gl) { R.getSize(_sz); if (_sz.x !== W || _sz.y !== H || R.getPixelRatio() !== 1) { R.setPixelRatio(1); R.setSize(W, H, false); } if (Math.abs(sc.cam.aspect - W / H) > 1e-3) { sc.cam.aspect = W / H; sc.cam.updateProjectionMatrix(); } }
+    if (gl) { R.getSize(_sz); if (_sz.x !== gw() || _sz.y !== gh() || R.getPixelRatio() !== 1) { R.setPixelRatio(1); R.setSize(gw(), gh(), false); } if (Math.abs(sc.cam.aspect - W / H) > 1e-3) { sc.cam.aspect = W / H; sc.cam.updateProjectionMatrix(); } }
     const s = sampleAt(dr, st.t), J = jointsAt(dr, st.t), key = s.key;
     if (key.step !== st.step) { st.step = key.step; opt.onStep && opt.onStep(key.step); }
     // camera: ease toward this key's view
     const want = camState(viewFor(key), key.camo || dr.camo);
     if (!st.cam) st.cam = want; else st.cam = camMix(st.cam, want, 0.08);
+    st.still = Object.keys(want).every(k => typeof want[k] !== 'number' || Math.abs(k === 'yaw' ? ((want.yaw - st.cam.yaw) % 360 + 540) % 360 - 180 : want[k] - st.cam[k]) < 1e-3);
     const cp = camPos(st.cam);
     let proj;
     if (gl) {
@@ -756,7 +775,7 @@ function Player(wrap, dr, opt) {
       const across = J.stickAcross || J.spineClub; sc.stick.visible = !!across; if (across) between(sc.stick, across[0], across[1]);
       if (sc.ball) { const hit = key.hit && (s.inHold || s.raw > 0.5); sc.ball.visible = !hit && !(dr.seq.slice(0, s.i).some(k => k.hit) && !key.reset); }
       updateProps(sc.props, J, key, dr, s);
-      R.render(sc.S, sc.cam);
+      R.render(sc.S, sc.cam); STATS.renders++;
       const v = new T.Vector3(); proj = p => { const q = mx(p); v.set(q[0], q[1], q[2]).project(sc.cam); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H, v.z]; };
     } else {
       const yaw = st.cam.yaw * D2R, Rr = [Math.cos(yaw), 0, -Math.sin(yaw)], k = H * 0.42;
@@ -769,11 +788,11 @@ function Player(wrap, dr, opt) {
   size(); st.raf = requestAnimationFrame(frame);
   return {
     get playing() { return st.playing; }, get step() { return st.step; }, get view() { return st.view; },
-    play() { st.playing = true; st.last = performance.now(); }, pause() { st.playing = false; },
+    play() { st.playing = true; st.last = performance.now(); }, pause() { st.playing = false; st.dirty = true; },
     toggle() { st.playing ? this.pause() : this.play(); return st.playing; },
     goStep(i) { st.t = stepStart(dr, clamp(i, 0, dr.steps.length - 1)); st.step = -1; draw(); },
     next() { this.goStep(st.step + 1 >= dr.steps.length ? 0 : st.step + 1); }, prev() { this.goStep(Math.max(0, st.step - 1)); },
-    setSpeed(s) { st.speed = s; }, setView(v) { st.view = v; },
+    setSpeed(s) { st.speed = s; }, setView(v) { st.view = v; st.dirty = true; },
     seek(t) { st.t = t; st.cam = null; draw(); }, get dur() { return dr._dur; },
     keyTimes() { return dr._tl.map(k => k.e + Math.min(0.4, (k.h - k.e) * 0.6)); },
     destroy() { st.dead = true; cancelAnimationFrame(st.raf); if (ro) ro.disconnect(); if (gl && cv.parentNode) cv.parentNode.removeChild(cv); },
@@ -793,10 +812,11 @@ function poster(dr, w, h) {
     if (!sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) upgrade(sc); poseAny(sc.fig, J); setTone(sc.fig, [], 0); poseClub(sc.club, (dr.noclub || s.p.noclub) ? null : J.club, J); sc.ghost.G.visible = false; sc.gclub.visible = false;
     const across = J.stickAcross || J.spineClub; sc.stick.visible = !!across; if (across) between(sc.stick, across[0], across[1]);
     if (sc.ball) sc.ball.visible = true; updateProps(sc.props, J, {}, dr, s);
-    R.render(sc.S, sc.cam); const x = c.getContext('2d'); x.drawImage(R.domElement, 0, 0, w, h);
+    R.render(sc.S, sc.cam); STATS.shared++; const x = c.getContext('2d'); x.drawImage(R.domElement, 0, 0, w, h);
   } else { const x = c.getContext('2d'), yaw = (VIEWS[dr.view] || VIEWS.face).yaw * D2R, Rr = [Math.cos(yaw), 0, -Math.sin(yaw)], kk = h * 0.42; flat(x, w, h, p => [w / 2 + (MIR ? -1 : 1) * dot(p, Rr) * kk, h * 0.9 - p[1] * kk, 0], J, dr); }
   const url = c.toDataURL('image/jpeg', 0.86); POSTERS.set(id, url); if (typeof CCGolfer !== 'undefined' && CCGolfer.ready()) POSTERS.set(id + ':real', true); return url;
 }
-const api = { Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, ballOf, propPoint };
+function stats() { return { scenes: SCN.size, renders: STATS.renders, scale: QUAL.s }; }
+const api = { stats, slowFrames, QUAL, Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, ballOf, propPoint };
 root.DrillStudio = api;
 })(this);
