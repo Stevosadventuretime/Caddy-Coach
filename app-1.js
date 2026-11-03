@@ -360,7 +360,7 @@ async function seek(t){
  t=Math.max(0,Math.min(v.duration-0.03,t));
  await new Promise(res=>{let d=false;const f=()=>{if(d)return;d=true;v.removeEventListener('seeked',f);clearTimeout(to);res()};const to=setTimeout(f,5000);v.addEventListener('seeked',f);v.currentTime=t});
  let mt=null;
- if(v.requestVideoFrameCallback)await Promise.race([new Promise(r=>v.requestVideoFrameCallback((n,m)=>{mt=m&&m.mediaTime;r()})),sleep(120)]);else await sleep(40);
+ if(v.requestVideoFrameCallback)await Promise.race([new Promise(r=>v.requestVideoFrameCallback((n,m)=>{mt=m&&m.mediaTime;r()})),sleep(400)]);else await sleep(40);
  return mt!=null&&Math.abs(mt-t)<0.1?mt:v.currentTime;
 }
 function dims(){const vw=v.videoWidth,vh=v.videoHeight,sc=Math.min(1,640/Math.max(vw,vh));return{W:Math.round(vw*sc),H:Math.round(vh*sc)}}
@@ -391,17 +391,28 @@ async function getPose(){
  POSE=new BlazePose.Pose(ab(POSE_MODELS.det),ab(POSE_MODELS.lm));return POSE;
 }
 
-// frames at the given times: play the video at speed and keep the frame nearest each time; jump to any it missed
-async function grabAt(times,W,H,live,onProg){const out=times.map(t=>({t,c:null,dt:1e9}));
+// a tiny fingerprint of a picture: two frames with the same one are (almost certainly) the same picture
+const FPC=document.createElement('canvas');FPC.width=FPC.height=16;
+function fprint(c){const x=FPC.getContext('2d',{willReadFrequently:true});x.drawImage(c,0,0,16,16);const d=x.getImageData(0,0,16,16).data;let h=0;for(let i=0;i<d.length;i++)h=(h*33+d[i])>>>0;return h}
+// frames at the given times. Each slot gets exactly the frame that is on screen at that time, so the result never
+// depends on which frames a busy phone drops: while the video plays fast, a frame is kept for a time only when the
+// next frame is also seen (so we know nothing was skipped in between); any slot left over is fetched by seeking.
+async function grabAt(times,W,H,live,onProg){const out=times.map(t=>({t,c:null}));
  if(v.requestVideoFrameCallback&&times.length>2){const a=Math.max(0,times[0]-0.05),b=times[times.length-1]+0.05;await seek(a);
+  const sc=[document.createElement('canvas'),document.createElement('canvas')];sc.forEach(c=>{c.width=W;c.height=H});
+  let prev=null,cur=0,step=1e9,gaps=0;
   await new Promise(res=>{let done=false;const fin=()=>{if(done)return;done=true;clearTimeout(to);v.pause();v.playbackRate=1;res()};
-   const to=setTimeout(fin,(b-a)/2*1000+6000);v.addEventListener('ended',fin,{once:true});
+   const to=setTimeout(fin,(b-a)/1.5*1000+6000);v.addEventListener('ended',fin,{once:true});
    const cb=(now,meta)=>{if(done)return;if(!live())return fin();const mt=meta.mediaTime;
-    // the time slot this frame is closest to; keep it if it's the closest seen yet
-    let k=0,bd=1e9;for(let i=0;i<out.length;i++){const dd=Math.abs(out[i].t-mt);if(dd<bd){bd=dd;k=i}}
-    if(bd<out[k].dt&&bd<0.12){out[k].dt=bd;out[k].t=mt;if(!out[k].c)out[k].c=document.createElement('canvas');const c=out[k].c;c.width=W;c.height=H;c.getContext('2d').drawImage(v,0,0,W,H)}
+    cur^=1;const c=sc[cur];c.getContext('2d').drawImage(v,0,0,W,H);const fh=fprint(c);
+    if(prev){const gap=mt-prev.mt;if(gap>0.002){gaps++;if(gap<step)step=gap}
+     // prev was on screen from prev.mt until mt; if no frame was skipped, it's the right frame for every time in between.
+     // Only trusted once the frame spacing is known, and not when prev's picture equals this one (on a busy phone the
+     // copy can catch the next frame instead); those slots are fetched exactly by seeking below.
+     if(gaps>=3&&gap>0&&gap<step*1.5+1e-4&&prev.fh!==fh)for(const o of out)if(!o.c&&o.t>=prev.mt-1e-4&&o.t<mt-1e-4){const c=document.createElement('canvas');c.width=W;c.height=H;c.getContext('2d').drawImage(prev.c,0,0);o.c=c;o.t=prev.mt}}
+    prev={mt,c,fh};
     if(onProg)onProg(Math.min(1,(mt-a)/(b-a)));if(mt>=b)fin();else v.requestVideoFrameCallback(cb)};
-   v.requestVideoFrameCallback(cb);try{v.playbackRate=4}catch(_){}
+   v.requestVideoFrameCallback(cb);try{v.playbackRate=3}catch(_){}
    v.muted=true;const p=v.play();if(p&&p.catch)p.catch(fin)})}
  for(const o of out){if(!live())break;if(!o.c){o.t=await seek(o.t);o.c=frameCanvas(W,H)}}
  return out}
@@ -419,13 +430,13 @@ async function findSwing(my){
   for(let i=0;i<n;i++){
    if(!live())return;
    const r=pose.track({width:W,height:H},roi,sampler(cs[i].c));roi=r?r.next:null;
-   fr.push(r?{t:cs[i].t,pts:r.pts,world:r.world}:{t:cs[i].t});
+   fr.push(r?{t:times[i],pts:r.pts,world:r.world}:{t:times[i]});   // the fixed sample time, so the trim never depends on frame timing
    prog(.27+.7*(i+1)/n);await tick();
   }
   const win=SwingMetrics.findWindow(fr);
   if(!live())return;
   if(!win){say("Couldn't spot a swing automatically. Drag the handles to the swing, then tap Trim and analyse.");return}
-  let a=Math.max(0,win.t0+0.2),b=Math.min(d,win.t1);if(b-a>MAXLEN)b=a+MAXLEN;
+  let a=Math.max(0,win.t0-0.4),b=Math.min(d,win.t1);if(b-a>MAXLEN)b=a+MAXLEN;
   busy=false;setTrim(a,b,'a');
   say(`Swing found at ${a.toFixed(1)}–${b.toFixed(1)}s. Check the trim, then tap Trim and analyse.`);
  }catch(e){if(live())say("Couldn't spot a swing automatically. Drag the handles to the swing, then tap Trim and analyse.")}
@@ -434,34 +445,67 @@ async function findSwing(my){
 }
 
 // ---------- capture the trimmed clip, discard the rest ----------
+// Frames are read so that the same video always gives the same frames: the clip plays at half speed and every frame
+// shown is kept with the time the video gives it; any frame a busy phone skipped is then fetched by seeking (gaps are
+// easy to see, because frames come at a fixed spacing); finally one frame per 1/60 s of the video's own timeline is
+// picked (not timed from the trim). Which frames get dropped while playing therefore never changes the result.
 async function captureClip(my,a,b){
- const {W,H}=dims(),out=[];
+ const {W,H}=dims(),got=new Map();
  const enc=c=>new Promise(r=>c.toBlob(r,'image/jpeg',.85));
+ let last=null;
+ // on a busy phone a copy can catch the next frame instead of its own; if a frame's picture equals the next one's,
+ // drop it so it's fetched exactly by seeking below
+ const keep=(mt,c,play)=>{const k=Math.round(mt*1e4);if(got.has(k))return;const fh=fprint(c);
+  if(play&&last&&last.fh===fh&&mt-last.t<0.06&&mt>last.t)got.delete(last.k);
+  got.set(k,{t:mt,p:enc(c),play:!!play});if(play)last={k,t:mt,fh}};
  if(v.requestVideoFrameCallback){
   await seek(Math.max(0,a-0.05));
-  const pend=[];
   await new Promise(res=>{
-   let done=false,last=-1;const fin=()=>{if(done)return;done=true;clearTimeout(to);v.pause();v.playbackRate=1;res()};
+   let done=false;const fin=()=>{if(done)return;done=true;clearTimeout(to);v.pause();v.playbackRate=1;res()};
    const to=setTimeout(fin,(b-a)/0.5*1000+8000);
    v.addEventListener('ended',fin,{once:true});
    const cb=(now,meta)=>{if(done)return;if(my!==job)return fin();const mt=meta.mediaTime;
-    if(mt>=a-0.001&&mt<=b+0.001&&mt-last>=1/32){last=mt;const c=frameCanvas(W,H);pend.push(enc(c).then(blob=>({t:mt,blob})))}
-    prog(.02+.1*Math.min(1,Math.max(0,(mt-a)/(b-a))));
-    if(mt>=b)fin();else v.requestVideoFrameCallback(cb)};
+    if(mt>=a-0.02&&mt<=b+0.02)keep(mt,frameCanvas(W,H),true);
+    prog(.02+.08*Math.min(1,Math.max(0,(mt-a)/(b-a))));
+    if(mt>=b+0.02)fin();else v.requestVideoFrameCallback(cb)};
    v.requestVideoFrameCallback(cb);
    try{v.playbackRate=0.5}catch(_){}
    const p=v.play();if(p&&p.catch)p.catch(fin);
   });
-  out.push(...(await Promise.all(pend)).filter(f=>f.blob));
  }
- out.sort((p,q)=>p.t-q.t);
+ if(my!==job)return null;
+ // the video's frame spacing, from the closest pair of frames seen; then fetch every frame that's missing
+ let ts=[...got.values()].map(f=>f.t).sort((p,q)=>p-q),step=1/30;
+ if(ts.length>2){let mn=1;for(let i=1;i<ts.length;i++){const d=ts[i]-ts[i-1];if(d>0.002&&d<mn)mn=d}step=Math.max(1/240,mn)}
  const want=[];
- if(out.length<3){for(let t=a;t<=b;t+=1/30)want.push(t)}
- else{const pts=[a-1/60].concat(out.map(f=>f.t),[b+1/60]);for(let i=1;i<pts.length;i++)if(pts[i]-pts[i-1]>0.05)for(let t=pts[i-1]+1/30;t<pts[i]-0.017;t+=1/30)want.push(t)}
- for(let i=0;i<want.length;i++){if(my!==job)return null;const t=await seek(want[i]);out.push({t,blob:await enc(frameCanvas(W,H))});prog(.12+.03*(i+1)/want.length)}
- out.sort((p,q)=>p.t-q.t);
- const uniq=out.filter((f,i)=>f.blob&&(i===0||f.t-out[i-1].t>0.005)),t0=uniq.length?uniq[0].t:a;
- return {W,H,frames:uniq.map(f=>({t:f.t-t0,blob:f.blob})),src:{a,b}};
+ if(ts.length<3){for(let t=a;t<=b;t+=step)want.push(t)}
+ else{const edge=[a-step].concat(ts,[b+step]);for(let i=1;i<edge.length;i++){const gap=edge[i]-edge[i-1];if(gap>step*1.5)for(let t=edge[i-1]+step;t<edge[i]-step*0.5;t+=step)want.push(t+step*0.25)}}
+ for(let i=0;i<want.length;i++){if(my!==job)return null;const mt=await seek(want[i]);keep(mt,frameCanvas(W,H));prog(.1+.05*(i+1)/want.length)}
+ // put every frame on the video's own frame grid (spacing and offset measured from the frames seen while playing),
+ // so a frame fetched by seeking gets exactly the same time as when it's seen playing; duplicates collapse
+ let all=[...got.values()].sort((p,q)=>p.t-q.t);
+ { const pl=all.filter(f=>f.play).map(f=>f.t);
+   // the true spacing: the standard video frame rate that every frame seen while playing sits on (timestamps are
+   // often rounded to the millisecond, so a measured average would drift a frame over a few seconds). Largest
+   // spacing that fits wins, since a busy phone may show only every other frame while playing.
+   if(pl.length>8){
+    // offset of the grid by a circular average (so frames either side of a grid line don't pull it apart), then
+    // check every frame is within 1.5 ms of it
+    const fit=st=>{let sx=0,sy=0;for(const t of pl){const a=2*Math.PI*t/st;sx+=Math.cos(a);sy+=Math.sin(a)}const ph=Math.atan2(sy,sx)*st/(2*Math.PI);
+      return pl.every(t=>{const d=t-ph;return Math.abs(d-st*Math.round(d/st))<Math.min(0.0015,st*0.2)})?ph:null};
+    const RATES=[24000/1001,24,25,30000/1001,30,48,50,60000/1001,60,100,120000/1001,120,240000/1001,240];
+    // the largest spacing that fits and doesn't merge real frames (a busy phone may show only every other frame
+    // while playing, which a grid twice as wide also fits); if none does, keep the times as they are
+    for(const fr of RATES){const st=1/fr,ph=fit(st);if(ph==null)continue;
+     const snap=new Map();for(const f of all){const t=+(ph+st*Math.round((f.t-ph)/st)).toFixed(5),o=snap.get(t);if(!o||(f.play&&!o.play))snap.set(t,Object.assign({},f,{t}))}
+     if(snap.size>=all.length*0.97){all=[...snap.values()].sort((p,q)=>p.t-q.t);break}}
+   } }
+ // one frame per 1/60 s of the video's timeline: the frame on screen at that moment
+ const pick=[];
+ for(let k=Math.ceil(a*60);k<=Math.floor(b*60);k++){const g=k/60+1/240;let f=null;for(const x of all){if(x.t<=g+1e-4)f=x;else break}if(f&&pick[pick.length-1]!==f)pick.push(f)}
+ const out=[];for(const f of pick)out.push({t:f.t,blob:await f.p});
+ const uniq=out.filter(f=>f.blob),t0=uniq.length?uniq[0].t:a;
+ return {W,H,frames:uniq.map(f=>({t:f.t-t0,blob:f.blob})),src:{a,b},t0};
 }
 function releaseOriginal(){
  v.pause();const u=v.src;v.removeAttribute('src');v.load();if(u&&u.startsWith('blob:'))URL.revokeObjectURL(u);
@@ -537,11 +581,48 @@ function keyThumb(src,me,id,T0,w,h,q){
  return c.toDataURL('image/jpeg',q||.8);
 }
 
+// The proof for "Fix this first": the frame where the fault shows, with the line a coach would draw on it
+// (where the hips or head were at address, the spine angle then and now, the hand path back and down).
+const EV_FRAME={Setup:'addr',Backswing:'top',Top:'top',Downswing:'down',Impact:'imp',Finish:'fin'};
+async function evidenceShot(c,R){
+ try{
+  const F=R.F,P=R.P;if(!F||!P)return null;
+  const pick=EV_FRAME[c.phase]||'imp',ki=pick==='down'?Math.round((P.top+P.imp)/2):P[pick],K=F[ki],A=F[P.addr];if(!K||!A)return null;
+  const near=t=>RES.dense.reduce((b,f)=>Math.abs(f.t-t)<Math.abs(b.t-t)?f:b,RES.dense[0]);
+  const src=await bmp(near(K.t).i),w=480,h=640,T=A.T||1;
+  const lead=R.metrics.handed==='left'?28:27,me=K.pts,pts=me.concat([A.head,A.hip]);
+  const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);let cx=(Math.min(...xs)+Math.max(...xs))/2,cy=(Math.min(...ys)+Math.max(...ys))/2,ch=(Math.max(...ys)-Math.min(...ys))*1.3,cw=ch*w/h;
+  if((Math.max(...xs)-Math.min(...xs))*1.3>cw){cw=(Math.max(...xs)-Math.min(...xs))*1.3;ch=cw*h/w}
+  const cv=document.createElement('canvas');cv.width=w;cv.height=h;const x=cv.getContext('2d');x.fillStyle='#0d130f';x.fillRect(0,0,w,h);
+  const k=w/cw,X=p=>[(p.x-(cx-cw/2))*k,(p.y-(cy-ch/2))*k];
+  x.drawImage(src,cx-cw/2,cy-ch/2,cw,ch,0,0,w,h);
+  const lw=Math.max(2,w/120);drawPose(x,me.map(X),'me',lw);
+  const ink='#f3c43a',bad='#ff5a4f';
+  const line=(a,b,col,dash)=>{x.save();x.strokeStyle='rgba(0,0,0,.55)';x.lineWidth=lw*2.6;x.setLineDash(dash?[lw*3,lw*2.2]:[]);x.beginPath();x.moveTo(a[0],a[1]);x.lineTo(b[0],b[1]);x.stroke();x.strokeStyle=col;x.lineWidth=lw*1.5;x.stroke();x.restore()};
+  const vline=(px,col)=>line([px,0],[px,h],col,true);
+  const dot=(p,col)=>{x.beginPath();x.arc(p[0],p[1],lw*2.6,0,7);x.fillStyle=col;x.fill();x.lineWidth=lw;x.strokeStyle='#fff';x.stroke()};
+  const label=(t,px,py)=>{x.save();x.font=`600 ${Math.round(w/26)}px system-ui,sans-serif`;const tw=x.measureText(t).width+20,hh=w/16;px=Math.max(8,Math.min(w-tw-8,px));x.fillStyle='rgba(13,19,15,.82)';x.beginPath();x.roundRect?x.roundRect(px,py,tw,hh,hh/2):x.rect(px,py,tw,hh);x.fill();x.fillStyle='#fff';x.textBaseline='middle';x.fillText(t,px+10,py+hh/2);x.restore()};
+  const spine=f=>[X(f.hip),X(f.sh)],id=c.id;let cap='';
+  if(['earlyExt','hipDepth','sway','hipShift','swayGap'].includes(id)){const a=X(A.hip);vline(a[0],ink);dot(X(K.hip),bad);label('Hips at address',a[0]+8,h*0.06);cap='Dashed line: where your hips were at address. Red dot: where they are here.'}
+  else if(['slide','finishWeight'].includes(id)){const a=X(A.pts[lead]);vline(a[0],ink);dot(X(K.pts[lead===27?23:24]),bad);label('Lead foot',a[0]+8,h*0.06);cap='Dashed line: straight up from your lead foot. Red dot: your lead hip.'}
+  else if(['posture','standUp','setupTilt','reverse','impactTilt'].includes(id)){const [a0,a1]=spine(A),[k0,k1]=spine(K);const ext=(p,q,s)=>[p[0]+(q[0]-p[0])*s,p[1]+(q[1]-p[1])*s];line(ext(a1,a0,-0.4),ext(a0,a1,1.5),ink,true);line(k0,ext(k0,k1,1.5),bad,false);label('Spine at address',Math.min(a1[0],k1[0]),h*0.06);cap='Dashed line: your spine angle at address. Red line: your spine here.'}
+  else if(['headDrop','headSide','headDepth','headRise','headImpact'].includes(id)){const a=X(A.head),r=T*0.22*k;x.save();x.setLineDash([lw*3,lw*2.2]);x.strokeStyle=ink;x.lineWidth=lw*1.5;x.strokeRect(a[0]-r,a[1]-r,r*2,r*2);x.restore();dot(X(K.head),bad);label('Head at address',a[0]-r,a[1]-r-w/14);cap='Dashed box: where your head was at address. Red dot: where it is here.'}
+  else if(id==='ott'){const back=F.slice(P.addr,P.top+1).map(f=>X(f.wr)),down=F.slice(P.top,P.imp+1).map(f=>X(f.wr));
+   const path=(ps,col,dash)=>{if(ps.length<2)return;x.save();x.strokeStyle=col;x.lineWidth=lw*1.6;x.setLineDash(dash?[lw*3,lw*2.2]:[]);x.beginPath();ps.forEach((p,i)=>i?x.lineTo(p[0],p[1]):x.moveTo(p[0],p[1]));x.stroke();x.restore()};
+   path(back,ink,true);path(down,bad,false);label('Hands: back (dashed), down (red)',w*0.05,h*0.06);cap='Dashed line: your hands going back. Red line: your hands coming down, outside the way they went back.'}
+  return {id,img:cv.toDataURL('image/jpeg',.82),cap,frame:{addr:'At address',top:'At the top',down:'Halfway down',imp:'At impact',fin:'At the finish'}[pick]};
+ }catch(e){console.warn('evidence',e);return null}
+}
+
 // ================= ANALYSIS =================
 function opts(){return{hand:$('hand').value||undefined,view:$('view').value||undefined}}
+// the camera angle is the golfer's choice (remembered), never a guess; the golfer's hand comes from their profile
+setTimeout(()=>{const sv=lsGet('cc_view',null);if(sv==='face-on'||sv==='down-the-line')$('view').value=sv;$('view').addEventListener('change',()=>lsSet('cc_view',$('view').value));
+ if(!$('hand').value&&typeof Hand!=='undefined')$('hand').value=Hand.get()},0);
 ['hand','view'].forEach(id=>$(id).onchange=()=>{if(RES&&RES.R&&!busy)finishAnalysis(job,true)});
 async function analyze(my){
- if(busy)return;if(typeof plusGate==='function'&&!(await plusGate('swing')))return;busy=true;$('go').disabled=true;stopPlay();
+ if(busy)return;
+ if(!$('view').value){say('Pick the camera angle first: "Facing you" if the phone was in front of you, "Down the line" if it was behind you, looking at the target.',true);$('view').focus();return}if(typeof plusGate==='function'&&!(await plusGate('swing')))return;busy=true;$('go').disabled=true;stopPlay();
  try{
   step(1);say('Keeping only your trimmed clip…');prog(.01);
   const clip=await captureClip(my,TR.a,TR.b);if(!clip||my!==job)return;
@@ -551,11 +632,17 @@ async function analyze(my){
   step(2);say('Loading the body-tracking model…');
   const pose=await getPose();if(my!==job)return;
   const sampler=makeSampler(),{W,H}=CLIP,N=CLIP.frames.length,dense=[],done=new Set();let count=0;const t1=performance.now();
-  const run=async(idx,total,base,span,lab)=>{
-   let r0=null,prevI=-9;
+  // frames are placed on the video's own timeline (not the trim), so moving the trim never changes which frames are
+  // looked at first or where tracking restarts: the first look takes one frame per 1/30 s of the video, and tracking
+  // restarts from scratch at each whole second of it (the blocks the background threads share out)
+  const T0=CLIP.t0||0,absT=i=>T0+CLIP.frames[i].t,block=i=>Math.floor(absT(i)+1e-3);
+  // chain: each frame starts from the one before (from scratch at a new block); otherwise each starts from the
+  // nearest earlier frame already tracked before this pass, exactly as the background threads do it
+  const run=async(idx,total,base,span,lab,chain)=>{
+   let r0=null,prevI=-1;const before=dense.slice();
    for(let k=0;k<idx.length;k++){
     const i=idx[k];if(my!==job)return false;
-    if(i-prevI>2||!r0){const prev=dense.filter(f=>f.i<i).pop();r0=prev?prev.roi:null}
+    if(chain){if(prevI<0||block(i)!==block(prevI))r0=null}else r0=((before.filter(f=>f.i<i).pop())||{}).roi||null;
     const b=await bmp(i);const r=pose.track({width:W,height:H},r0,sampler(b));r0=r?r.next:null;prevI=i;done.add(i);
     if(r)dense.push({i,t:CLIP.frames[i].t,pts:r.pts,world:r.world,roi:r.roi});
     count++;const per=(performance.now()-t1)/count;
@@ -564,19 +651,23 @@ async function analyze(my){
    }
    dense.sort((p,q)=>p.t-q.t);return true;
   };
-  const idxA=[];for(let i=0;i<N;i+=2)idxA.push(i);
+  const idxA=[];{let last=null;for(let i=0;i<N;i++){const sl=Math.floor(absT(i)*30+1e-3);if(sl!==last){idxA.push(i);last=sl}}}
   // the first look: every other frame (split between background threads where the phone has the cores)
   const par=await PW.init().catch(()=>false);if(my!==job)return;
   const runPar=async(idx,total,base,span,lab,chain)=>{const K=PW.workers.length,parts=[];
-   if(chain){const per=Math.ceil(idx.length/K);for(let k=0;k<K;k++){const a=idx.slice(k*per,(k+1)*per);if(a.length)parts.push(a)}}
-   else{for(let k=0;k<K;k++)parts.push(idx.filter((_,q)=>q%K===k))}
+   // chain: one block per whole second of the video, shared out between the threads, each block tracked from scratch;
+   // otherwise frames are dealt out and each starts from the nearest earlier frame already tracked
+   if(chain){const bl=new Map();for(const i of idx){const b=block(i);if(!bl.has(b))bl.set(b,[]);bl.get(b).push(i)}[...bl.values()].forEach((a,j)=>{(parts[j%K]=parts[j%K]||[]).push(a)})}
+   else{for(let k=0;k<K;k++)parts.push([idx.filter((_,q)=>q%K===k)])}
    const t0=performance.now();let doneN=0;
-   const res=await Promise.all(parts.map((a,k)=>PW.call(PW.workers[k],{chain,W,H,jobs:a.map(i=>({i,blob:CLIP.frames[i].blob,roi:chain?null:((dense.filter(f=>f.i<i).pop()||{}).roi||null)}))},()=>{count++;doneN++;const per=(performance.now()-t0)/doneN,left=Math.max(1,Math.round(per*(idx.length-doneN)/1000));if(my===job){say(lab?`${lab} (about ${left} s)…`:`Tracking your body ${count}/${total} (about ${left} s left)…`);prog(base+span*doneN/idx.length)}})));
+   const onP=()=>{count++;doneN++;const per=(performance.now()-t0)/doneN,left=Math.max(1,Math.round(per*(idx.length-doneN)/1000));if(my===job){say(lab?`${lab} (about ${left} s)…`:`Tracking your body ${count}/${total} (about ${left} s left)…`);prog(base+span*doneN/idx.length)}};
+   const res=await Promise.all(parts.map(async(blocks,k)=>{const out=[];for(const a of blocks){if(!a.length)continue;if(my!==job)break;
+     out.push(...await PW.call(PW.workers[k],{chain,W,H,jobs:a.map(i=>({i,blob:CLIP.frames[i].blob,roi:chain?null:((dense.filter(f=>f.i<i).pop()||{}).roi||null)}))},onP))}return out}));
    if(my!==job)return false;
    for(const r of res)for(const x of r){done.add(x.i);if(x.r)dense.push({i:x.i,t:CLIP.frames[x.i].t,pts:x.r.pts,world:x.r.world,roi:x.r.roi})}
    dense.sort((p,q)=>p.t-q.t);return true};
-  if(par){try{if(!await runPar(idxA,idxA.length+16,.15,.6,null,true))return}catch(e){console.warn(e);PW.ok=false;dense.length=0;done.clear();count=0;if(!await run(idxA,idxA.length+16,.15,.6))return}}
-  else if(!await run(idxA,idxA.length+16,.15,.6))return;
+  if(par){try{if(!await runPar(idxA,idxA.length+16,.15,.6,null,true))return}catch(e){console.warn(e);PW.ok=false;dense.length=0;done.clear();count=0;if(!await run(idxA,idxA.length+16,.15,.6,null,true))return}}
+  else if(!await run(idxA,idxA.length+16,.15,.6,null,true))return;
   if(dense.length<5){say('No golfer was found in the trimmed clip. Make sure your whole body is in view and well lit.',true);prog(null);return}
   step(3);
   const A2=SwingMetrics.analyse(dense,opts());
@@ -598,6 +689,9 @@ async function finishAnalysis(my,quick){
  const dense=RES.dense;
  const R=SwingMetrics.analyse(dense,opts());
  if(!R.ok){say('The swing could not be measured reliably from this clip. Try a steadier camera with your whole body in view.',true);prog(null);return}
+ if(R.metrics.view_mismatch&&!(CLIP&&CLIP.viewOk)){const picked=R.metrics.view,looks=R.metrics.view_mismatch,nm=x=>x==='face-on'?'facing you':'down the line';
+  prog(null);$('msg').innerHTML=`<span class="err">This video looks like it was filmed ${nm(looks)}, but the camera angle is set to ${nm(picked)}. The checks are different for each angle, so which was it?</span> <span class="vmBtns"><button type="button" class="btn sm" data-vm="${looks}">It was ${nm(looks)}</button> <button type="button" class="btn sm" data-vm="${picked}">It was ${nm(picked)}</button></span>`;
+  $('msg').querySelectorAll('[data-vm]').forEach(b=>b.onclick=()=>{$('view').value=b.dataset.vm;lsSet('cc_view',b.dataset.vm);if(CLIP)CLIP.viewOk=true;finishAnalysis(job,quick)});return}
  const I=IdealPose.build(dense,R);
  RES.R=R;RES.I=I;RES.T0=I.T0;RES.byFrame=new Map();dense.forEach((f,k)=>RES.byFrame.set(f.i,{me:f.pts,id:I.ideal[k]}));
  RES.nearest=t=>{let b=0,bd=1e9;dense.forEach((f,k)=>{const d=Math.abs(f.t-t);if(d<bd){bd=d;b=k}});return bd<0.05?{me:dense[b].pts,id:I.ideal[b]}:null};
@@ -606,7 +700,7 @@ async function finishAnalysis(my,quick){
  const keys=[];
  for(const [lab,t] of items){let bk=0;dense.forEach((f,k)=>{if(Math.abs(f.t-t)<Math.abs(dense[bk].t-t))bk=k});const f=dense[bk];const b=await bmp(f.i);
   keys.push({lab,t:f.t,fi:f.i,notes:I.notes[lab]||[],img:keyThumb(b,f.pts,I.ideal[bk],I.T0,240,320,.8),small:keyThumb(b,f.pts,I.ideal[bk],I.T0,150,200,.66)})}
- RES.keys=keys;RES.text=localText(R);renderLive();
+ RES.keys=keys;{const F0=SwingMetrics.faults(swingChecks(R.metrics))[0];RES.evidence=F0?await evidenceShot(F0,R):null}RES.text=localText(R);renderLive();
  {const tips=filmCheck(dense,CLIP.W,CLIP.H),ft=$('filmTip');if(ft){ft.hidden=!tips.length;ft.innerHTML=tips.length?`<div class="card fgCheck"><b>Filming tip for next time</b>${tips.map(t=>`<p>${esc(t)}</p>`).join('')}</div>`:''}}
  step(4);prog(null);showFrame(keys[0].fi);
  if(quick==='preview'){say('Your results are below. Fine-tuning the key moments…');prog(.75);return}
@@ -710,13 +804,13 @@ const GOOD_PLAIN={setupTilt:'Good setup: back shoulder slightly lower than the f
  earlyExt:'Hips stay back through the ball, so you keep room to swing.',standUp:'Keeps your posture into the ball.',hipShift:'Good move onto your front foot.',slide:'Front hip stays over your front foot.',
  hipOpen:'Hips turn nicely through the ball.',finishWeight:'Finishes with your weight on the front foot.',trailHeel:'Up on your back toe at the finish.',sway:'Turns going back instead of sliding.',
  headDepth:'Head stays the same distance from the ball.',headImpact:'Head stays behind the ball through impact.',impactTilt:'Stays behind the ball at impact.'};
-const VERDICT={tour:['Spot on','good','✓'],ok:['Nearly there','mid','–'],fault:['Needs work','bad','!'],major:['Big fix','bad','!!']};
+const VERDICT={tour:['Spot on','good','✓'],ok:['Nearly there','mid','–'],borderline:['Borderline','mid','~'],info:['For information','mid','i'],fault:['Needs work','bad','!'],major:['Big fix','bad','!!']};
 const capFirst=t=>t?t.charAt(0).toUpperCase()+t.slice(1):t;
 function sideOf(c){const def=SwingMetrics.CHECKS.find(x=>x.id===c.id);if(!def||c.value==null)return null;const good=def.A.filter(a=>a[1]>=8.5).map(a=>a[0]);if(!good.length)return null;
  return c.value<Math.min(...good)?'lo':c.value>Math.max(...good)?'hi':null}
 const plainName=c=>(PLAIN[c.id]||{}).n||String(c.name||'').replace(/ \(.*\)$/,'');
 // "Too upright", or "Spot on"
-function plainState(c){if(c.verdict==='tour')return 'Spot on';const sd=sideOf(c),w=sd&&(PLAIN[c.id]||{})[sd];return w?capFirst(w)+(c.verdict==='ok'?' (a little)':''):VERDICT[c.verdict][0]}
+function plainState(c){if(c.verdict==='tour')return 'Spot on';if(c.verdict==='info')return c.infoWhy==='angle'?'Shown only: film from the side facing you to judge it':'Shown only: film at 60 frames a second to judge it';const sd=sideOf(c),w=sd&&(PLAIN[c.id]||{})[sd];return w?capFirst(w)+(c.verdict==='ok'?' (a little)':c.verdict==='borderline'?' (borderline)':''):VERDICT[c.verdict][0]}
 function plainAdvice(c){const a=Object.assign({},SwingMetrics.advice(c)||{}),t=TITLE_PLAIN[c.id+'.'+sideOf(c)];if(t&&a.title){a.title=t[0];a.term=t[1]}if(GOOD_PLAIN[c.id])a.good=GOOD_PLAIN[c.id];return a}
 // the gauge with plain labels: "Too upright · Just right · Too bent over", and where you are
 function gaugeHTML(c){const def=SwingMetrics.CHECKS.find(x=>x.id===c.id);if(!def)return'';const A=def.A,p=PLAIN[c.id]||{};
@@ -767,12 +861,12 @@ function fixListHTML(m,live){
 function checklistHTML(m){
  const C=swingChecks(m);if(!C.length)return'';
  const fo=m.view==='face-on',other=SwingMetrics.CHECKS.filter(c=>c.view===(fo?'dtl':'fo')&&!C.some(x=>x.name===c.name));
- const tally={tour:0,ok:0,fault:0,major:0};C.forEach(c=>tally[c.verdict]++);
+ const tally={tour:0,ok:0,borderline:0,info:0,fault:0,major:0};C.forEach(c=>tally[c.verdict]++);
  const row=c=>{const a=plainAdvice(c),[lab,cls,sym]=VERDICT[c.verdict];
   return `<details class="ck"><summary><span class="ckI g-${cls}" aria-hidden="true">${sym}</span><span class="ckN">${esc(plainName(c))}</span><span class="ckV g-${cls}">${esc(c.verdict==='tour'?lab:plainState(c))}</span></summary>
   <div class="ckB">${gaugeHTML(c)}<p class="mut" style="margin:0">You measured ${esc(c.shown)}${esc(realDist(c))}. Tour players: ${esc(c.target)}.</p><p>${esc(c.verdict==='tour'?(a.good||''):(a.why||a.good||''))}</p>${a.feel&&c.verdict!=='tour'?`<p><b>How it should feel:</b> ${esc(a.feel)}</p>`:''}</div></details>`};
  return `<div class="card ckList"><h2>Every check, position by position</h2><p class="mut" style="margin:0 0 10px">Everything we could measure from this ${fo?'front-on':'behind-the-ball'} video, compared with tour players filmed the same way. Tap any row to see the numbers.</p>
- <div class="ckTally"><span><b class="g-good">${tally.tour}</b> spot on</span><span><b class="g-mid">${tally.ok}</b> nearly there</span><span><b class="g-bad">${tally.fault+tally.major}</b> need work</span></div>
+ <div class="ckTally"><span><b class="g-good">${tally.tour}</b> spot on</span><span><b class="g-mid">${tally.ok+tally.borderline}</b> nearly there</span><span><b class="g-bad">${tally.fault+tally.major}</b> need work</span></div>
  ${PHASES.map(ph=>{const cs=C.filter(c=>c.phase===ph);return cs.length?`<h3 class="ckPh">${ph}</h3>${cs.map(row).join('')}`:''}).join('')}
  ${other.length?`<div class="ckOther"><b>Film one swing from ${fo?'behind you, looking at the target,':'in front of you, facing your chest,'} to check ${other.length} more things,</b> including ${esc([...new Set(other.slice().sort((a,b)=>b.w-a.w).map(c=>plainName(c).toLowerCase()))].slice(0,3).join(', '))}.</div>`:''}
  <p class="mut" style="margin:10px 0 0">Measured from one camera, so treat single numbers as good estimates rather than exact. Tour ranges come from tour swings tracked by this app plus published GolfTEC, Sportsbox AI and TPI data.</p></div>`;
@@ -823,7 +917,7 @@ function summaryHTML(s,txt,m){const g=grade(s.overall),L=SwingMetrics.level(s.ov
  ${C.length?`<div class="shTally"><span><b class="g-good">${t.tour}</b> spot on</span><span><b class="g-mid">${t.ok}</b> nearly there</span><span><b class="g-bad">${t.f}</b> ${t.f===1?'needs':'need'} work</span></div>`:''}
  ${txt&&txt.summary?`<p class="shSum">${esc(txt.summary)}</p>`:''}
  ${good.length?`<div class="shGood"><b>What you do well</b><ul>${good.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
- ${top?`<div class="shPri"><span>Fix this first</span><b>${esc(ta.title)}</b><p>${esc(ta.feel||'')}</p>${d0?`<button type="button" class="pri" data-drill="${d0.id}">Show me the drill: ${esc(d0.name)}</button>`:''}</div>`
+ ${top?`<div class="shPri"><span>${top.borderline?'Worth working on first':'Fix this first'}</span><b>${esc(ta.title)}</b>${typeof RES!=='undefined'&&RES&&RES.evidence&&RES.evidence.id===top.id?`<figure class="evShot"><img src="${RES.evidence.img}" alt="${esc(RES.evidence.frame)}, with the coaching line drawn on"><figcaption>${esc(RES.evidence.frame)}. ${esc(RES.evidence.cap)} You measured ${esc(top.shown)}; the target is ${esc(top.target)}.</figcaption></figure>`:''}<p>${esc(ta.feel||'')}</p>${d0?`<button type="button" class="pri" data-drill="${d0.id}">Show me the drill: ${esc(d0.name)}</button>`:''}</div>`
   :txt&&txt.top_priority?`<div class="shPri"><span>Work on first</span><b>${esc(txt.top_priority)}</b></div>`:''}
  <div class="acts2"><button type="button" data-go="3">Open the drill library</button></div></div>`}
 function breakdownHTML(s,txt,m){return `<details class="acc fullBd"><summary><span>The full breakdown<small>Every check and every area, with the numbers, for when you want the detail</small></span></summary><div class="acb">${checklistHTML(m)}${reportHTML(s,txt,m)}</div></details>`}
