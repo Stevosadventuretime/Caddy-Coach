@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Caddy Coach">
 <style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}#ccSplash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;align-content:center;gap:18px;background:radial-gradient(120% 80% at 50% 35%,#16553c,#0b2f21);color:#f3f6f1;transition:opacity .35s ease}#ccSplash img{width:96px;height:96px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.35)}#ccSplash b{font:760 30px/1 Archivo,'Instrument Sans',system-ui,sans-serif;font-stretch:72%;letter-spacing:.01em}#ccSplash i{display:block;width:120px;height:3px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}#ccSplash i::after{content:'';display:block;height:100%;width:40%;background:#f3c43a;animation:ccLd 1s ease-in-out infinite alternate}@keyframes ccLd{from{transform:translateX(-10%)}to{transform:translateX(160%)}}@media (prefers-reduced-motion:reduce){#ccSplash i::after{animation:none}}#ccSplash.out{opacity:0;pointer-events:none}</style>
-<script>window.CC_VER='ad027009db'</script></head><body>
+<script>window.CC_VER='5811050d04'</script></head><body>
 <div id="ccSplash" aria-hidden="true"><img src="icons/icon-192.png" alt=""><b>Caddy Coach</b><i></i></div>
 <script>(function(){let done=0;const go=d=>{if(done++)return;const s=document.getElementById('ccSplash');if(!s)return;setTimeout(()=>{s.classList.add('out');setTimeout(()=>s.remove(),400)},d)};addEventListener('DOMContentLoaded',()=>go(350));addEventListener('load',()=>go(0));setTimeout(()=>go(0),4000)})()</script>
 <title>Caddy Coach</title>
@@ -537,7 +537,7 @@ button.back{min-height:38px;padding:0 12px 0 8px;border-radius:999px;gap:4px;fon
 .rtLab{font:600 13.5px/1 var(--f-ui);color:var(--ink2);margin:16px 0 8px}
 .tee{display:inline-flex;align-items:center;gap:8px}
 .tee i{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.25);flex:none}
-.rtStart{width:100%;min-height:54px;font-size:16.5px;margin-top:18px}
+.rtStart{width:100%;min-height:54px;font-size:16.5px;margin-top:18px;position:sticky;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:5;box-shadow:0 6px 18px rgba(0,0,0,.18)}
 .rtLink{min-height:0;padding:0;border:0;background:none;color:var(--green);font:600 14px var(--f-ui)}
 .rtLink:hover{text-decoration:underline}
 /* scorecard grid */
@@ -1894,6 +1894,11 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 .scoreHero .shPri{--ink:#10201a;--ink2:#2f3b35;--muted:#5a5a3a;color:#10201a;background:#f4eedd;border-color:#d9c58c}
 .scoreHero .shPri b,.scoreHero .shPri p,.scoreHero .shPri span{color:#10201a}
 .scoreHero .tiles i.p{color:#eef4ef!important}
+
+/* text links: the same look, a finger-sized tap area */
+:where(button.link,button.rtLink){position:relative}
+.gpsWarn{margin:10px 0 0;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--gold,#e6b422) 22%,transparent);color:var(--ink);font-size:13.5px}
+:where(button.link,button.rtLink)::after{content:'';position:absolute;inset:-9px -6px}
 </style>
 
 <header class="topbar"><div class="in">

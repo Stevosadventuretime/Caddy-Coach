@@ -624,11 +624,14 @@ async function onbSteps(){const [rs,sw]=await Promise.all([allRounds(),allSwings
   {k:'trace',t:'Trace a shot',d:'Draws the ball flight and reads your clubface and path.',done:!!lsGet('cc_lastflight',null),act:'data-go="6"',btn:'Trace'},
   {k:'round',t:'Play a round',d:'Score as you go, with yardages to the green.',done:rs.some(r=>tally(r.holes||[]).thru>=9),act:'data-onb-round',btn:'Start'},
   {k:'goal',t:'Set a goal',d:'Break 90, get your handicap down, or a better swing score.',done:goalsGet().length>0,act:'data-goal-new',btn:'Add'}]}
-async function renderHomeStart(){const el=$('homeStart');if(!el)return;if(!meU()||lsGet(uKey('onb_off'),0)){el.hidden=true;return}
- const S=await onbSteps(),n=S.filter(s=>s.done).length;if(n===S.length){el.hidden=true;return}el.hidden=false;
+async function renderHomeStart(){const el=$('homeStart');if(!el)return;if(!meU()||lsGet(uKey('onb_off'),0)){el.hidden=true;homeDedupe();return}
+ const S=await onbSteps(),n=S.filter(s=>s.done).length;if(n===S.length){el.hidden=true;homeDedupe();return}el.hidden=false;setTimeout(homeDedupe,0);
  el.innerHTML=`<figure class="heroImg sm"><img src="hero-swing.jpg" alt="" decoding="async" onerror="this.parentElement.hidden=true"></figure><div class="rtTop"><div><h2 style="margin:0">Get started</h2><small class="mut">${n} of ${S.length} done</small></div><button type="button" class="link" data-onb-off>Hide</button></div>
   <div class="onbBar" role="progressbar" aria-valuemin="0" aria-valuemax="${S.length}" aria-valuenow="${n}" aria-label="Getting started"><i style="width:${n/S.length*100}%"></i></div>
   <ol class="onbList">${S.map(s=>`<li class="${s.done?'ok':''}"><span class="onbTick" aria-hidden="true">${s.done?'✓':''}</span><span class="onbW"><b>${s.t}</b>${s.done?'<small>Done</small>':`<small>${s.d}</small>`}</span>${s.done?'':`<button type="button" ${s.act}>${s.btn}<span class="sr"> – ${s.t.toLowerCase()}</span></button>`}</li>`).join('')}</ol>`}
+// while the Get started list is showing, the cards that repeat its steps (set your handicap, film your first swing) stay out of the way
+function homeDedupe(){const on=!$('homeStart').hidden,h=$('homeHcp'),g=$('homeGame'),hr=typeof HcpStore!=='undefined'&&HcpStore.rec;
+ if(h&&typeof PROF!=='undefined'&&PROF.me)h.hidden=on&&!(hr&&hr.start)?true:false;if(g)g.hidden=on&&!!g.querySelector('.hgEmpty')}
 document.addEventListener('click',e=>{
  if(e.target.closest('[data-onb-off]')){lsSet(uKey('onb_off'),1);renderHomeStart();return}
  if(e.target.closest('[data-onb-round]')){RT.tab='new';tab(8);return}});
@@ -901,7 +904,7 @@ const HcpStore={rec:null,
    if(c==='late')pull.then(c2=>{take(c2);hcpRefresh()});else take(c)}
   return this.rec},
  async save(){const r=this.rec;r.updatedAt=Date.now();await this.keep(r);HcpCloud.push(r);try{renderHomeHcp()}catch(_){}try{lbHcpPush()}catch(_){}}};
-function hcpRefresh(){try{renderHomeHcp()}catch(_){}if(!$('prof').hidden&&/^(me|hcp)/.test(PROF.mode||''))profRender();if(typeof RT!=='undefined'&&(RT.view==='done'||RT.detail)&&!$('p8').hidden)rtRender()}
+function hcpRefresh(){try{renderHomeHcp();homeDedupe()}catch(_){}if(!$('prof').hidden&&/^(me|hcp)/.test(PROF.mode||''))profRender();if(typeof RT!=='undefined'&&(RT.view==='done'||RT.detail)&&!$('p8').hidden)rtRender()}
 async function hcpSetStart(hi){const r=HcpStore.rec;if(!r||r.start)return false;r.start={hi,date:hcpToday(),at:Date.now()};await HcpStore.save();return true}
 async function hcpAdd(s){const r=HcpStore.rec;if(!r)return;r.scores=r.scores.filter(x=>x.id!==s.id);r.removed=r.removed.filter(x=>x!==s.id);r.scores.push(s);await HcpStore.save()}
 async function hcpRemove(id){const r=HcpStore.rec;if(!r)return;if(!r.removed.includes(id))r.removed.push(id);await HcpStore.save()}
