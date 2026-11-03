@@ -318,8 +318,8 @@ async function planMake(){const B=await planBasis(),S=[];
  return{week:isoWeek(),made:Date.now(),sessions:out,done:{},last:null,basis:{swing:!!B.sw.length,rounds:B.rounds}}}
 async function planGet(force){let p=lsGet(planKey(),null);const prev=p;if(force||!p||p.week!==isoWeek()){p=await planMake();if(prev){p.streak=(prev.sessions&&prev.sessions.every((s,i)=>prev.done['s'+i]))?(prev.streak||0)+1:0;p.last=prev.last}lsSet(planKey(),p)}return p}
 function planDoneN(p){return p.sessions.filter((s,i)=>p.done['s'+i]).length}
-async function renderPlan(){const el=$('weekPlan');if(!el)return;const p=await planGet();const n=planDoneN(p),all=n===p.sessions.length;
- el.hidden=false;el.innerHTML=`<div class="rtTop"><div><h2 style="margin:0">This week's practice</h2><small class="mut">${n} of ${p.sessions.length} sessions done${p.streak?` · ${p.streak} week${p.streak===1?'':'s'} in a row`:''}</small></div><button type="button" class="rtLink" data-plan="new">Rebuild</button></div>
+async function renderPlan(){const el=$('weekPlan');if(!el)return;const p=await planGet();const n=planDoneN(p),all=n===p.sessions.length;const st=await practiceStreak().catch(()=>null);
+ el.hidden=false;el.innerHTML=`<div class="rtTop"><div><h2 style="margin:0">This week's practice</h2><small class="mut">${n} of ${p.sessions.length} sessions done${st&&st.n?` · ${st.n}-week practice streak`:''}</small></div><button type="button" class="rtLink" data-plan="new">Rebuild</button></div>
   <div class="wpBar" aria-hidden="true">${p.sessions.map((s,i)=>`<i class="${p.done['s'+i]?'on':''}"></i>`).join('')}</div>
   ${p.sessions.map((s,i)=>`<details class="wpS${p.done['s'+i]?' done':''}"${!p.done['s'+i]&&p.sessions.findIndex((x,j)=>!p.done['s'+j])===i?' open':''}><summary><span class="wpN">${p.done['s'+i]?'✓':i+1}</span><span><b>${esc(s.title)}</b><small>${esc(s.why)}</small></span></summary>
    <ul class="wpItems">${s.items.map(it=>{if(it.kind==='task'){const t=TASKS[it.id];return `<li><b>${esc(t.name)}</b><small>${esc(t.where)} · ${esc(t.time)}</small><ol>${t.steps.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></li>`}const d=DRILLS.find(x=>x.id===it.id);return `<li><b>${esc(d.name)}</b><small>${whereLabel(d.where)} · ${esc(d.time)}</small><button type="button" class="link wpGo" data-drill="${d.id}">See how to do it</button></li>`}).join('')}</ul>
@@ -328,13 +328,80 @@ async function renderPlan(){const el=$('weekPlan');if(!el)return;const p=await p
   ${!p.basis.swing&&!p.basis.rounds?'<p class="mut" style="font-size:13px;margin:10px 0 0">Analyse a swing and log putts and fairways in your rounds, and next week\'s plan is built around what you need.</p>':''}`}
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-plan]');if(!b)return;const a=b.dataset.plan;
  if(a==='new'){await planGet(true);return renderPlan()}
- if(a==='done'){const p=await planGet(),k='s'+b.dataset.i;p.done[k]=!p.done[k];if(p.done[k]){p.last=Date.now();if(typeof track==='function')track('practice')}lsSet(planKey(),p);renderPlan();renderHomePlan();if(p.done[k])toast(planDoneN(p)===p.sessions.length?'That\'s the week done. Well played.':'Session ticked off.')}});
+ if(a==='done'){const p=await planGet(),k='s'+b.dataset.i;p.done[k]=!p.done[k];if(p.done[k]){p.last=Date.now();pwMark();if(typeof track==='function')track('practice')}lsSet(planKey(),p);renderPlan();renderHomePlan();if(p.done[k])toast(planDoneN(p)===p.sessions.length?'That\'s the week done. Well played.':'Session ticked off.')}});
 // home: where you are with this week's plan, and a nudge when it's been a while
-async function renderHomePlan(){const el=$('homePlan');if(!el)return;let p=null;try{p=await planGet()}catch(_){}if(!p){el.hidden=true;return}
+async function renderHomePlan(){const el=$('homePlan');if(!el)return;let p=null;try{p=await planGet()}catch(_){}if(!p){el.hidden=true;return}const st=await practiceStreak().catch(()=>null);
  const n=planDoneN(p),N=p.sessions.length,next=p.sessions.find((s,i)=>!p.done['s'+i]),days=p.last?Math.floor((Date.now()-p.last)/864e5):null;
  el.hidden=false;el.innerHTML=`<div class="rtTop"><div><span class="mut">This week's practice</span><h2 class="hgT">${n===N?'All done this week':`${n} of ${N} sessions done`}</h2></div><div class="wpRing" aria-hidden="true" style="--p:${n/N}"><b>${n}/${N}</b></div></div>
   ${days!=null&&days>=5&&n<N?`<p class="hcNote" style="margin:10px 0 0">It's been ${days} days since you last practised. ${next?`Next up: ${esc(next.title.toLowerCase())}.`:''}</p>`:next?`<p class="mut" style="margin:6px 0 0">Next up: ${esc(next.title)}. ${esc(next.why)}.</p>`:''}
+  ${streakLine(st)}
   <button type="button" data-go-plan style="margin-top:12px;width:100%">${n===N?'See the plan':'Open this week\'s plan'}</button>`}
+
+// ---------- Practice streak ----------
+// A week counts if you practised at all: ticked a plan session, analysed a swing or played a round. Missing one
+// session doesn't break it (a habit survives the odd miss; it's missing whole weeks that ends one). The streak runs
+// in whole weeks, Monday to Sunday, and this week counts as soon as you do anything; until then it shows last
+// week's streak with a nudge to keep it going.
+const wkIdx=ts=>Math.floor((ts/864e5+3)/7);
+const pwKey=()=>planKey()+'_weeks';
+function pwMark(ts){const a=lsGet(pwKey(),[]),w=wkIdx(ts||Date.now());if(!a.includes(w)){a.push(w);lsSet(pwKey(),a.slice(-260))}}
+async function practiceWeeks(){const set=new Set(lsGet(pwKey(),[]));
+ try{(await Store.list()||[]).forEach(r=>{const t=Date.parse(r.createdAt);if(t)set.add(wkIdx(t))})}catch(_){}
+ try{(await RStore.list()||[]).forEach(r=>{const t=Date.parse(r.date||r.createdAt);if(t)set.add(wkIdx(t))})}catch(_){}
+ return set}
+async function practiceStreak(){const set=await practiceWeeks(),now=wkIdx(Date.now()),thisWeek=set.has(now);let w=thisWeek?now:now-1,n=0;while(set.has(w)){n++;w--}
+ return{n,thisWeek,any:set.size>0}}
+function streakLine(st){if(!st)return'';if(st.n>=1)return `<p class="streak"><b>${st.n}-week practice streak</b>${st.thisWeek?'. This week counts.':'. Practise once this week to keep it going.'}</p>`;
+ return st.any?'<p class="streak">Practise once this week to start a new streak.</p>':''}
+
+// ---------- Your year in golf ----------
+// What you did this year, worked out from your own rounds, swings, practice and handicap, with a picture to share.
+async function yearStats(y){y=String(y||new Date().getFullYear());const S={y};
+ let rounds=[];try{rounds=(await RStore.list()||[]).filter(r=>String(r.date||'').startsWith(y)&&r.holes)}catch(_){}
+ S.rounds=rounds.length;const full=rounds.map(r=>({r,t:tally(r.holes),nt:rtNet(r)})).filter(x=>x.t.thru===18&&x.t.total);
+ if(full.length){const b=full.reduce((a,x)=>x.t.total<a.t.total?x:a);S.best={total:b.t.total,course:b.r.course&&b.r.course.name,date:b.r.date};S.avg=Math.round(full.reduce((a,x)=>a+x.t.total,0)/full.length)}
+ const pts=rounds.map(r=>rtNet(r)).filter(Boolean).map(n=>n.pts).filter(v=>v!=null);if(pts.length)S.bestPts=Math.max(...pts);
+ let sw=[];try{sw=(await Store.list()||[]).filter(r=>String(r.createdAt||'').startsWith(y)).sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)))}catch(_){}
+ S.swings=sw.length;if(sw.length){const sc=sw.map(r=>r.overall).filter(v=>v!=null);S.first=sc[0];S.latest=sc[sc.length-1];S.bestSwing=Math.max(...sc)}
+ // the biggest improvement between the first and latest swing filmed from the same angle
+ if(sw.length>=2){for(const v of ['down-the-line','face-on']){const same=sw.filter(r=>r.view===v);if(same.length<2)continue;
+   try{const a=await Store.detail(same[0].id),b=await Store.detail(same[same.length-1].id);const P=a&&b&&a.metrics&&b.metrics?SwingMetrics.progress(b.metrics,a.metrics,v):null;
+    const top=P&&P.better[0];if(top&&(!S.improved||Math.abs(top.ds)>Math.abs(S.improved.ds)))S.improved=Object.assign({},top,{name:plainName({id:top.id,name:top.name})})}catch(_){}}}
+ const weeks=await practiceWeeks(),y0=wkIdx(Date.parse(y+'-01-01')),y1=wkIdx(Date.parse((+y+1)+'-01-01'));S.weeks=[...weeks].filter(w=>w>=y0&&w<y1).length;
+ try{const r=HcpStore.rec;if(r&&r.start){const c=WHS.calc(r),s0=typeof r.start==='object'?(r.start.hi??r.start.index):r.start;if(c.hi!=null&&s0!=null&&!isNaN(+s0)){S.hcpFrom=+s0;S.hcpNow=c.hi}}}catch(_){}
+ S.any=S.rounds||S.swings||S.weeks;return S}
+function yearHTML(S,compact){if(!S||!S.any)return'';const it=[];
+ if(S.rounds)it.push([String(S.rounds),S.rounds===1?'round played':'rounds played']);
+ if(S.best)it.push([String(S.best.total),'best 18-hole score']);
+ if(S.swings)it.push([String(S.swings),S.swings===1?'swing analysed':'swings analysed']);
+ if(S.weeks)it.push([String(S.weeks),S.weeks===1?'week you practised':'weeks you practised']);
+ const lines=[];if(S.swings>=2&&S.latest!=null&&S.first!=null)lines.push(`Swing score ${fmt1(S.first)} → ${fmt1(S.latest)}${S.bestSwing>S.latest?` (best ${fmt1(S.bestSwing)})`:''}`);
+ if(S.improved)lines.push(`Most improved: ${S.improved.name.toLowerCase()}, ${S.improved.from} → ${S.improved.to}`);
+ if(S.hcpFrom!=null&&S.hcpNow!=null&&S.hcpFrom!==S.hcpNow)lines.push(`Handicap estimate ${WHS.fmt(S.hcpFrom)} → ${WHS.fmt(S.hcpNow)}`);
+ if(S.bestPts!=null)lines.push(`Best Stableford: ${S.bestPts} points`);
+ return `<div class="rtTop"><div><span class="mut">${S.y===String(new Date().getFullYear())&&new Date().getMonth()<11?'So far this year':'Your year'}</span><h2 class="hgT">Your ${esc(S.y)} in golf</h2></div></div>
+  <div class="yrGrid">${it.slice(0,4).map(([v,l])=>`<div><b>${esc(v)}</b><small>${esc(l)}</small></div>`).join('')}</div>
+  ${lines.length?`<ul class="yrLines">${lines.map(l=>`<li>${esc(l)}</li>`).join('')}</ul>`:''}
+  <button type="button" data-year-share="${esc(S.y)}" style="margin-top:12px;width:100%">Share your year</button>`}
+async function yearCardBlob(S){try{await document.fonts.ready}catch(_){}const {c,x}=scCanvas();
+ x.textAlign='left';x.fillStyle='rgba(242,245,238,.75)';x.font=`500 38px ${SC_FONT}`;x.fillText('Caddy Coach',72,120);
+ x.fillStyle='#f2f5ee';x.font=`600 92px ${SC_FONT}`;x.fillText(`My ${S.y} in golf`,72,230);
+ const it=[];if(S.rounds)it.push([String(S.rounds),S.rounds===1?'Round played':'Rounds played']);if(S.best)it.push([String(S.best.total),'Best 18-hole score']);
+ if(S.swings)it.push([String(S.swings),S.swings===1?'Swing analysed':'Swings analysed']);if(S.weeks)it.push([String(S.weeks),S.weeks===1?'Week of practice':'Weeks of practice']);
+ it.slice(0,4).forEach(([v,l],i)=>{const bx=72+(i%2)*480,by=310+Math.floor(i/2)*270;x.fillStyle='rgba(255,255,255,.08)';x.beginPath();x.roundRect(bx,by,456,240,28);x.fill();
+  x.fillStyle='#f2f5ee';x.font=`600 120px ${SC_FONT}`;x.fillText(v,bx+36,by+140);x.fillStyle='rgba(242,245,238,.72)';x.font=`500 34px ${SC_FONT}`;x.fillText(l,bx+36,by+200)});
+ let y=900;const lines=[];if(S.swings>=2&&S.latest!=null&&S.first!=null)lines.push(`Swing score ${fmt1(S.first)} → ${fmt1(S.latest)}`);
+ if(S.improved)lines.push(`Most improved: ${S.improved.name.toLowerCase()}`);if(S.hcpFrom!=null&&S.hcpNow!=null&&S.hcpFrom!==S.hcpNow)lines.push(`Handicap ${WHS.fmt(S.hcpFrom)} → ${WHS.fmt(S.hcpNow)}`);
+ if(S.bestPts!=null)lines.push(`Best Stableford: ${S.bestPts} points`);
+ x.fillStyle='#e6d7aa';x.font=`600 46px ${SC_FONT}`;for(const l of lines.slice(0,4)){scFit(x,l,936,46);x.fillText(l,72,y);y+=82}
+ x.fillStyle='rgba(242,245,238,.6)';x.font=`500 32px ${SC_FONT}`;x.fillText('Made with Caddy Coach',72,1278);
+ return await new Promise(r=>c.toBlob(r,'image/png'))}
+async function renderYear(){const S=await yearStats().catch(()=>null),m=new Date().getMonth();
+ const h=$('histYear');if(h){const html=yearHTML(S);h.hidden=!html;h.innerHTML=html}
+ const el=$('homeYear');if(el){const show=(m>=10||m===0)&&S&&S.any;el.hidden=!show;el.innerHTML=show?yearHTML(S):''}}
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-year-share]');if(!b)return;b.disabled=true;
+ try{const S=await yearStats(b.dataset.yearShare);const bl=await yearCardBlob(S);const res=await shareBlob(bl,`my-${S.y}-in-golf.png`,`My ${S.y} in golf`);if(res==='saved')toast('Picture saved. Share it from your photos or downloads.')}
+ catch(err){console.error(err);toast('The picture could not be made here.')}finally{b.disabled=false}});
 setTimeout(()=>{if(!$('p0').hidden)renderHomePlan().catch(()=>{})},0);
 document.addEventListener('click',e=>{if(!e.target.closest('[data-go-plan]'))return;tab(3);setTimeout(()=>{const w=$('weekPlan');if(w)w.scrollIntoView({behavior:'smooth',block:'start'})},80)});
 

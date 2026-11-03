@@ -259,10 +259,10 @@ function cmPrefill(){const cm=GPS.cm,c=GPS.course,gf=c&&c.gf;if(!cm||cm.step!=='
  const rt=gf&&gf.route&&gf.route[cm.n],g=rt&&rt.i>=0&&gf.cands[rt.i];if(rt&&rt.tee&&g){cm.tee=rt.tee;cm.green={lat:g.lat,lon:g.lon};cm.poly=g.poly||null;cm.step='check';cm.auto=true}}
 function cmBegin(){const r=RT.live;GPS.cm={n:r.holes[r.i].n,step:'tee',back:r.i,done:0};cmPrefill();cmFrame();cmDraw();gpsPanel()}
 function cmGo(i){const r=RT.live;r.i=Math.max(0,Math.min(r.holes.length-1,i));rtSaveLive();const h=r.holes[r.i];GPS.cm={n:h.n,step:'tee',back:GPS.cm.back,done:GPS.cm.done};cmPrefill();GPS.framed=false;gpsTop();cmFrame();cmDraw();gpsPanel()}
-function cmFrame(){const L=window.L,c=GPS.course,cm=GPS.cm;if(!GPS.map||!cm||cm.intro)return;if(cm.tee&&cm.green){GPS.map.fitBounds(L.latLngBounds([[cm.tee.lat,cm.tee.lon],[cm.green.lat,cm.green.lon]]).pad(.3),{maxZoom:18,animate:false});return}const g=cmHoleData(c,cm.n);
- if(g&&g.tee){GPS.map.fitBounds(L.latLngBounds([[g.tee.lat,g.tee.lon],[g.lat,g.lon]]).pad(.3),{maxZoom:18});return}
- if(GPS.pos&&gpsOnSite()){GPS.map.setView([GPS.pos.lat,GPS.pos.lng],18);return}
- const prev=cmHoleData(c,cm.n-1);if(prev){GPS.map.setView([prev.lat,prev.lon],17);return}
+function cmFrame(){const L=window.L,c=GPS.course,cm=GPS.cm;if(!GPS.map||!cm||cm.intro)return;if(cm.tee&&cm.green){gpsFit(L.latLngBounds([[cm.tee.lat,cm.tee.lon],[cm.green.lat,cm.green.lon]]).pad(.3),{maxZoom:18,animate:false});return}const g=cmHoleData(c,cm.n);
+ if(g&&g.tee){gpsFit(L.latLngBounds([[g.tee.lat,g.tee.lon],[g.lat,g.lon]]).pad(.3),{maxZoom:18});return}
+ if(GPS.pos&&gpsOnSite()){gpsView([GPS.pos.lat,GPS.pos.lng],18);return}
+ const prev=cmHoleData(c,cm.n-1);if(prev){gpsView([prev.lat,prev.lon],17);return}
  gpsFrameSite()}
 function cmTap(ll){const cm=GPS.cm;if(!cm||cm.intro)return;const p={lat:+ll.lat.toFixed(6),lon:+ll.lng.toFixed(6)},h=gpsHole();
  if(cm.step==='tee'){cm.tee=p;cm.step='green';cm.sug=cmSuggest(p,h);if(cm.sug)GPS.map.fitBounds(window.L.latLngBounds([[p.lat,p.lon],[cm.sug.lat,cm.sug.lon]]).pad(.25),{maxZoom:18,animate:false})}

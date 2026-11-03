@@ -103,7 +103,7 @@ async function cmMapCourse(cr){if(RT.live&&!RT.live.mapOnly&&keyBase(RT.live.cou
   holes:t.holes.map(h=>({n:h.n,par:h.par,yards:h.yards,si:h.si,score:null})),i:0,others:[],notes:{}};
  GPS.course=null;await gpsOpen();cmOpen()}
 async function renderHome(){
- renderHomeRound();renderHomeHcp();renderHomeMap().catch(()=>{});if(typeof renderHomePlan==='function')renderHomePlan().catch(()=>{});
+ renderHomeRound();renderHomeHcp();renderHomeMap().catch(()=>{});if(typeof renderYear==='function')renderYear().catch(()=>{});if(typeof renderHomePlan==='function')renderHomePlan().catch(()=>{});
  if(typeof renderHomeStart==='function'){renderHomeStart().catch(()=>{});renderHomeGoals().catch(()=>{});renderHomeNews();if(typeof coachNews==='function')coachNews().catch(()=>{});inboxCheck().catch(()=>{})}
  let rows=[];try{rows=await Store.list()}catch(_){}
  rows=(rows||[]).slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
@@ -1110,7 +1110,7 @@ function histTrendHTML(rows){const rs=rows.filter(r=>r.overall!=null).slice().so
  return `<div class="histTrend"><b>Your swing score over time</b>${trendChart(pts,{title:'Swing score out of 10',fmt:v=>(+v.toFixed(1)).toString(),h:112})}${mv}</div>`}
 async function loadHistory(){
  cancelAnimationFrame(HR.raf);if(HR.stop)HR.stop();cancelAnimationFrame(CMP.raf);CMP.play=false;FaultClips.stopAll($('histDetail'));$('histDetail').hidden=true;$('histListCard').hidden=false;
- $('histList').innerHTML='<p class="mut">Loading…</p>';$('histTrend').innerHTML='';
+ $('histList').innerHTML='<p class="mut">Loading…</p>';$('histTrend').innerHTML='';if(typeof renderYear==='function')renderYear().catch(()=>{});
  let rows=[];try{rows=await Store.list()}catch(e){console.error(e);$('histList').innerHTML='<p class="mut">Previous analyses could not be loaded right now. Try again in a moment.</p>';return}
  $('histNote').textContent=Store.mode==='db'?'Every completed analysis is saved to your account and opens on any device.':Store.mode==='local'?'Every completed analysis is saved in this browser.':'This browser cannot save analyses, so they last until you close Caddy Coach.';
  storageNote();
@@ -1795,12 +1795,21 @@ async function gpsSite0(c){
  if(s&&(s.b||s.poly))lsSet(ck,{t:Date.now(),s});
  return s}
 // are you at the club? inside its outline (with a little margin for the car park and the range), or within a mile of it
+// the course map remembers what it was last asked to frame. The panel under it grows and shrinks as cards come and
+// go (the map check, club, weather), which changes the map's height; the map then re-measures itself and frames the
+// same things again, so you and the flag never end up hidden below its edge. Not after you've dragged it yourself.
+function gpsFit(b,o){GPS.want={b,o};GPS.userMoved=false;GPS.map.fitBounds(b,o)}
+function gpsView(ll,z,o){GPS.want={ll,z,o};GPS.userMoved=false;GPS.map.setView(ll,z,o)}
+function gpsWatchSize(){const el=$('gpsMapEl');if(!el||GPS.ro||typeof ResizeObserver==='undefined')return;let last=0;
+ GPS.ro=new ResizeObserver(()=>{const h=el.clientHeight;if(!GPS.map||!h||Math.abs(h-last)<2)return;last=h;GPS.map.invalidateSize({pan:false});
+  const w=GPS.want;if(!w||GPS.userMoved)return;if(w.b)GPS.map.fitBounds(w.b,Object.assign({},w.o,{animate:false}));else GPS.map.setView(w.ll,w.z,Object.assign({},w.o,{animate:false}))});
+ GPS.ro.observe(el)}
 function gpsOnSite(){const p=GPS.pos,c=GPS.course;if(!p||!c)return false;const s=c._site;
  if(s&&s.b){const m=.0025;if(p.lat>s.b[0][0]-m&&p.lat<s.b[1][0]+m&&p.lng>s.b[0][1]-m*1.7&&p.lng<s.b[1][1]+m*1.7)return true}
  const la=s?s.lat:c.lat,lo=s?s.lon:c.lon;return la!=null&&miles(p.lat,p.lng,la,lo)<1}
 function gpsFrameSite(){const L=window.L,c=GPS.course;if(!GPS.map||!c)return;const s=c._site;
- if(s&&s.b){GPS.map.fitBounds(L.latLngBounds(s.b),{padding:[18,18],maxZoom:17,animate:false});return}
- const la=s?s.lat:c.lat,lo=s?s.lon:c.lon;if(la!=null)GPS.map.setView([la,lo],16,{animate:false})}
+ if(s&&s.b){gpsFit(L.latLngBounds(s.b),{padding:[18,18],maxZoom:17,animate:false});return}
+ const la=s?s.lat:c.lat,lo=s?s.lon:c.lon;if(la!=null)gpsView([la,lo],16,{animate:false})}
 function gpsDrawSite(){const L=window.L,c=GPS.course;if(!GPS.map||!c)return;if(GPS.siteL){GPS.map.removeLayer(GPS.siteL);GPS.siteL=null}
  const s=c._site;if(s&&s.poly&&s.poly.length>3)GPS.siteL=L.polygon(s.poly,{color:'#fff',weight:2,opacity:.55,dashArray:'6 6',fill:false,interactive:false}).addTo(GPS.map)}
 async function gpsOpen(){const ov=$('gpsOv');ov.hidden=false;if(!BG.bag)BagStore.load().then(b=>{BG.bag=b;if(!ov.hidden)gpsPanel()}).catch(()=>{});document.documentElement.style.overflow='hidden';
@@ -1816,7 +1825,7 @@ async function gpsOpen(){const ov=$('gpsOv');ov.hidden=false;if(!BG.bag)BagStore
   tl.on('tileload',()=>GPS.tiles++);tl.on('tileerror',()=>{GPS.tileErr++;if(GPS.tileErr>6&&!GPS.tiles)gpsNote('Satellite imagery isn\'t loading. Check your signal.')});
   GPS.lines=L.layerGroup().addTo(GPS.map);
   GPS.map.on('click',e=>gpsTap(e.latlng))}
- setTimeout(()=>GPS.map.invalidateSize(),60);
+ setTimeout(()=>GPS.map.invalidateSize(),60);gpsWatchSize();GPS.map.on('dragstart',()=>{GPS.userMoved=true});
  GPS.framed=false;gpsDrawSite();gpsStartWatch();gpsDrawHole(true);
  if(!site)gpsSite(GPS.course).then(st=>{if(st&&!$('gpsOv').hidden&&GPS.map){gpsDrawSite();if(!GPS.framed||!gpsOnSite())gpsDrawHole(true)}});
  try{if(navigator.wakeLock&&!GPS.wake)GPS.wake=await navigator.wakeLock.request('screen')}catch(_){}}
@@ -1842,10 +1851,10 @@ function gpsDrawHole(frame){const L=window.L;if(!GPS.map)return;if(GPS.cm){cmDra
  if(GPS.gOut){GPS.map.removeLayer(GPS.gOut);GPS.gOut=null}if(g&&g.sat&&g.poly&&g.poly.length>2)GPS.gOut=L.polygon(g.poly.map(p=>[p.lat,p.lon]),{color:'#fff',weight:1.5,opacity:.8,fill:false,dashArray:'3 4',interactive:false}).addTo(GPS.map);
  if(g)GPS.green=L.marker([g.lat,g.lon],{icon:L.divIcon({className:'gpsFlag',html:'<svg viewBox="0 0 24 34" width="28" height="40"><path d="M5 2v30" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><path d="M6 3l15 5.5L6 14z" fill="#d23a2f"/><ellipse cx="5" cy="32" rx="4" ry="1.6" fill="rgba(0,0,0,.45)"/></svg>',iconSize:[28,40],iconAnchor:[6,38]}),interactive:false,keyboard:false}).addTo(GPS.map);
  if(g&&g.tee)GPS.teeM=L.marker([g.tee.lat,g.tee.lon],{icon:L.divIcon({className:'cmPt tee sm',html:'<i>T</i>',iconSize:[20,20]}),interactive:false,keyboard:false}).addTo(GPS.map);
- if(frame){if(g&&GPS.pos&&ydsBetween(GPS.pos,{lat:g.lat,lon:g.lon})<700){GPS.map.fitBounds(L.latLngBounds([[GPS.pos.lat,GPS.pos.lng],[g.lat,g.lon]]).pad(0.25),{maxZoom:19});GPS.framed=true}
-  else if(g&&g.tee){GPS.map.fitBounds(L.latLngBounds([[g.tee.lat,g.tee.lon],[g.lat,g.lon]]).pad(0.25),{maxZoom:18});GPS.framed=!!GPS.pos}
-  else if(g){GPS.map.setView([g.lat,g.lon],17);GPS.framed=!!GPS.pos}
-  else if(GPS.pos&&gpsOnSite()){GPS.map.setView([GPS.pos.lat,GPS.pos.lng],18);GPS.framed=true}
+ if(frame){if(g&&GPS.pos&&ydsBetween(GPS.pos,{lat:g.lat,lon:g.lon})<700){gpsFit(L.latLngBounds([[GPS.pos.lat,GPS.pos.lng],[g.lat,g.lon]]).pad(0.25),{maxZoom:19});GPS.framed=true}
+  else if(g&&g.tee){gpsFit(L.latLngBounds([[g.tee.lat,g.tee.lon],[g.lat,g.lon]]).pad(0.25),{maxZoom:18});GPS.framed=!!GPS.pos}
+  else if(g){gpsView([g.lat,g.lon],17);GPS.framed=!!GPS.pos}
+  else if(GPS.pos&&gpsOnSite()){gpsView([GPS.pos.lat,GPS.pos.lng],18);GPS.framed=true}
   else{gpsFrameSite();GPS.framed=!!GPS.pos&&!!(GPS.course&&GPS.course._site)}}
  gpsDrawPool();gpsDrawLines();pinDraw();pinsMaybe();gpsPanel()}
 function gpsDrawLines(){const L=window.L;if(!GPS.lines)return;GPS.lines.clearLayers();const g=greenOf(gpsHole());
