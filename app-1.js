@@ -107,7 +107,7 @@ async function renderHome(){
  if(typeof renderHomeStart==='function'){renderHomeStart().catch(()=>{});renderHomeGoals().catch(()=>{});renderHomeNews();if(typeof coachNews==='function')coachNews().catch(()=>{});inboxCheck().catch(()=>{})}
  let rows=[];try{rows=await Store.list()}catch(_){}
  rows=(rows||[]).slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
- const g=$('homeGame');
+ const g=$('homeGame');setTimeout(()=>typeof homeDedupe==='function'&&homeDedupe(),0);
  if(!rows.length){g.innerHTML=`<div class="hgEmpty"><h2 class="hgT">Start with your swing</h2><p class="mut" style="margin:0">Film one swing and Caddy Coach scores every position, shows you a better one and builds your practice plan.</p><button type="button" class="pri" data-go="1">Analyse your first swing</button></div>`}
  else{
   const last=rows[0],sc=rows.slice(0,10).reverse().map(r=>r.overall).filter(v=>v!=null),gr=grade(last.overall);
@@ -1488,11 +1488,11 @@ function rtPlayHTML(){trkStart();wakeKeep();const r=RT.live,i=r.i,h=r.holes[i],t
    ${h.par>=4?`<div class="hsRow"><span id="hsFw">Tee shot</span><div class="seg3" role="group" aria-labelledby="hsFw">${[['left','Left'],['hit','Fairway'],['right','Right']].map(([k,l])=>`<button type="button" data-rt-fw="${k}" aria-pressed="${h.fw===k}">${l}</button>`).join('')}</div></div>`:''}
    <div class="hsRow"><span id="hsPt">Putts</span><div class="seg5" role="group" aria-labelledby="hsPt">${[0,1,2,3,4].map(v=>`<button type="button" data-rt-putts="${v}" aria-pressed="${h.putts===v}">${v===4?'4+':v}</button>`).join('')}</div></div>
    ${h.putts>=1?`<div class="hsRow"><span id="hsFp">First putt</span><div class="seg6" role="group" aria-labelledby="hsFp">${FP.map(([k,l])=>`<button type="button" data-rt-fp="${k}" aria-pressed="${h.fp===k}">${l.replace(' ft','')}</button>`).join('')}</div></div>`:''}
-   <div class="hsRow"><span>Bunker</span><button type="button" class="hsTog" data-rt-sand aria-pressed="${!!h.sand}">${h.sand?'Played from a greenside bunker':'Greenside bunker? Tap if you were in one'}</button></div>
+   <div class="hsRow"><span>Greenside bunker</span><button type="button" class="hsTog" data-rt-sand aria-pressed="${!!h.sand}">${h.sand?'Yes, played from one':'Tap if you were in one'}</button></div>
    <div class="hsRow"><span id="hsPen">Penalties</span><div class="seg4" role="group" aria-labelledby="hsPen">${[0,1,2,3].map(v=>`<button type="button" data-rt-pen="${v}" aria-pressed="${(h.pen||0)===v&&h.pen!=null}">${v===3?'3+':v}</button>`).join('')}</div></div>
    ${h.putts!=null&&sc!=null&&sc-h.putts>=1?`<p class="hsGir">${sc-h.putts<=h.par-2?'Green in regulation':'Missed the green in regulation'} (on in ${sc-h.putts})</p>`:''}</div></div>
  ${palsPlayHTML(r)}${(()=>{if(r.grp){if(Date.now()-GRP.t>14000)setTimeout(grpPoll,0);grpLoop()}return grpLiveHTML(r)})()}
- ${HOSTED_IN_CLAUDE?'':`<div class="rtOpts card">${[['opt-autonext','cc_autonext','Next hole when you walk off the green'],['opt-wake','cc_wake','Keep the screen on']].map(([a,k,l])=>`<button type="button" class="optRow" data-rt="${a}" role="switch" aria-checked="${!!lsGet(k,1)}"><span>${l}</span><i aria-hidden="true"></i></button>`).join('')}</div>`}
+ ${HOSTED_IN_CLAUDE?'':`<div class="rtOpts card">${[['opt-autonext','cc_autonext','Next hole when you walk off the green',1],['opt-wake','cc_wake','Keep the screen on (uses more battery)',0]].map(([a,k,l,d])=>`<button type="button" class="optRow" data-rt="${a}" role="switch" aria-checked="${!!lsGet(k,d)}"><span>${l}</span><i aria-hidden="true"></i></button>`).join('')}</div>`}
  <div class="rtNav"><button type="button" data-rt="prev" ${i===0?'disabled':''}>Previous hole</button>${last?`<button type="button" class="pri" data-rt="finish">Finish round</button>`:`<button type="button" class="pri" data-rt="next">Next hole</button>`}</div>
  <div class="card"><h2>Scorecard</h2><p class="mut" style="margin:0 0 10px;font-size:13.5px">Tap a score to go to that hole.${nt?' Dots show the holes you get shots on.':''}</p>${cardGrid(r.holes,{tap:1,cur:i,sh:nt&&nt.sh})}${scKey()}
   ${RT.finArm?`<p class="rtMsg" role="alert">${n-tl.thru} hole${n-tl.thru===1?' has':'s have'} no score. Finish anyway?</p><div class="rtTwo" style="margin-top:10px"><button type="button" data-rt="finish-no">Keep playing</button><button type="button" class="pri" data-rt="finish-yes">Finish round</button></div>`:''}
@@ -1567,7 +1567,7 @@ document.addEventListener('click',async e=>{const p8=$('p8');if(!p8||!p8.contain
  if(a==='start'){rtSaveCourse();RT.live=rtNewLive();RT.view='play';RT.edit=false;RT.finArm=false;await RStore.setLive(RT.live).catch(()=>{});RT.liveSaved=RT.live;rtRender();window.scrollTo(0,0);return}
  if(a==='resume'){RT.live=RT.liveSaved;RT.view='play';RT.edit=false;RT.finArm=false;rtRender();window.scrollTo(0,0);return}
  if(a==='abandon'||a==='abandon-play'){if(!RT.abArm){RT.abArm=true;return rtRender()}RT.abArm=false;trkStop();clearTimeout(_liveT);await RStore.setLive(null).catch(()=>{});RT.live=null;RT.liveSaved=null;RT.view='find';await rtLoadMyCourses();rtRender();return}
- if(a==='opt-autonext'||a==='opt-wake'){const k=a==='opt-wake'?'cc_wake':'cc_autonext';lsSet(k,lsGet(k,1)?0:1);if(a==='opt-wake'&&!lsGet(k,1))wakeDrop();rtRender();return}
+ if(a==='opt-autonext'||a==='opt-wake'){const k=a==='opt-wake'?'cc_wake':'cc_autonext',d=a==='opt-wake'?0:1;lsSet(k,lsGet(k,d)?0:1);if(a==='opt-wake'){if(lsGet(k,0))wakeKeep();else wakeDrop()}rtRender();return}
  if(a==='prev'||a==='next'){const r=RT.live;if(a==='next'&&r.holes[r.i].score==null)r.holes[r.i].score=r.holes[r.i].par;if(a==='next')(r.others||[]).forEach(p=>{if(p.sc[r.i]==null)p.sc[r.i]=r.holes[r.i].par});RT.noteEd=false;r.i=Math.max(0,Math.min(r.holes.length-1,r.i+(a==='next'?1:-1)));RT.edit=false;rtSaveLive();rtRender();window.scrollTo(0,0);return}
  if(a==='hole-edit'){RT.edit=!RT.edit;return rtRender()}
  if(a==='finish'){const r=RT.live,h=r.holes[r.i];if(h.score==null)h.score=h.par;const tl=tally(r.holes);if(tl.thru<r.holes.length){RT.finArm=true;rtRender();const m=$('rtBody').querySelector('[role=alert]');if(m)m.scrollIntoView({block:'center'});return}return rtFinish()}
@@ -1825,7 +1825,7 @@ async function gpsOpen(){const ov=$('gpsOv');ov.hidden=false;if(!BG.bag)BagStore
  const c0=GPS.course;let site=c0&&c0._site;
  if(!site){$('gpsPanel').innerHTML=`<div class="gpsDist"><span class="gpsK">Finding ${esc(c0&&c0.name||'the course')} on the map…</span></div>`;site=await Promise.race([gpsSite(c0),sleep(c0&&c0.lat!=null?1500:4000).then(()=>null)])}
  if(!GPS.map){const L=window.L,c=GPS.course;
-  GPS.map=L.map('gpsMapEl',{zoomControl:false,attributionControl:true,maxZoom:20,tap:true}).setView([c.lat||54,c.lon||-2],c.lat?16:6);
+  GPS.map=L.map('gpsMapEl',{zoomControl:false,attributionControl:true,maxZoom:20,tap:true});GPS.map.attributionControl.setPrefix(false);GPS.map.setView([c.lat||54,c.lon||-2],c.lat?16:6);
   const tl=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics | Course data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'}).addTo(GPS.map);
   tl.on('tileload',()=>GPS.tiles++);tl.on('tileerror',()=>{GPS.tileErr++;if(GPS.tileErr>6&&!GPS.tiles)gpsNote('Satellite imagery isn\'t loading. Check your signal.')});
   GPS.lines=L.layerGroup().addTo(GPS.map);
@@ -1843,8 +1843,9 @@ function gpsTop(){const h=gpsHole(),r=RT.live;$('gpsTop').innerHTML=`<button typ
  <button type="button" class="gpsIc x" data-gps="close" aria-label="Close the map"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>`}
 function gpsStartWatch(){if(GPS.watch!=null)return;if(!navigator.geolocation){GPS.posErr='This phone can\'t share its location.';return gpsPanel()}
  // a quick first fix (the phone's last known position) so the map can snap to you straight away, then live updates
- try{navigator.geolocation.getCurrentPosition(p=>{if(GPS.pos||GPS.watch==null)return;GPS.pos={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy};GPS.posErr='';gpsDrawMe();gpsPanel();if(!GPS.framed)gpsDrawHole(true)},()=>{},{enableHighAccuracy:false,maximumAge:60000,timeout:8000})}catch(_){}
- GPS.watch=navigator.geolocation.watchPosition(p=>{GPS.pos={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy};GPS.posErr='';gpsDrawMe();gpsPanel();if(!GPS.framed)gpsDrawHole(true)},
+ try{navigator.geolocation.getCurrentPosition(p=>{if(GPS.pos||GPS.watch==null)return;GPS.pos={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy,t:p.timestamp||Date.now()};GPS.posErr='';gpsDrawMe();gpsPanel();if(!GPS.framed)gpsDrawHole(true)},()=>{},{enableHighAccuracy:false,maximumAge:60000,timeout:8000})}catch(_){}
+ if(!GPS.staleT)GPS.staleT=setInterval(()=>{if(GPS.pos&&!$('gpsOv').hidden&&Date.now()-(GPS.pos.t||0)>30000)gpsPanel()},10000);
+ GPS.watch=navigator.geolocation.watchPosition(p=>{GPS.pos={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy,t:Date.now()};GPS.posErr='';gpsDrawMe();gpsPanel();if(!GPS.framed)gpsDrawHole(true)},
   e=>{GPS.posErr=e.code===1?'Location is turned off for Caddy Coach. Turn it on in your phone\'s settings to see your distance. You can still tap the map to measure.':'Finding your position…';gpsPanel()},{enableHighAccuracy:true,maximumAge:2000,timeout:20000})}
 function gpsDrawMe(){const L=window.L;if(!GPS.map||!GPS.pos)return;const ll=[GPS.pos.lat,GPS.pos.lng];
  if(!GPS.me){GPS.acc=L.circle(ll,{radius:GPS.pos.acc,color:'#4aa3ff',weight:1,fillColor:'#4aa3ff',fillOpacity:.15,interactive:false}).addTo(GPS.map);
@@ -1892,7 +1893,7 @@ function gpsPanel(){const p=$('gpsPanel');if(!p||HOSTED_IN_CLAUDE)return;if(GPS.
   ${WX.now?`<p class="gpsP sm">${esc(wxLine(WX.now))}</p>`:''}
   <button type="button" class="cmLink" data-gl="open">Big, easy-to-read view</button>
   ${g&&!g.likely&&(g.tee||(dist!=null&&dist<=700))?'<button type="button" class="cmLink" data-flyopen>3D flyover of this hole</button>':''}
-  ${GPS.pos&&GPS.pos.acc>20?`<p class="gpsP sm">GPS accuracy ±${Math.round(GPS.pos.acc*1.094)} yds</p>`:''}<p class="gpsNote" id="gpsNote" hidden></p></div>`}
+  ${GPS.pos&&Date.now()-(GPS.pos.t||Date.now())>30000?`<p class="gpsWarn" role="status">No new position for ${Math.round((Date.now()-GPS.pos.t)/1000)} seconds, so these yardages are from where you were then. Step into the open or check location is on.</p>`:GPS.pos&&GPS.pos.acc>20?`<p class="gpsWarn" role="status">GPS is only accurate to about ±${Math.round(GPS.pos.acc*1.094)} yds right now${GPS.pos.acc>40?'. Treat these yardages as rough':''}.</p>`:''}<p class="gpsNote" id="gpsNote" hidden></p></div>`}
 
 // ---- 3D flyover of the hole: satellite picture over the ground heights, flying from the tee (or you) to the green ----
 let FLYP=null;
@@ -2155,7 +2156,7 @@ function rtGoHole(j){const r=RT.live;if(!r)return;r.i=Math.max(0,Math.min(r.hole
  if(!$('gpsOv').hidden){GPS.tap=null;GPS.setMode=false;GPS.pendingGreen=null;GPS.framed=false;gpsTop();if(!HOSTED_IN_CLAUDE)gpsDrawHole(true);gpsPanel();if(typeof glanceRender==='function')glanceRender()}
  rtRender()}
 // the screen stays on for the whole round (phones dim and lock mid-hole otherwise); you can turn it off on the round screen
-async function wakeKeep(){if(!RT.live||!lsGet('cc_wake',1)||RT.wake||!navigator.wakeLock||document.visibilityState!=='visible')return;
+async function wakeKeep(){if(!RT.live||!lsGet('cc_wake',0)||RT.wake||!navigator.wakeLock||document.visibilityState!=='visible')return;
  try{RT.wake=await navigator.wakeLock.request('screen');RT.wake.addEventListener('release',()=>{RT.wake=null})}catch(_){RT.wake=null}}
 function wakeDrop(){try{RT.wake&&RT.wake.release()}catch(_){}RT.wake=null}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&RT.live&&RT.view==='play')wakeKeep()});
