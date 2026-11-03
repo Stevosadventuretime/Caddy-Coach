@@ -1297,7 +1297,7 @@ async function psOpen(){const o=psEl();o.hidden=false;PS.open=true;PS.sheet=fals
  PS.c=await psCourse();PS.holes=(PS.c.tees&&PS.c.tees[0]&&PS.c.tees[0].holes||[]).map(h=>h.n);if(!PS.holes.length)PS.holes=Array.from({length:18},(_,i)=>i+1);
  await pinsLoad(PS.c,true);PS.picks={};PINS.rows.filter(r=>r.source==='club').forEach(r=>{if(!PS.picks[r.hole])PS.picks[r.hole]={lat:r.lat,lon:r.lon,saved:true}});PS.i=0;PS.err='';
  const L=window.L;if(!PS.map){PS.map=L.map('psMap',{zoomControl:false,maxZoom:20}).setView([PS.c.lat||54,PS.c.lon||-2],17);
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics'}).addTo(PS.map);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics | Course data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'}).addTo(PS.map);
   PS.map.on('click',ev=>{PS.picks[PS.holes[PS.i]]={lat:ev.latlng.lat,lon:ev.latlng.lng};psDraw()})}
  setTimeout(()=>PS.map.invalidateSize(),60);
  if(navigator.geolocation&&PS.watch==null)PS.watch=navigator.geolocation.watchPosition(p=>{PS.pos={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy};psPanel()},()=>{},{enableHighAccuracy:true,maximumAge:3000});

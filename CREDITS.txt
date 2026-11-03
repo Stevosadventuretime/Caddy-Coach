@@ -15,3 +15,8 @@ Real swing motion (swing-model.json)
 Hole flyover
   Satellite imagery: Esri World Imagery (Esri, Maxar, Earthstar Geographics), shown with attribution.
   Ground heights: Copernicus DEM via Open-Meteo (CC BY 4.0).
+
+Course maps (holes, greens and tees)
+  Course data © OpenStreetMap contributors, available under the Open Database Licence (ODbL 1.0):
+  https://www.openstreetmap.org/copyright
+  The shared hole maps in Caddy Coach are built partly from OpenStreetMap data and partly from golfers' own mapping.
