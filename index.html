@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Caddy Coach">
 <style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}#ccSplash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;align-content:center;gap:18px;background:radial-gradient(120% 80% at 50% 35%,#16553c,#0b2f21);color:#f3f6f1;transition:opacity .35s ease}#ccSplash img{width:96px;height:96px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.35)}#ccSplash b{font:760 30px/1 Archivo,'Instrument Sans',system-ui,sans-serif;font-stretch:72%;letter-spacing:.01em}#ccSplash i{display:block;width:120px;height:3px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}#ccSplash i::after{content:'';display:block;height:100%;width:40%;background:#f3c43a;animation:ccLd 1s ease-in-out infinite alternate}@keyframes ccLd{from{transform:translateX(-10%)}to{transform:translateX(160%)}}@media (prefers-reduced-motion:reduce){#ccSplash i::after{animation:none}}#ccSplash.out{opacity:0;pointer-events:none}</style>
-<script>window.CC_VER='0b45ad493f'</script></head><body>
+<script>window.CC_VER='b5459e445c'</script></head><body>
 <div id="ccSplash" aria-hidden="true"><img src="icons/icon-192.png" alt=""><b>Caddy Coach</b><i></i></div>
 <script>(function(){let done=0;const go=d=>{if(done++)return;const s=document.getElementById('ccSplash');if(!s)return;setTimeout(()=>{s.classList.add('out');setTimeout(()=>s.remove(),400)},d)};addEventListener('DOMContentLoaded',()=>go(350));addEventListener('load',()=>go(0));setTimeout(()=>go(0),4000)})()</script>
 <title>Caddy Coach</title>
@@ -328,7 +328,7 @@ details.acc>.acb>h2{display:none}
 .drop .acts .btn{min-height:52px;font-size:16px}
 .opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .opts label{display:grid;gap:6px;font:500 13px/1 var(--f-ui);color:var(--muted)}
-.opts select{width:100%}
+.opts select{width:100%}.optNote{margin:-4px 0 0;font-size:12px}
 
 /* steps tracker (a real sequence) */
 .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:4px 0 0}
@@ -1871,6 +1871,7 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 .flyMsg:empty{display:none}
 
 /* swing score on the scoreboard panel too */
+.missWhy{margin:6px 0 0;font-size:14px}.shPri .cue{margin:8px 0 0;font-size:14px}.shPri .cue b,.shPri .missWhy b{display:inline;font:inherit;font-weight:700;margin:0}.consist ul{margin:8px 0;padding-left:18px;display:grid;gap:6px}.consist p{margin:6px 0 0}.missNote{margin:0;font-size:14px;color:var(--ink2)}
 .scoreHero .acts2 button{background:rgba(255,255,255,.1);color:#eef4ef;border:1px solid rgba(255,255,255,.3)}
 .scoreHero{background:linear-gradient(180deg,var(--board2),var(--board));color:#eef4ef;border:0;--ink:#eef4ef;--ink2:#d6e3da;--muted:#a8c3b2;--line:rgba(255,255,255,.14);--line2:rgba(255,255,255,.22);--surface2:rgba(255,255,255,.08)}
 .scoreHero .shBig{display:flex;align-items:flex-end;gap:8px;margin:8px 0 4px}
@@ -1937,7 +1938,10 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
  <div class="opts">
   <label for="hand">Golfer<select id="hand"><option value="">Auto-detect</option><option value="right">Right-handed</option><option value="left">Left-handed</option></select></label>
   <label for="view">Camera angle<select id="view"><option value="" disabled selected>Choose…</option><option value="face-on">Facing you</option><option value="down-the-line">Down the line</option></select></label>
+  <label for="club">Club<select id="club"><option value="driver">Driver</option><option value="wood">Wood or hybrid</option><option value="iron" selected>Iron</option><option value="wedge">Wedge</option></select></label>
+  <label for="miss">Your usual miss<select id="miss"><option value="">Not sure</option><option value="slice">Slice (curves right*)</option><option value="hook">Hook (curves left*)</option><option value="push">Push (straight right*)</option><option value="pull">Pull (straight left*)</option><option value="fat">Fat (ground first)</option><option value="thin">Thin (low, off the bottom)</option><option value="top">Topped</option><option value="shank">Shank</option></select></label>
  </div>
+ <p class="mut optNote">*For a right-hander; left-handers, swap left and right.</p>
  <ul class="steps" id="steps" aria-label="Progress"><li data-s="1">Trim</li><li data-s="2">Track</li><li data-s="3">Measure</li><li data-s="4">Coach</li></ul>
  <p id="msg" class="mut" style="margin:0">You'll trim the video to your swing, then it's tracked on this device, scored and saved to your swing history.</p>
  <div class="prog" id="prog" hidden><i></i></div>
@@ -1978,6 +1982,7 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 </div>
 
 <div id="filmTip" hidden></div>
+<div id="consistBox"></div>
 <div id="results" class="wrap" style="padding:0"></div>
 </section>
 
