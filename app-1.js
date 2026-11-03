@@ -144,7 +144,9 @@ const CHECK_NAME=id=>{const c=SwingMetrics.CHECKS.find(x=>x.id===id);return c?c.
 const FAULT_TITLE=id=>{const F=SwingMetrics.FAULTS[id];const f=F&&(F.lo||F.hi);return f?f.title.replace(/:.*$/,''):CHECK_NAME(id)};
 const DRILLS=(window.DRILL_LIBRARY||[]).map(d=>Object.assign(d,{areas:[...new Set(d.fixes.map(id=>(SwingMetrics.CHECKS.find(c=>c.id===id)||{}).area).filter(Boolean))],reps:d.dose,tips:d.mistakes||[]}));
 const drillsFor=a=>DRILLS.filter(d=>d.areas.includes(a));
-const drillsForCheck=id=>DRILLS.filter(d=>d.fixes.includes(id)).sort((a,b)=>a.fixes.indexOf(id)-b.fixes.indexOf(id));
+// a check that is the same fault seen another way shares its drills (coming down above the plane is over the top)
+const DRILL_ALIAS={downPlane:'ott'};
+const drillsForCheck=id=>{const k=DRILLS.some(d=>d.fixes.includes(id))?id:(DRILL_ALIAS[id]||id);return DRILLS.filter(d=>d.fixes.includes(k)).sort((a,b)=>a.fixes.indexOf(k)-b.fixes.indexOf(k))};
 function pickPair(a){const ds=drillsFor(a);const r=ds.find(d=>d.where!=='home'),h=ds.find(d=>d.where!=='range'&&d!==r);return [r,h].filter(Boolean)}
 const whereLabel=w=>w==='both'?'Range or home':w==='range'?'Range':'Home';
 let DF={where:'all',area:'mine'};
@@ -436,7 +438,8 @@ async function findSwing(my){
   const win=SwingMetrics.findWindow(fr);
   if(!live())return;
   if(!win){say("Couldn't spot a swing automatically. Drag the handles to the swing, then tap Trim and analyse.");return}
-  let a=Math.max(0,win.t0-0.4),b=Math.min(d,win.t1);if(b-a>MAXLEN)b=a+MAXLEN;
+  // rounded to a tenth of a second, so a few milliseconds of difference between attempts gives the identical trim
+  let a=Math.max(0,Math.round((win.t0-0.4)*10)/10),b=Math.min(d,Math.round(win.t1*10)/10);if(b-a>MAXLEN)b=a+MAXLEN;
   busy=false;setTrim(a,b,'a');
   say(`Swing found at ${a.toFixed(1)}–${b.toFixed(1)}s. Check the trim, then tap Trim and analyse.`);
  }catch(e){if(live())say("Couldn't spot a swing automatically. Drag the handles to the swing, then tap Trim and analyse.")}
@@ -590,7 +593,7 @@ async function evidenceShot(c,R){
   const pick=EV_FRAME[c.phase]||'imp',ki=pick==='down'?Math.round((P.top+P.imp)/2):P[pick],K=F[ki],A=F[P.addr];if(!K||!A)return null;
   const near=t=>RES.dense.reduce((b,f)=>Math.abs(f.t-t)<Math.abs(b.t-t)?f:b,RES.dense[0]);
   const src=await bmp(near(K.t).i),w=480,h=640,T=A.T||1;
-  const lead=R.metrics.handed==='left'?28:27,me=K.pts,pts=me.concat([A.head,A.hip]);
+  const lead=R.metrics.handed==='left'?28:27,me=K.pts,pts=me.concat([A.head,A.hip],R.metrics.shaft&&['ballPos','shaftLean','downPlane','ott'].includes(c.id)?[{x:R.metrics.shaft.cx,y:R.metrics.shaft.cy}]:[]);
   const xs=pts.map(p=>p.x),ys=pts.map(p=>p.y);let cx=(Math.min(...xs)+Math.max(...xs))/2,cy=(Math.min(...ys)+Math.max(...ys))/2,ch=(Math.max(...ys)-Math.min(...ys))*1.3,cw=ch*w/h;
   if((Math.max(...xs)-Math.min(...xs))*1.3>cw){cw=(Math.max(...xs)-Math.min(...xs))*1.3;ch=cw*h/w}
   const cv=document.createElement('canvas');cv.width=w;cv.height=h;const x=cv.getContext('2d');x.fillStyle='#0d130f';x.fillRect(0,0,w,h);
@@ -607,17 +610,27 @@ async function evidenceShot(c,R){
   else if(['slide','finishWeight'].includes(id)){const a=X(A.pts[lead]);vline(a[0],ink);dot(X(K.pts[lead===27?23:24]),bad);label('Lead foot',a[0]+8,h*0.06);cap='Dashed line: straight up from your lead foot. Red dot: your lead hip.'}
   else if(['posture','standUp','setupTilt','reverse','impactTilt'].includes(id)){const [a0,a1]=spine(A),[k0,k1]=spine(K);const ext=(p,q,s)=>[p[0]+(q[0]-p[0])*s,p[1]+(q[1]-p[1])*s];line(ext(a1,a0,-0.4),ext(a0,a1,1.5),ink,true);line(k0,ext(k0,k1,1.5),bad,false);label('Spine at address',Math.min(a1[0],k1[0]),h*0.06);cap='Dashed line: your spine angle at address. Red line: your spine here.'}
   else if(['headDrop','headSide','headDepth','headRise','headImpact'].includes(id)){const a=X(A.head),r=T*0.22*k;x.save();x.setLineDash([lw*3,lw*2.2]);x.strokeStyle=ink;x.lineWidth=lw*1.5;x.strokeRect(a[0]-r,a[1]-r,r*2,r*2);x.restore();dot(X(K.head),bad);label('Head at address',a[0]-r,a[1]-r-w/14);cap='Dashed box: where your head was at address. Red dot: where it is here.'}
+  else if(id==='downPlane'&&R.metrics.vplane&&R.metrics.shaft){const V=R.metrics.vplane,S=R.metrics.shaft,b=X({x:V.bx,y:V.by}),far=(q,s)=>[b[0]+(q[0]-b[0])*s,b[1]+(q[1]-b[1])*s];
+   line(b,far(X({x:S.gx,y:S.gy}),2.6),ink,true);line(b,far(X({x:V.sx,y:V.sy}),1.5),ink,true);
+   const down=F.slice(P.top,P.imp+1).map(f=>X(f.wr));x.save();x.strokeStyle=bad;x.lineWidth=lw*1.6;x.beginPath();down.forEach((p,i)=>i?x.lineTo(p[0],p[1]):x.moveTo(p[0],p[1]));x.stroke();x.restore();
+   label('Swing plane: shaft line and shoulder line',w*0.05,h*0.06);cap='Dashed lines: along your shaft at address, and from the ball through your shoulders. Red line: your hands coming down. They should stay between the two dashed lines.'}
+  else if(id==='ballPos'&&R.metrics.shaft){const S=R.metrics.shaft,g=X({x:S.gx,y:S.gy}),c0=X({x:S.cx,y:S.cy});line(g,c0,ink,false);
+   const la=X(A.pts[27]),ra=X(A.pts[28]),mid=[(la[0]+ra[0])/2,(la[1]+ra[1])/2];vline(mid[0],'rgba(255,255,255,.75)');vline(c0[0],bad);
+   label('Ball: red line. Middle of your stance: white',w*0.05,h*0.06);cap='Yellow line: your club at address. Red dashed line: where the clubhead (and ball) sits. White dashed line: the middle of your stance.'}
+  else if(id==='shaftLean'&&R.metrics.shaft){const S=R.metrics.shaft,g=X({x:S.gx,y:S.gy}),c0=X({x:S.cx,y:S.cy});line(c0,[c0[0],g[1]],'rgba(255,255,255,.75)',true);line(c0,g,bad,false);
+   label('Shaft (red) against straight up (white)',w*0.05,h*0.06);cap='Red line: your club shaft at address. White dashed line: straight up from the clubhead.'}
   else if(id==='ott'){const back=F.slice(P.addr,P.top+1).map(f=>X(f.wr)),down=F.slice(P.top,P.imp+1).map(f=>X(f.wr));
    const path=(ps,col,dash)=>{if(ps.length<2)return;x.save();x.strokeStyle=col;x.lineWidth=lw*1.6;x.setLineDash(dash?[lw*3,lw*2.2]:[]);x.beginPath();ps.forEach((p,i)=>i?x.lineTo(p[0],p[1]):x.moveTo(p[0],p[1]));x.stroke();x.restore()};
+   if(R.metrics.vplane&&R.metrics.shaft){const V=R.metrics.vplane,S=R.metrics.shaft,b=X({x:V.bx,y:V.by}),far=(q,s)=>[b[0]+(q[0]-b[0])*s,b[1]+(q[1]-b[1])*s];line(b,far(X({x:S.gx,y:S.gy}),2.6),'rgba(255,255,255,.7)',true);line(b,far(X({x:V.sx,y:V.sy}),1.5),'rgba(255,255,255,.7)',true)}
    path(back,ink,true);path(down,bad,false);label('Hands: back (dashed), down (red)',w*0.05,h*0.06);cap='Dashed line: your hands going back. Red line: your hands coming down, outside the way they went back.'}
   return {id,img:cv.toDataURL('image/jpeg',.82),cap,frame:{addr:'At address',top:'At the top',down:'Halfway down',imp:'At impact',fin:'At the finish'}[pick]};
  }catch(e){console.warn('evidence',e);return null}
 }
 
 // ================= ANALYSIS =================
-function opts(){return{hand:$('hand').value||undefined,view:$('view').value||undefined}}
+function opts(){return{hand:$('hand').value||undefined,view:$('view').value||undefined,miss:$('miss').value||undefined,club:$('club').value||'iron',shaft:(CLIP&&CLIP.shaft)||undefined}}
 // the camera angle is the golfer's choice (remembered), never a guess; the golfer's hand comes from their profile
-setTimeout(()=>{const sv=lsGet('cc_view',null);if(sv==='face-on'||sv==='down-the-line')$('view').value=sv;$('view').addEventListener('change',()=>lsSet('cc_view',$('view').value));
+setTimeout(()=>{const sv=lsGet('cc_view',null);if(sv==='face-on'||sv==='down-the-line')$('view').value=sv;$('view').addEventListener('change',()=>lsSet('cc_view',$('view').value));const sc=lsGet('cc_club',null);if(['driver','wood','iron','wedge'].includes(sc))$('club').value=sc;$('club').addEventListener('change',()=>lsSet('cc_club',$('club').value));const sm=lsGet('cc_miss',null);if(sm&&SwingMetrics.MISSES[sm])$('miss').value=sm;$('miss').addEventListener('change',()=>lsSet('cc_miss',$('miss').value));
  if(!$('hand').value&&typeof Hand!=='undefined')$('hand').value=Hand.get()},0);
 ['hand','view'].forEach(id=>$(id).onchange=()=>{if(RES&&RES.R&&!busy)finishAnalysis(job,true)});
 async function analyze(my){
@@ -685,9 +698,25 @@ async function analyze(my){
  finally{if(my===job){busy=false;if(!CLIP)trimUI()}}
 }
 
+// the club shaft at address: searched in each frame of the last half-second before the takeaway on its own (golfers
+// waggle, so averaging frames would blur the club away), and the clear result nearest the takeaway is used: the
+// address position the swing actually starts from. Frames are taken at fixed tenths of a second of the video's own
+// timeline, so trimming never changes which frames are looked at. Once per clip; null if no frame shows it clearly.
+async function findShaft(R){
+ try{const t0=R.times.takeaway-0.5,t1=R.times.takeaway-0.1,fs=RES.dense.filter(f=>f.t>=t0&&f.t<=t1);if(fs.length<2)return null;
+  const T0=CLIP.t0||0,pick=[];for(let k=Math.floor((T0+t1)*10);k>=Math.ceil((T0+t0)*10);k--){const f=fs.reduce((b,x)=>Math.abs(T0+x.t-k/10)<Math.abs(T0+b.t-k/10)?x:b,fs[0]);if(!pick.includes(f))pick.push(f)}
+  const W=CLIP.W,H=CLIP.H,n=W*H,cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d',{willReadFrequently:true}),view=R.metrics.view;
+  for(const f of pick){x.drawImage(await bmp(f.i),0,0,W,H);const d=x.getImageData(0,0,W,H).data,g=new Float32Array(n);for(let i=0,j=0;i<n;i++,j+=4)g[i]=(d[j]*77+d[j+1]*150+d[j+2]*29)/256;
+   const p=f.pts,hx=(p[15].x+p[16].x)/2,hy=(p[15].y+p[16].y)/2,T=Math.hypot((p[11].x+p[12].x-p[23].x-p[24].x)/2,(p[11].y+p[12].y-p[23].y-p[24].y)/2),fy=(p[27].y+p[28].y)/2,hipX=(p[23].x+p[24].x)/2;
+   await tick();const r=SwingMetrics.detectShaft(g,W,H,hx,hy,T,fy,{view,dir:Math.sign(hx-hipX)||0});if(r&&r.ok)return r}
+  return null}
+ catch(e){console.warn('shaft',e);return null}
+}
 async function finishAnalysis(my,quick){
  const dense=RES.dense;
- const R=SwingMetrics.analyse(dense,opts());
+ let R=SwingMetrics.analyse(dense,opts());
+ // the full pass finds the club shaft at address (once per clip) and measures again with it
+ if(!quick&&R.ok&&CLIP&&CLIP.shaft===undefined){CLIP.shaft=await findShaft(R);if(my!==job)return;if(CLIP.shaft)R=SwingMetrics.analyse(dense,opts())}
  if(!R.ok){say('The swing could not be measured reliably from this clip. Try a steadier camera with your whole body in view.',true);prog(null);return}
  if(R.metrics.view_mismatch&&!(CLIP&&CLIP.viewOk)){const picked=R.metrics.view,looks=R.metrics.view_mismatch,nm=x=>x==='face-on'?'facing you':'down the line';
   prog(null);$('msg').innerHTML=`<span class="err">This video looks like it was filmed ${nm(looks)}, but the camera angle is set to ${nm(picked)}. The checks are different for each angle, so which was it?</span> <span class="vmBtns"><button type="button" class="btn sm" data-vm="${looks}">It was ${nm(looks)}</button> <button type="button" class="btn sm" data-vm="${picked}">It was ${nm(picked)}</button></span>`;
@@ -700,7 +729,7 @@ async function finishAnalysis(my,quick){
  const keys=[];
  for(const [lab,t] of items){let bk=0;dense.forEach((f,k)=>{if(Math.abs(f.t-t)<Math.abs(dense[bk].t-t))bk=k});const f=dense[bk];const b=await bmp(f.i);
   keys.push({lab,t:f.t,fi:f.i,notes:I.notes[lab]||[],img:keyThumb(b,f.pts,I.ideal[bk],I.T0,240,320,.8),small:keyThumb(b,f.pts,I.ideal[bk],I.T0,150,200,.66)})}
- RES.keys=keys;{const F0=SwingMetrics.faults(swingChecks(R.metrics))[0];RES.evidence=F0?await evidenceShot(F0,R):null}RES.text=localText(R);renderLive();
+ RES.keys=keys;{const F0=SwingMetrics.faults(swingChecks(R.metrics),R.metrics.miss)[0];RES.evidence=F0?await evidenceShot(F0,R):null}RES.text=localText(R);renderLive();
  {const tips=filmCheck(dense,CLIP.W,CLIP.H),ft=$('filmTip');if(ft){ft.hidden=!tips.length;ft.innerHTML=tips.length?`<div class="card fgCheck"><b>Filming tip for next time</b>${tips.map(t=>`<p>${esc(t)}</p>`).join('')}</div>`:''}}
  step(4);prog(null);showFrame(keys[0].fi);
  if(quick==='preview'){say('Your results are below. Fine-tuning the key moments…');prog(.75);return}
@@ -710,6 +739,7 @@ async function finishAnalysis(my,quick){
  if(t){const loc=localText(R),by={};t.categories.forEach(c=>{if(c&&c.name)by[c.name]=c});t.categories=AREAS.map(k=>Object.assign({},loc.categories.find(c=>c.name===k),k.startsWith('Clubface')&&/traced shot/.test((loc.categories.find(c=>c.name===k)||{}).finding||'')?{}:(by[k]||{})));if(!t.summary)t.summary=loc.summary;if(!t.top_priority)t.top_priority=loc.top_priority;RES.text=t;renderLive()}
  say('Saving to your swing history…');
  const saved=await saveAnalysis().catch(e=>{console.error(e);return null});
+ if(my===job){const cb=$('consistBox');if(cb)cb.innerHTML=(await progressHTML(RES.R.metrics))+(await consistencyHTML(RES.R.metrics))}
  if(typeof track==='function')track('swing');if(typeof ccNotify==='function')ccNotify('Your swing analysis is ready','Overall score '+R.scores.overall+'/10. Tap to see what to work on.');
  say((t||!HOSTED_IN_CLAUDE?'Done. ':'Done (coaching notes are built in because Claude was not available here). ')+(saved?`Saved to your swing history${saved.hasClip?' with the trimmed clip':''}.${saved.clipNote}`:'This round could not be saved.')+' Play the clip to compare your swing with the better position.');
 }
@@ -723,7 +753,7 @@ function clubfaceArea(k,m){let f=null;try{f=JSON.parse(localStorage.getItem('cc_
  let x='';if(f.path<-1&&ott)x=' This matches your swing: your hands come over the top on the way down.';else if(f.path<-1&&inside)x=' Your hands stay inside coming down, so the out-to-in path is more likely from your shoulders or alignment.';else if(f.path>-1&&ott)x=' Your hands do drift out coming down, so watch that this doesn\'t turn into a slice.';
  return{name:k,finding:`From your last traced shot (${when}, a ${String(f.shape||'').toLowerCase()}): clubface about ${f.faceTxt}, path ${f.pathTxt}. ${f.why}${x}`,fix:f.fix}}
 function localText(R){
- const m=R.metrics,s=R.scores,C=swingChecks(m),F=SwingMetrics.faults(C),L=SwingMetrics.level(s.overall),fo=m.view==='face-on';
+ const m=R.metrics,s=R.scores,C=swingChecks(m),F=SwingMetrics.faults(C,m.miss),L=SwingMetrics.level(s.overall),fo=m.view==='face-on';
  const categories=AREAS.map(k=>{const cs=C.filter(c=>c.area===k);
   if(k.startsWith('Clubface'))return clubfaceArea(k,m);
   if(!cs.length)return{name:k,finding:'Not measured from this camera angle.',fix:`Film one swing from ${fo?'behind, down the line,':'the front, face-on,'} to check this.`};
@@ -732,17 +762,19 @@ function localText(R){
   return{name:k,finding,fix:adv.feel||'Keep doing what you are doing here.'}});
  const o=s.overall,open=o>=9?'Your positions are tour level almost everywhere we can see.':o>=8?'A very good swing with only small things left to tidy up.':o>=7?'A good swing, but there are a couple of clear faults holding you back.':o>=5.5?'There are some real faults here that will be costing you shots, and they can be fixed.':'There are some big faults here costing you a lot of shots. Fix them one at a time and you will see a big difference.';
  const fl=F.slice(0,2).map(f=>{const t=plainAdvice(f).title;return t.charAt(0).toLowerCase()+t.slice(1)});
- const summary=`${open} ${F.length?`The biggest thing to fix is ${fl[0]}${fl[1]?`, then ${fl[1]}`:''}.`:'Nothing is a real fault from this angle, so the gains left are small ones.'}`;
+ const MZ=m.miss&&SwingMetrics.MISSES[m.miss],linked=F[0]&&F[0].missWhy;
+ const summary=`${open} ${F.length?`The biggest thing to fix is ${fl[0]}${linked?`, the most likely cause of your ${MZ.name}`:''}${fl[1]?`, then ${fl[1]}`:''}.`:'Nothing is a real fault from this angle, so the gains left are small ones.'}`;
  const top=F[0]||C.filter(c=>c.score<8.5).sort((a,b)=>(8.5-b.score)*b.w-(8.5-a.score)*a.w).map(c=>Object.assign({},c,{advice:SwingMetrics.advice(c)})).find(c=>c.advice&&c.advice.title);
  const strengths=C.filter(c=>c.verdict==='tour').sort((a,b)=>b.w-a.w).slice(0,3).map(c=>plainAdvice(c).good).filter(Boolean);
  return{summary,strengths,top_priority:top?`${plainAdvice(top).title}. ${top.advice.feel}`:'Keep these positions and film again from the other angle.',categories};
 }
 async function coachText(R){
  const sample=(window.claude&&claude.use)?await claude.use('sample').catch(()=>null):null;if(!sample)return null;
- const m=R.metrics,s=R.scores,C=swingChecks(m),F=SwingMetrics.faults(C);
+ const m=R.metrics,s=R.scores,C=swingChecks(m),F=SwingMetrics.faults(C,m.miss);
  const p=`You are a straight-talking golf coach in the style of a popular UK YouTube coach: plain words, honest, encouraging but never flattering. A swing analysis app tracked the golfer's body on one ${m.view} video (${m.handed}-handed) and compared each position with tour players measured on the same tracking.
 Checks (score 0-10 against tour players; verdict tour/ok/fault/major): ${JSON.stringify(C.map(c=>({check:c.name,in_plain_words:plainName(c),state:plainState(c),phase:c.phase,area:c.area,you:c.shown,tour:c.target,score:c.score,verdict:c.verdict})))}
-Faults in priority order: ${JSON.stringify(F.map(f=>plainAdvice(f).title))}
+Faults in priority order: ${JSON.stringify(F.map(f=>plainAdvice(f).title))}${m.miss?`
+The golfer says their usual miss is a ${SwingMetrics.MISSES[m.miss].name}. Faults that commonly cause it, with the reason: ${JSON.stringify(F.filter(f=>f.missWhy).map(f=>({fault:plainAdvice(f).title,why:f.missWhy})))}. Connect the top fault to their miss in the summary when it is one of these; if none is, say plainly that the camera can't see the cause (it may be the clubface or grip).`:''}
 The reader is an average weekend club golfer, not a coach: write in plain everyday words a 20-handicapper understands. No jargon (if you must use a golf term, explain it in a few words), no degrees or percentages in the summary, strengths or top_priority.
 Area scores (do not change): ${JSON.stringify(s)}
 Write critical, specific coaching from ONLY these numbers. Be honest: if a position is a fault, say so plainly and say what it does to the ball. Don't praise anything that isn't at tour level. Don't invent things the camera can't see (clubface, grip, ball flight). Don't name drills; the app adds them.
@@ -840,7 +872,7 @@ function fixCard(c,n,live,open){
  const body=`<div class="fixMeas"><div class="fxNow"><span class="mut">Where you are</span><b>${esc(plainState(c))}</b></div>${gaugeHTML(c)}
   <details class="fxNums"><summary>Show the numbers</summary><p>You measured <b>${esc(c.shown)}</b>${esc(realDist(c))}. Tour players: ${esc(c.target)}.</p></details></div>
  <div class="fixRow"><b>Why it matters</b><p>${esc(a.why)}</p>${a.term?`<p class="fxTerm">Coaches call this <b>${esc(a.term)}</b>.</p>`:''}</div>
- <div class="fixFeel"><b>How it should feel</b><p>${esc(a.feel)}</p></div>
+ <div class="fixFeel"><b>Practice swings: how it should feel</b><p>${esc(a.feel)}</p>${a.cue?`<b>When you hit: one swing thought</b><p>${esc(a.cue)}</p>`:''}</div>
  ${(()=>{const lib=drillsForCheck(c.id),d0=lib[0];
   if(!d0)return `<details class="fixDrill"${open?' open':''}><summary>Drill: ${esc(a.drill.name)}</summary><ol>${a.drill.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol></details>`;
   return `<div class="fixDrillBox"><b class="fxLab">The drill that fixes it</b><button type="button" class="watch" data-drill="${d0.id}"><img alt="" data-poster="${d0.id}" hidden><span><b>${esc(d0.name)}</b><span class="dby">${esc(d0.by)}</span><small>Watch the step-by-step demo</small></span></button>
@@ -850,7 +882,7 @@ function fixCard(c,n,live,open){
 }
 function fixListHTML(m,live){
  const C=swingChecks(m);if(!C.length)return'';
- const F=SwingMetrics.faults(C),P=C.filter(c=>c.score>=6.5&&c.score<8.5).map(c=>Object.assign({},c,{advice:SwingMetrics.advice(c),pri:(8.5-c.score)*c.w})).filter(c=>c.advice&&c.advice.title).sort((a,b)=>b.pri-a.pri);
+ const F=SwingMetrics.faults(C,m.miss),P=C.filter(c=>c.score>=6.5&&c.score<8.5).map(c=>Object.assign({},c,{advice:SwingMetrics.advice(c),pri:(8.5-c.score)*c.w})).filter(c=>c.advice&&c.advice.title).sort((a,b)=>b.pri-a.pri);
  const list=F.length?F:P,head=F.length===1?'Your one thing to fix':F.length?'Your fixes, in order':'Small gains left';
  const sub=F.length===1?'Fix this and the rest is fine-tuning.':F.length?'Start with number 1. Fixing it often makes the next one easier, so don\'t try to fix everything at once.':'Nothing here is a real fault, so these are the small gains left.';
  if(!list.length)return `<div class="card"><h2>Your fixes</h2><p class="mut" style="margin:0">Everything we can see from this camera angle is spot on. Film from the other angle to check the rest.</p></div>`;
@@ -906,9 +938,16 @@ function tempoBars(m){const tot=m.backswing_s+m.downswing_s,b=tot?m.backswing_s/
  return `<div style="display:grid;gap:4px;font-size:12px"><div class="row" style="gap:6px;flex-wrap:nowrap"><span style="width:48px">You</span>${bar(b,1)}<span class="v">${m.tempo_ratio}:1</span></div>
  <div class="row" style="gap:6px;flex-wrap:nowrap"><span style="width:48px">Target</span>${bar(75,.55)}<span class="v">3:1</span></div><div class="mut">Green = backswing, amber = downswing</div></div>`}
 const fmt1=n=>n==null?'–':(Math.round(n*10)/10).toString();
-function summaryHTML(s,txt,m){const g=grade(s.overall),L=SwingMetrics.level(s.overall),C=swingChecks(m),F=SwingMetrics.faults(C);
+// the golfer told us their usual miss but nothing the camera can see explains it: say so honestly, and say which
+// angle would show the usual causes, or that it may be the clubface (grip and face control), which video can't see
+function missNoteHTML(m,F){const M=m&&m.miss&&SwingMetrics.MISSES[m.miss];if(!M||(F[0]&&F[0].missWhy))return'';
+ const L=F.find(f=>f.missWhy);
+ if(L)return `<p class="missNote"><b>Most likely cause of your ${esc(M.name)}${M.name==='fat'||M.name==='thin'?' shots':''}:</b> ${esc(plainAdvice(L).title.charAt(0).toLowerCase()+plainAdvice(L).title.slice(1))}${L.borderline?' (borderline here)':''}. ${esc(L.missWhy)} It's further down your list because the faults above it are bigger, and fixing those often helps this too.</p>`;
+ const ids=M.links.map(l=>l[0]),fo=m.view==='face-on',other=SwingMetrics.CHECKS.filter(c=>ids.includes(c.id)&&c.view===(fo?'dtl':'fo')).length;
+ return `<p class="missNote">None of the body movements that usually cause a ${esc(M.name)} show up clearly from this angle.${other?` Some of the common causes can only be seen ${fo?'from behind, down the line':'from the front, facing you'}: film one swing that way too.`:''} If it still doesn't show, the cause is likely the clubface (your grip or how you control the face), which a body-tracking video can't see.</p>`}
+function summaryHTML(s,txt,m){const g=grade(s.overall),L=SwingMetrics.level(s.overall),C=swingChecks(m),F=SwingMetrics.faults(C,m.miss);
  const t={tour:C.filter(c=>c.verdict==='tour').length,ok:C.filter(c=>c.verdict==='ok').length,f:C.filter(c=>c.verdict==='fault'||c.verdict==='major').length};
- const top=F[0],d0=top?drillsForCheck(top.id)[0]:null,ta=top?plainAdvice(top):null;
+ const top=F[0],d0=top?drillsForCheck(top.id==='downPlane'&&sideOf(top)==='lo'?'earlyExt':top.id)[0]:null,ta=top?plainAdvice(top):null;
  const like=L.hcp==='28+'?'a beginner':/^Tour/.test(L.band)?'a tour player':`a golfer with a ${L.hcp.replace('about ','')} handicap`;
  const good=(txt&&txt.strengths||[]).slice(0,3);
  return `<div class="card scoreHero"><div class="shTop"><div><span class="mut">Your swing score</span><div class="shBig g-${g}">${tiles(fmt1(s.overall))}<small>/10</small></div><b class="shWord g-${g}">${esc(scoreWord(s.overall))}</b></div></div>
@@ -917,8 +956,9 @@ function summaryHTML(s,txt,m){const g=grade(s.overall),L=SwingMetrics.level(s.ov
  ${C.length?`<div class="shTally"><span><b class="g-good">${t.tour}</b> spot on</span><span><b class="g-mid">${t.ok}</b> nearly there</span><span><b class="g-bad">${t.f}</b> ${t.f===1?'needs':'need'} work</span></div>`:''}
  ${txt&&txt.summary?`<p class="shSum">${esc(txt.summary)}</p>`:''}
  ${good.length?`<div class="shGood"><b>What you do well</b><ul>${good.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
- ${top?`<div class="shPri"><span>${top.borderline?'Worth working on first':'Fix this first'}</span><b>${esc(ta.title)}</b>${typeof RES!=='undefined'&&RES&&RES.evidence&&RES.evidence.id===top.id?`<figure class="evShot"><img src="${RES.evidence.img}" alt="${esc(RES.evidence.frame)}, with the coaching line drawn on"><figcaption>${esc(RES.evidence.frame)}. ${esc(RES.evidence.cap)} You measured ${esc(top.shown)}; the target is ${esc(top.target)}.</figcaption></figure>`:''}<p>${esc(ta.feel||'')}</p>${d0?`<button type="button" class="pri" data-drill="${d0.id}">Show me the drill: ${esc(d0.name)}</button>`:''}</div>`
+ ${top?`<div class="shPri"><span>${top.borderline?'Worth working on first':'Fix this first'}</span><b>${esc(ta.title)}</b>${top.missWhy?`<p class="missWhy"><b>Why this causes your ${esc(SwingMetrics.MISSES[m.miss].name)}:</b> ${esc(top.missWhy)}</p>`:''}${typeof RES!=='undefined'&&RES&&RES.evidence&&RES.evidence.id===top.id?`<figure class="evShot"><img src="${RES.evidence.img}" alt="${esc(RES.evidence.frame)}, with the coaching line drawn on"><figcaption>${esc(RES.evidence.frame)}. ${esc(RES.evidence.cap)} You measured ${esc(top.shown)}; the target is ${esc(top.target)}.</figcaption></figure>`:''}<p>${esc(ta.feel||'')}</p>${ta.cue?`<p class="cue"><b>Swing thought when you hit:</b> ${esc(ta.cue)}</p>`:''}${d0?`<button type="button" class="pri" data-drill="${d0.id}">Show me the drill: ${esc(d0.name)}</button>`:''}</div>`
   :txt&&txt.top_priority?`<div class="shPri"><span>Work on first</span><b>${esc(txt.top_priority)}</b></div>`:''}
+ ${missNoteHTML(m,F)}
  <div class="acts2"><button type="button" data-go="3">Open the drill library</button></div></div>`}
 function breakdownHTML(s,txt,m){return `<details class="acc fullBd"><summary><span>The full breakdown<small>Every check and every area, with the numbers, for when you want the detail</small></span></summary><div class="acb">${checklistHTML(m)}${reportHTML(s,txt,m)}</div></details>`}
 // clips in the full breakdown start when it's opened (so they're sized properly)
@@ -999,6 +1039,28 @@ const Store={mode:null,db:null,uid:null,ns:'',mem:{idx:[],det:{}},
   if(this.mode==='local'){try{await KV.del('d_'+id).catch(()=>{});localStorage.removeItem(Store.k('cc_d_'+id));this.lset('cc_index',this.lget('cc_index',[]).filter(e=>e.id!==id))}catch(_){}return}
   this.mem.idx=this.mem.idx.filter(e=>e.id!==id);delete this.mem.det[id]}
 };
+// swing-to-swing consistency: this swing plus the last swings filmed from the same angle (last 60 days, up to 8)
+// since last time: this swing against the previous one filmed from the same angle
+async function progressHTML(m){
+ try{const idx=await Store.list(),same=(idx||[]).filter(e=>e&&e.view===m.view).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  if(same.length<2)return'';const d=await Store.detail(same[1].id).catch(()=>null);if(!d||!d.metrics)return'';
+  const P=SwingMetrics.progress(m,d.metrics,m.view);if(!P)return'';
+  const when=(()=>{const days=Math.round((Date.now()-Date.parse(same[1].createdAt))/864e5);return days<1?'earlier today':days===1?'yesterday':days+' days ago'})();
+  const li=o=>`<li><b>${esc(plainName({id:o.id,name:o.name}))}</b>: ${esc(o.from)} → ${esc(o.to)}</li>`;
+  if(!P.better.length&&!P.worse.length)return `<div class="card consist"><h2>Since your last swing</h2><p class="mut">Compared with your swing ${when} from this angle, nothing has changed by more than the tracking can tell apart. Same swing, so keep working on the same thing.</p></div>`;
+  return `<div class="card consist"><h2>Since your last swing</h2><p class="mut">Compared with your swing ${when} from this angle.</p>${P.better.length?`<p><b class="g-good">Better</b></p><ul>${P.better.slice(0,3).map(li).join('')}</ul>`:''}${P.worse.length?`<p><b class="g-bad">Worse</b></p><ul>${P.worse.slice(0,3).map(li).join('')}</ul>`:''}${P.better.length&&P.worse.length?'<p class="mut">Fixing one thing often moves another for a while; that\'s normal. Keep at the one thing at the top of your list.</p>':''}</div>`}
+ catch(e){console.warn('progress',e);return''}
+}
+async function consistencyHTML(m){
+ try{const idx=await Store.list(),cut=Date.now()-60*864e5,same=(idx||[]).filter(e=>e&&e.view===m.view&&Date.parse(e.createdAt)>cut).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,8);
+  const ms=[];for(const e of same){const d=await Store.detail(e.id).catch(()=>null);if(d&&d.metrics)ms.push(d.metrics)}
+  if(ms.length<3)return `<div class="card consist"><h2>Swing-to-swing consistency</h2><p class="mut">Analyse ${3-ms.length} more swing${3-ms.length===1?'':'s'} filmed ${m.view==='face-on'?'facing you':'down the line'} and you'll see how much your positions change from swing to swing. Better golfers repeat their positions more closely than almost anything else we can measure.</p></div>`;
+  const C=SwingMetrics.consistency(ms,m.view);if(!C)return'';
+  const worst=C.items.filter(i=>i.state!=='steady').slice(0,3),pct=Math.round(C.steadyShare*100);
+  const row=i=>`<li><b>${esc(plainName({id:i.id,name:i.name}))}</b>: ${i.state==='all over'?'changes a lot':'changes a little'} from swing to swing (typically ${esc(i.fmt(i.mean))}, give or take ${esc(i.fmt(i.sd).replace(/^[+−]/,''))}).</li>`;
+  return `<div class="card consist"><h2>Swing-to-swing consistency</h2><p>Across your last ${C.n} swings filmed ${m.view==='face-on'?'facing you':'down the line'}, <b>${pct}%</b> of your positions repeat closely.</p>${worst.length?`<ul>${worst.map(row).join('')}</ul><p class="mut">A position that changes from swing to swing is usually costing you more than one that's slightly off but the same every time: work on making ${esc(plainName({id:worst[0].id,name:worst[0].name}).toLowerCase())} the same each time first.</p>`:'<p class="mut">Your positions repeat closely from swing to swing. That consistency is one of the clearest signs of a good player.</p>'}</div>`}
+ catch(e){console.warn('consistency',e);return''}
+}
 async function saveAnalysis(){
  const R=RES.R,id=Date.now().toString(36),now=new Date().toISOString(),r1=x=>Math.round(x*10)/10;
  const series={W:CLIP.W,H:CLIP.H,t:RES.dense.map(f=>+f.t.toFixed(3)),me:RES.dense.map(f=>J.map(j=>[r1(f.pts[j].x),r1(f.pts[j].y)])),id:RES.I.ideal.map(P=>J.map(j=>[r1(P[j].x),r1(P[j].y)])),T0:r1(RES.T0)};

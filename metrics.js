@@ -137,7 +137,7 @@ function analyse(frames, opt) {
   const lead = right ? 'l' : 'r';
   const toBall = Math.sign(A.wr.x - A.hip.x) || 1;
   const between = (a, b) => F.filter(f => f.t >= a.t && f.t <= b.t);
-  const m = { view, handed: right ? 'right' : 'left', view_looks: looks, shoulder_width_ratio: r2(shW0) };
+  const m = { view, handed: right ? 'right' : 'left', view_looks: looks, shoulder_width_ratio: r2(shW0), miss: opt.miss || null };
   if (opt.view && ((opt.view === 'down-the-line' && shW0 > 0.75) || (opt.view === 'face-on' && shW0 < 0.4))) m.view_mismatch = looks;
   // tempo from hand speed where it's clear, else from positions
   const tA = P.topS != null ? P.takeS : P.takeT, tT = P.topS != null ? P.topS : P.topT;
@@ -166,6 +166,48 @@ function analyse(frames, opt) {
   m.finish_head_wobble = hold.length > 2 ? r2(Math.max(...hold.map(f => Math.hypot(f.headX - Fi.headX, f.headY - Fi.headY)))) : null;
   m.tracking_quality = r2(F.reduce((a, f) => a + f.vis, 0) / F.length);
   Object.assign(m, extra(F, P, { A, Tp, I, Fi, addrSet, T0, right, view, toBall, shW0, hipW0 }));
+  // ---- shoulder plane at the top (down the line, TPI's flat-shoulder-plane check) ----
+  // the shoulders should turn at right angles to the spine angle set at address, so at the top the shoulder line
+  // tilts down toward the ball by about the address spine angle. Less than that is a flat shoulder plane (the
+  // shoulders turned level, the posture lost); much more is a steep, tilting turn.
+  if (view === 'down-the-line') {
+    const near = F.filter(f => Math.abs(f.t - Tp.t) <= 0.05), li = lead === 'l' ? L.lSh : L.rSh, ti = lead === 'l' ? L.rSh : L.lSh;
+    const tilt = median(near.map(f => { const a = f.pts[li], b = f.pts[ti]; return deg(Math.atan2(a.y - b.y, Math.abs(a.x - b.x) + 1e-6)); }));
+    const sp = Math.abs(at('tilt'));
+    if (tilt != null && sp != null) { m.shoulder_tilt_top_deg = r0(tilt); m.shoulder_plane_dev = r0(tilt - sp); }
+  }
+  // ---- from the club shaft at address, when the picture showed it clearly ----
+  const club = opt.club || 'iron'; m.club = club;
+  const sh = opt.shaft && opt.shaft.ok ? opt.shaft : null;
+  if (sh) {
+    m.shaft = { gx: r1(sh.gx), gy: r1(sh.gy), cx: r1(sh.cx), cy: r1(sh.cy) };
+    const dx = sh.cx - sh.gx, dy = sh.cy - sh.gy;
+    if (view === 'down-the-line') {
+      // the "V": a line along the shaft at address (ball through the hands) and a line from the ball through the
+      // shoulders at address. Halfway down (hands passing 0.4 torso lengths above their address height) the hands
+      // should be inside it: 0 = on the shaft line, 1 = on the shoulder line; above 1 is steep (over the top),
+      // below 0 is stuck under the plane
+      const bx = sh.cx, by = sh.cy, shX = median(addrSet.map(f => f.sh.x)), shY = median(addrSet.map(f => f.sh.y));
+      const ang = (x, y) => Math.atan2(by - y, Math.abs(x - bx) > 1e-6 ? (x - bx) * Math.sign(sh.gx - bx) : 1e-6);   // angle up from the ground, toward the golfer
+      const aShaft = ang(sh.gx, sh.gy), aShoulder = ang(shX, shY);
+      let z = null;
+      if (aShoulder - aShaft > 0.05) for (let i = P.top + 1; i <= P.imp && i < F.length; i++) if (F[i - 1].h >= 0.4 && F[i].h < 0.4) {
+        const k = (F[i - 1].h - 0.4) / Math.max(1e-6, F[i - 1].h - F[i].h), hx = F[i - 1].wr.x + (F[i].wr.x - F[i - 1].wr.x) * k, hy = F[i - 1].wr.y + (F[i].wr.y - F[i - 1].wr.y) * k;
+        z = (ang(hx, hy) - aShaft) / (aShoulder - aShaft); break; }
+      if (z != null) { m.plane_down = r2(z); m.vplane = { bx: r1(bx), by: r1(by), sx: r1(shX), sy: r1(shY) }; }
+    } else {
+      // ball position: where the clubhead sits between the feet (0 = trail foot, 1 = lead foot), against where it
+      // should be for the club; and how the shaft leans (+ = hands toward the target)
+      const lAn = median(addrSet.map(f => f.pts[L.lAn].x)), rAn = median(addrSet.map(f => f.pts[L.rAn].x)), aY = median(addrSet.map(f => (f.pts[L.lAn].y + f.pts[L.rAn].y) / 2));
+      const leadX = right ? (leftOnTarget ? lAn : rAn) : (leftOnTarget ? rAn : lAn), trailX = leadX === lAn ? rAn : lAn;
+      const xAt = y => sh.gx + dx * (y - sh.gy) / (Math.abs(dy) > 1e-6 ? dy : 1e-6), headX = Math.abs(dy) > Math.abs(dx) ? xAt(aY) : sh.cx;
+      const pos = (headX - trailX) / ((leadX - trailX) || 1);
+      const BALL = { driver: 0.9, wood: 0.75, iron: 0.55, wedge: 0.5 }, LEAN = { driver: 0, wood: 2, iron: 6, wedge: 8 };
+      if (Math.abs(leadX - trailX) > 0.3 * T0) { m.ball_pos = r2(pos); m.ball_pos_dev = r2(pos - (BALL[club] || 0.55)); }
+      const tg = Math.sign(leadX - trailX) || 1, lean = deg(Math.atan2((sh.gx - headX) * tg, Math.max(1, aY - sh.gy)));
+      m.shaft_lean_deg = r0(lean); m.shaft_lean_dev = r0(lean - (LEAN[club] != null ? LEAN[club] : 6));
+    }
+  }
   const times = { address: r2(Math.max(F[0].t, Math.min(A.t, P.takeT - 0.25))), takeaway: r2(P.takeT), top: r2(P.topT), impact: r2(P.impT), finish: r2(Fi.t) };
   return { ok: true, metrics: m, times, F, P, toBall, scores: score(m, view), checks: checks(m, view) };
 }
@@ -274,6 +316,14 @@ const CHECKS = [
     A: [[1.6, 1], [2.0, 3], [2.3, 6], [2.6, 9], [2.8, 10], [3.3, 10], [3.6, 8], [4.2, 5], [5, 2]] },
   { id: 'dsTime', view: 'all', phase: 'Downswing', area: 'Tempo and sequencing', w: 0.7, name: 'Downswing time', key: 'downswing_s', fmt: v => v.toFixed(2) + 's', target: 'about 0.25–0.32s',
     A: [[0.16, 6], [0.22, 9], [0.25, 10], [0.32, 10], [0.38, 7.5], [0.5, 4], [0.8, 1]] },
+  { id: 'ballPos', view: 'fo', phase: 'Setup', area: 'Setup posture', w: 0.8, name: 'Ball position for this club', key: 'ball_pos_dev', fmt: v => Math.abs(v) < 0.05 ? 'right for the club' : Math.round(Math.abs(v) * 100) + '% of your stance too far ' + (v > 0 ? 'forward' : 'back'), target: 'driver off the lead heel, irons just ahead of centre, wedges in the middle',
+    A: [[-0.4, 1], [-0.25, 4], [-0.15, 7], [-0.07, 10], [0.07, 10], [0.15, 7], [0.25, 4], [0.4, 1]] },
+  { id: 'shaftLean', view: 'fo', phase: 'Setup', area: 'Setup posture', w: 0.5, name: 'Shaft lean at address', key: 'shaft_lean_dev', fmt: v => Math.abs(v) < 3 ? 'right for the club' : Math.round(Math.abs(v)) + '° too much ' + (v > 0 ? 'toward the target' : 'away from the target'), target: 'hands level with or a little ahead of the ball (less with a driver)',
+    A: [[-15, 2], [-10, 5], [-6, 8], [-3, 10], [4, 10], [8, 8], [12, 5], [18, 2]] },
+  { id: 'downPlane', view: 'dtl', phase: 'Downswing', area: 'Tempo and sequencing', w: 1.0, name: 'Hands halfway down, inside the swing plane "V"', key: 'plane_down', fmt: v => v > 1.05 ? 'above the shoulder line (steep)' : v < -0.05 ? 'under the shaft line (stuck)' : 'inside the V', target: 'between the shaft line and the shoulder line',
+    A: [[-0.7, 2], [-0.4, 6], [-0.15, 9], [0, 10], [0.95, 10], [1.1, 8], [1.3, 5], [1.6, 2.5], [2, 1]] },
+  { id: 'flatShoulders', view: 'dtl', phase: 'Top', area: 'Hip and shoulder rotation', w: 0.8, name: 'Shoulder plane at the top', key: 'shoulder_plane_dev', fmt: v => Math.abs(v) < 6 ? 'turning around your spine' : Math.round(Math.abs(v)) + '° ' + (v < 0 ? 'flatter' : 'steeper') + ' than your spine angle', target: 'shoulders turning at right angles to the spine (about the same tilt as your posture)',
+    A: [[-35, 1.5], [-25, 4], [-16, 7], [-9, 10], [10, 10], [18, 7], [28, 4], [40, 2]] },
   { id: 'ott', view: 'dtl', phase: 'Downswing', area: 'Tempo and sequencing', w: 2.0, name: 'Hand path coming down (over the top check)', key: 'hand_path_out', fmt: PC, target: 'hands on or inside the backswing path',
     A: [[-0.25, 8.5], [-0.12, 10], [-0.03, 10], [0.03, 8], [0.08, 6], [0.14, 4], [0.22, 2], [0.35, 1]] },
   { id: 'swayGap', view: 'fo', phase: 'Downswing', area: 'Tempo and sequencing', w: 1.5, name: 'Hips leading the chest', key: 'sway_gap_impact', fmt: PC, target: 'hips clearly ahead of the chest at impact',
@@ -318,7 +368,7 @@ const CHECKS = [
 // how much each reading typically moves between two films of the same swing (measured by re-running clips with the trim moved a frame or two)
 // how much each reading moves between two looks at the same swing (measured on real swings by re-running them
 // with the trim moved), by check. A reading this close to a band edge is called borderline, not a fault.
-const NOISE = { tempo: 0.35, dsTime: 0.02, posture: 1.0, knees: 2.0, armHang: 0.04, hipDepth: 0.015, leadArm: 3, handsTopDtl: 0.02, handsTopFo: 0.02,
+const NOISE = { flatShoulders: 3, ballPos: 0.03, shaftLean: 1.5, downPlane: 0.06, tempo: 0.35, dsTime: 0.02, posture: 1.0, knees: 2.0, armHang: 0.04, hipDepth: 0.015, leadArm: 3, handsTopDtl: 0.02, handsTopFo: 0.02,
   ott: 0.03, earlyExt: 0.015, standUp: 1.5, headDepth: 0.02, headDrop: 0.02, headRise: 0.03, finishDtl: 0.03, finishFo: 0.05, hold: 0.05,
   stance: 0.02, setupTilt: 1, sway: 0.02, reverse: 1, shTurn: 3, hipTurn: 5, swayGap: 0.03, hipShift: 0.03, slide: 0.02, hipOpen: 4,
   impactTilt: 1.5, headImpact: 0.02, headSide: 0.02, chickenWing: 3, finishWeight: 0.06, trailHeel: 0.02 };
@@ -430,6 +480,22 @@ const FAULTS = {
     hi: { title: 'Slow downswing', why: 'A slow downswing usually means the arms are doing the work instead of the body unwinding from the ground up.', feel: 'Start down by pushing into the ground with your lead foot and turning your hips, letting the arms drag down.', drill: { name: 'Feet-together speed swings', steps: ['Feet together, no ball.', 'Swing and make the loudest "whoosh" you can past where the ball would be.', 'Do 10, then hit balls with a normal stance.'] } },
     lo: { title: 'Very quick downswing', why: 'A downswing this quick often means throwing the club from the top with the hands.', feel: 'Start down from the ground up: legs, hips, chest, then arms.', drill: { name: 'Pump drill', steps: ['Swing to the top.', 'Pump the club halfway down and back up twice, feeling the hips start it.', 'On the third, swing through.'] } },
     good: 'Good downswing speed.' },
+  ballPos: {
+    lo: { title: 'Ball too far back in your stance', why: 'With the ball back, the club reaches it while still coming down steeply and before the face has squared: low pushes, thin shots and a sore wrist from digging.', feel: 'Set the ball where the club naturally brushes the ground: just ahead of centre for irons, off your lead heel for driver.', drill: { name: 'Ball position check', steps: ['Lay a club on the ground pointing at the ball from between your feet.', 'For a mid iron, the ball should be a ball or two ahead of the middle of your stance.', 'For driver, in line with the inside of your lead heel.'] } },
+    hi: { title: 'Ball too far forward in your stance', why: 'With the ball forward your shoulders open up to reach it, so the club swings across the ball: pulls, slices and thin shots as the club is already rising.', feel: 'Bring the ball back toward the middle until your shoulders sit square at address.', drill: { name: 'Ball position check', steps: ['Lay a club on the ground pointing at the ball from between your feet.', 'For a mid iron, the ball should be a ball or two ahead of the middle of your stance.', 'Check your shoulders are parallel to your feet with the ball there.'] } },
+    good: 'Ball in the right place for the club.' },
+  shaftLean: {
+    lo: { title: 'Shaft leaning back at address', why: 'With your hands behind the ball the club is already flipping at address, which makes it easy to scoop the ball and hit it thin or fat.', feel: 'Set your hands level with, or just ahead of, the ball so the shaft leans a touch toward the target.', drill: { name: 'Hands ahead set-up', steps: ['Set the club behind the ball.', 'Move your hands until they sit over your lead thigh.', 'Keep that angle as you start the club back.'] } },
+    hi: { title: 'Too much forward shaft lean at address', why: 'Pressing the hands well forward delofts and opens the face and tends to start the club back too far inside.', feel: 'Let the hands hang just ahead of the ball, over the inside of your lead thigh, not past it.', drill: { name: 'Neutral hands', steps: ['Set up and let your arms hang naturally.', 'The grip should point at your belt buckle or just ahead of it.', 'Make a few swings from that position.'] } },
+    good: 'Good shaft angle at address.' },
+  downPlane: {
+    hi: { title: 'Coming down above the plane (steep)', why: 'Halfway down your hands are above the line from the ball through your shoulders, so the club comes into the ball steep and from outside: slices, pulls and divots that point left.', feel: 'From the top, let your trail elbow drop toward your hip so the hands come down under the line before you turn through.', drill: { name: 'Plane line drill', steps: ['Film down the line and draw two lines from the ball: one along the shaft at address, one through your shoulders.', 'Make slow swings pausing halfway down: the hands should be between the two lines.', 'Feel the club drop behind you first, then turn.'] } },
+    lo: { title: 'Coming down too far under the plane (stuck)', why: 'Your hands drop under the line the shaft made at address, so the club gets stuck behind you and has to be flipped closed: pushes and hooks.', feel: 'Keep your chest turning through the ball so the arms stay in front of you coming down.', drill: { name: 'Pump and turn', steps: ['Swing to the top.', 'Pump down to halfway with the hands just under the shaft line, then back to the top, twice.', 'On the third, turn your chest through to the finish.'] } },
+    good: 'Hands come down inside the swing plane.' },
+  flatShoulders: {
+    lo: { title: 'Flat shoulder turn', why: 'At the top your shoulders have turned too level for your posture, so you lose your spine angle and the club gets behind you or out of position; the downswing then has to re-route it, costing strike and consistency.', feel: 'Turn your lead shoulder down toward the ball, at right angles to your spine, rather than round level with the ground.', drill: { name: 'Club across the chest', steps: ['Hold a club across your chest in your posture.', 'Turn back: the club end by your lead shoulder should point at the ground just past the ball.', 'Hold the posture; repeat ten slow turns, then hit half shots.'] } },
+    hi: { title: 'Tilting rather than turning', why: 'Your lead shoulder dives down rather than turning, so you tilt toward the ball at the top: steep swings, heavy contact and reverse pivots follow.', feel: 'Turn your back to the target around your spine; your lead shoulder goes across, not just down.', drill: { name: 'Club across the chest', steps: ['Hold a club across your chest in your posture.', 'Turn back so the club end by your lead shoulder points just past the ball, not at your feet.', 'Repeat ten slow turns, then hit half shots.'] } },
+    good: 'Shoulders turn nicely around your spine.' },
   ott: {
     hi: { title: 'Over the top', why: 'Your hands come down further out than they went back, so the club cuts across the ball from out-to-in. That\'s the classic cause of slices (and pulls when the face is square).', feel: 'From the top, let the club drop behind you first, then swing out toward right field (for a right-hander).', drill: { name: 'Headcover outside the ball', steps: ['Place a headcover just outside and a few inches behind the ball.', 'Swing without hitting it, so you must come from the inside.', 'Aim to start the ball slightly right of target.'] } },
     good: 'Hands come down on or inside the backswing path.' },
@@ -498,21 +564,152 @@ function faultSide(c) {
   return c.value < best[0] ? 'lo' : 'hi';
 }
 // a check turned into coaching: title, why, feel, drill (null when it's fine)
+
+// One swing thought for when you're hitting balls, about the club, ball, ground or target rather than a body part.
+// External cues like these beat body-part cues for accuracy in beginners and scratch golfers alike (Wulf & Su 2007,
+// pitch shots: an internal 'arms' focus was no better than no instruction). The body 'feel' in FAULTS stays for
+// slow rehearsal swings; this is the one thought to take to the ball.
+const CUES = {
+  'stance.lo': 'Set your feet so the clubhead could sweep a line from your trail toe to your lead toe.',
+  'stance.hi': 'Set your feet so you could just step a ball-width toward each other.',
+  'setupTilt.lo': 'Set the grip end of the club pointing at your lead hip pocket, not past it.',
+  'posture.lo': 'Let the grip end point at your belt buckle with the clubhead sitting flat on the ground.',
+  'posture.hi': 'Hold the club so its sole sits flat, with the grip end pointing just below your belt buckle.',
+  'knees.lo': 'Stand tall enough that the clubhead sits flat on the ground, not on its heel.',
+  'knees.hi': 'Stand ready to jump: flex until the club sole sits flat without reaching.',
+  'armHang.lo': 'Leave a hand-width of space between the butt of the club and your thighs.',
+  'armHang.hi': 'Move in until the butt of the club is a hand-width from your thighs.',
+  'sway.lo': 'Swing the clubhead back low and wide along the ground for the first two feet.',
+  'sway.hi': 'Swing the club back around you, not away from the target: turn the clubhead behind you.',
+  'reverse.lo': 'At the top, feel the club point at the target behind your head, not at the sky.',
+  'shTurn.lo': 'Swing the club back until the shaft points at the target at the top.',
+  'hipTurn.lo': 'Swing the club back further round behind you, letting the belt buckle follow.',
+  'hipTurn.hi': 'Make a compact backswing: stop when the shaft points at the target.',
+  'hipDepth.hi': 'Swing the club back around you while the ball stays the same distance from your belt.',
+  'leadArm.lo': 'Push the clubhead as far from the ball as you can going back: make the arc wide.',
+  'handsTopFo.lo': 'Swing the club back until the shaft points at the target.',
+  'handsTopDtl.lo': 'Swing the club back until the shaft points at the target.',
+  'tempo.lo': 'Swing the clubhead back slowly enough that you could stop it at any point.',
+  'tempo.hi': 'Let the clubhead change direction at the top without a pause.',
+  'dsTime.lo': 'Swing at 80% and let the clubhead pick up speed through the ball, not from the top.',
+  'dsTime.hi': 'Swish the clubhead through the ball: the loudest swish should be just after the ball.',
+  'ballPos.lo': 'Put the ball where your practice swing brushes the grass.',
+  'ballPos.hi': 'Put the ball where your practice swing brushes the grass.',
+  'shaftLean.lo': 'Let the grip end point at the inside of your lead thigh at address.',
+  'shaftLean.hi': 'Let the grip end point at your belt buckle or just ahead of it.',
+  'downPlane.lo': 'Swing the clubhead through toward the target, not out to the right.',
+  'downPlane.hi': 'Swing the clubhead out at right field (for a right-hander): hit the inside back of the ball.',
+  'ott.hi': 'Swing the clubhead out at right field (for a right-hander): hit the inside back of the ball.',
+  'swayGap.lo': 'Feel the club stay behind you as you start down; the ball comes to you.',
+  'earlyExt.hi': 'Swing the clubhead out toward the target after impact, keeping room between the club and your legs.',
+  'standUp.lo': 'Brush the grass just in front of the ball.',
+  'standUp.hi': 'Brush the grass just in front of the ball.',
+  'hipShift.lo': 'Take a divot just in front of the ball (or brush the tee with a driver).',
+  'hipShift.hi': 'Swing the club around to the finish rather than toward the target.',
+  'slide.hi': 'Swing the club around you to the finish, not out at the target.',
+  'hipOpen.lo': 'Swing the club to a full finish, with the shaft behind your head.',
+  'impactTilt.lo': 'Hit the back of the ball, not the top of it.',
+  'headImpact.lo': 'Watch the back of the ball until the club has hit it.',
+  'headSide.hi': 'Keep your eyes on one dimple on the back of the ball.',
+  'headDepth.hi': 'Keep your eyes on one dimple on the back of the ball.',
+  'headDrop.hi': 'Keep your eyes on one dimple on the back of the ball, at the same height.',
+  'headRise.lo': 'Brush the grass just in front of the ball.',
+  'headRise.hi': 'Keep looking at the spot where the ball was until the club has passed it.',
+  'chickenWing.lo': 'Throw the clubhead out toward the target after impact, so the shaft points at it.',
+  'finishWeight.lo': 'Finish with the club behind your head and the ball still in sight down the fairway.',
+  'trailHeel.lo': 'Finish with the club behind your head and your belt buckle facing the target.',
+  'finishFo.lo': 'Finish with the club wrapped behind your head.',
+  'finishDtl.lo': 'Finish with the club wrapped behind your head.',
+  'hold.hi': 'Swing at 80% and hold the finish until the ball lands.',
+  'flatShoulders.lo': 'Swing the club up more, so at the top the shaft is over your trail shoulder, not behind your neck.',
+  'flatShoulders.hi': 'Swing the club back more around you, so the shaft sits over your trail shoulder at the top.'
+};
 function advice(c) {
   const F = FAULTS[c.id]; if (!F) return null;
   if (c.score >= 8.5) return { good: F.good };
   const side = faultSide(c), f = F[side] || F.lo || F.hi;
-  return Object.assign({ severity: c.score < 4 ? 'major' : c.score < 5.5 ? 'moderate' : c.score < 6.5 ? 'minor' : 'polish' }, f);
+  return Object.assign({ severity: c.score < 4 ? 'major' : c.score < 5.5 ? 'moderate' : c.score < 6.5 ? 'minor' : 'polish', cue: CUES[c.id + '.' + side] || null }, f);
+}
+// What a coach asks first: "what's your usual miss?". For each miss, the body faults the camera can see that
+// commonly cause it (strength 0-1), with the link in plain words. A fault linked to the golfer's miss moves up the
+// list and says why; the camera can't see the clubface, so a miss with no visible cause is said honestly.
+const MISSES = {
+  slice: { name: 'slice', links: [
+    ['ott', 'hi', 1, 'Coming over the top swings the club across the ball from out to in, which is the classic slice spin.'],
+    ['downPlane', 'hi', 1, 'Coming down above the shaft plane brings the club into the ball from outside, putting slice spin on it.'],
+    ['ballPos', 'hi', 0.4, 'A ball too far forward opens your shoulders at address, so the club swings across it.'],
+    ['reverse', 'lo', 0.7, 'Leaning toward the target at the top makes you fall back coming down and throw the club over the top.'],
+    ['shTurn', 'lo', 0.6, 'A short shoulder turn leaves the arms to do the work, and they swing out and across the ball.'],
+    ['chickenWing', 'lo', 0.6, 'A lead arm that folds through impact holds the clubface open, so the ball curves right (for a right-hander).'],
+    ['sway', 'hi', 0.4, 'Swaying off the ball makes you lunge back at it from the top, which swings the club across it.'],
+    ['hipShift', 'lo', 0.5, 'Hanging back on your trail side leaves the face open and the path across the ball.']] },
+  hook: { name: 'hook', links: [
+    ['earlyExt', 'hi', 1, 'When your hips move toward the ball the arms get stuck behind you, so the hands flip the face shut to save the shot.'],
+    ['downPlane', 'lo', 0.8, 'Coming down well under the plane gets the club stuck behind you, so the hands flip it shut.'],
+    ['hipShift', 'lo', 0.7, 'Hanging back makes the hands take over through impact and close the face.'],
+    ['hipOpen', 'lo', 0.7, 'If your hips stop turning through impact the arms overtake the body and the face shuts.'],
+    ['swayGap', 'lo', 0.4, 'Starting down with the upper body throws the timing off so the hands close the face to catch up.'],
+    ['standUp', 'hi', 0.4, 'Standing up through impact gets the club stuck, and a late flip of the hands hooks it.']] },
+  push: { name: 'push', links: [
+    ['earlyExt', 'hi', 1, 'Hips moving toward the ball leave the arms stuck behind you, so the club swings out to the right (for a right-hander).'],
+    ['slide', 'hi', 0.7, 'Sliding past your lead foot leaves the clubface behind, pointing right of target.'],
+    ['downPlane', 'lo', 0.8, 'Coming down well under the plane swings the club out to the right (for a right-hander).'],
+    ['ballPos', 'lo', 0.6, 'A ball too far back is struck before the club has swung back to the target line, so it starts right.'],
+    ['hipShift', 'hi', 0.6, 'Too much move toward the target gets the body ahead of the club and the face stays open.'],
+    ['standUp', 'hi', 0.5, 'Standing up through impact gets the club stuck behind you, which pushes the ball.']] },
+  pull: { name: 'pull', links: [
+    ['ott', 'hi', 1, 'Coming over the top swings the club left of target (for a right-hander), so a square face pulls it straight left.'],
+    ['downPlane', 'hi', 1, 'Coming down above the plane swings the club left of target, pulling the ball.'],
+    ['ballPos', 'hi', 0.6, 'A ball too far forward is struck after the club has started swinging left.'],
+    ['hipOpen', null, 0.4, 'Hips and shoulders spinning open early swing the club across the ball to the left.'],
+    ['reverse', 'lo', 0.5, 'A reverse spine at the top tends to throw the club over the top and pull it.']] },
+  fat: { name: 'fat', links: [
+    ['hipShift', 'lo', 1, 'Hanging back keeps the bottom of your swing behind the ball, so the club hits the ground first.'],
+    ['ballPos', 'hi', 0.5, 'A ball too far forward sits past the bottom of your swing, so the club hits the ground first.'],
+    ['shaftLean', 'lo', 0.5, 'Hands behind the ball at address set you up to flip and catch the ground first.'],
+    ['sway', 'hi', 0.8, 'Swaying away from the target moves the bottom of the swing back with you.'],
+    ['headDrop', 'hi', 0.7, 'Your head dipping takes the club lower, into the ground before the ball.'],
+    ['headRise', 'lo', 0.6, 'Your head dropping at impact takes the club into the ground.'],
+    ['finishWeight', 'lo', 0.6, 'Falling back at the finish shows the weight stayed back, which puts the low point behind the ball.'],
+    ['impactTilt', 'lo', 0.4, 'Your upper body is ahead of the ball at impact, so the club comes in steep and digs.']] },
+  thin: { name: 'thin', links: [
+    ['standUp', 'hi', 1, 'Standing up through impact lifts the club, so it catches the middle of the ball.'],
+    ['ballPos', 'hi', 0.5, 'A ball too far forward is reached after the bottom of the swing, with the club already rising.'],
+    ['shaftLean', 'lo', 0.4, 'Hands behind the ball at address make it easy to scoop and catch it thin.'],
+    ['earlyExt', 'hi', 0.9, 'Hips moving toward the ball make you stand up to make room, raising the club.'],
+    ['headRise', 'hi', 0.7, 'Your head lifting at impact lifts your chest and the club with it.'],
+    ['hipShift', 'lo', 0.5, 'Hanging back means the club bottoms out early and is rising when it reaches the ball.'],
+    ['chickenWing', 'lo', 0.5, 'A lead arm folding through impact shortens the radius, so the club rises into the ball.']] },
+  top: { name: 'topped shot', links: [
+    ['standUp', 'hi', 1, 'Standing up through impact lifts the club right off the ground.'],
+    ['headRise', 'hi', 0.9, 'Lifting your head to see where it went lifts your chest and the club with it.'],
+    ['earlyExt', 'hi', 0.8, 'Hips moving toward the ball make you stand up, lifting the club.'],
+    ['chickenWing', 'lo', 0.6, 'A lead arm folding through impact pulls the club up into the top of the ball.']] },
+  shank: { name: 'shank', links: [
+    ['earlyExt', 'hi', 1, 'Hips moving toward the ball push your hands out, so the hosel (the neck of the club) gets to the ball first.'],
+    ['headDepth', 'hi', 0.8, 'Your head moving toward the ball takes your hands closer to it, bringing the hosel into play.'],
+    ['hipDepth', 'hi', 0.8, 'Losing posture going back moves your body toward the ball, so the hands come down further out.'],
+    ['ott', 'hi', 0.4, 'Coming over the top can throw the hands out toward the ball.']] }
+};
+const FAMILY = { ott: 'steep', downPlane: 'steep' };
+function missLink(c, miss) {
+  const M = miss && MISSES[miss]; if (!M) return null;
+  for (const [id, side, k, why] of M.links) if (id === c.id && (!side || faultSide(c) === side)) return { k, why };
+  return null;
 }
 // the faults to work on, most important first (how bad × how much it matters)
 const PHASE_ORDER = ['Setup', 'Backswing', 'Top', 'Downswing', 'Impact', 'Finish'];
-function faults(C) {
+function faults(C, miss) {
   // everything scoring below the fault line, clear faults and borderline readings ranked together by how much they
   // matter (so a reading a hair either side of the line doesn't drop out of the list); borderline ones are marked.
   // A coach fixes the earliest cause first, so among faults of similar size the one earlier in the swing leads.
   return C.filter(c => !c.info && (c.verdict === 'fault' || c.verdict === 'major' || (c.verdict === 'borderline' && c.score < 6.5))).map(c => { const ph = Math.max(0, PHASE_ORDER.indexOf(c.phase));
-    return Object.assign({}, c, { advice: advice(c), borderline: c.verdict === 'borderline', pri: (6.5 - c.score) * c.w * (1.25 - 0.05 * ph) }); })
-    .filter(c => c.advice && c.advice.title).sort((a, b) => b.pri - a.pri || a.id.localeCompare(b.id));
+    const ml = missLink(c, miss);
+    // a fault that explains the golfer's own miss counts up to twice as much
+    return Object.assign({}, c, { advice: advice(c), borderline: c.verdict === 'borderline', missWhy: ml ? ml.why : null, pri: (6.5 - c.score) * c.w * (1.25 - 0.05 * ph) * (1 + (ml ? ml.k : 0)) }); })
+    .filter(c => c.advice && c.advice.title).sort((a, b) => b.pri - a.pri || a.id.localeCompare(b.id))
+    // the same fault seen two ways (hand path and the plane line) is reported once, the stronger reading
+    .filter((c, i, all) => !(FAMILY[c.id] && all.slice(0, i).some(x => FAMILY[x.id] === FAMILY[c.id] && faultSide(x) === faultSide(c))));
 }
 
 // Rough swing window from a sparse scan: the first time the hands go high after a set-up.
@@ -529,6 +726,91 @@ function findWindow(frames) {
   }
   return null;
 }
-const api = { analyse, features, phases, score, checks, level, faults, advice, lerp, FAULTS, CHECKS, AREA_LIST, findWindow, L };
+
+// ---------- The club shaft at address, from the picture ----------
+// The shaft is the thinnest, most continuous straight line from the hands down to near the feet (searched in one
+// frame at a time: golfers waggle, so the club isn't still enough to average frames). Searched coarse-to-fine; returns
+// null when no line stands out clearly from its surroundings (better no plane line than a wrong one).
+// g: grey image (Float32Array, w*h, 0-255); hx,hy: hands; T: torso length (px); footY: ankle height (px).
+// opt.view: 'down-the-line' (the shaft points out from the body toward the ball, opt.dir = +1/-1 in x, at a
+// normal lie, 20-70° from the ground) or 'face-on' (the shaft hangs within 35° of vertical). Lines outside these
+// (legs, the edge of shorts, mat lines) are never considered.
+function detectShaft(g, w, h, hx, hy, T, footY, opt) {
+  opt = opt || {};
+  const okAng = a => { const c = Math.cos(a), fromH = Math.asin(Math.min(1, Math.abs(Math.sin(a)))) * 180 / Math.PI;
+    if (opt.view === 'down-the-line') return fromH >= 20 && fromH <= 70 && (!opt.dir || Math.sign(c) === opt.dir);
+    if (opt.view === 'face-on') return fromH >= 55;
+    return true; };
+  const px = (x, y) => { if (x < 0) x = 0; if (y < 0) y = 0; if (x > w - 1.001) x = w - 1.001; if (y > h - 1.001) y = h - 1.001;
+    const x0 = x | 0, y0 = y | 0, fx = x - x0, fy = y - y0, i = y0 * w + x0;
+    return g[i] * (1 - fx) * (1 - fy) + g[i + 1] * fx * (1 - fy) + g[i + w] * (1 - fx) * fy + g[i + w + 1] * fx * fy; };
+  // how much the line stands out as a thin stripe (darker or lighter than both sides), mean and 30th percentile
+  const line = (x0, y0, x1, y1, a = 0.2, b = 0.97, off = 0) => {
+    const L = Math.hypot(x1 - x0, y1 - y0); if (L < 4) return 0; const nx = -(y1 - y0) / L, ny = (x1 - x0) / L, n = Math.max(12, Math.min(160, L | 0)), d = new Float32Array(n);
+    for (let k = 0; k < n; k++) { const t = a + (b - a) * k / (n - 1), x = x0 + (x1 - x0) * t + nx * off, y = y0 + (y1 - y0) * t + ny * off;
+      const c = px(x, y), l = px(x + nx * 2.5, y + ny * 2.5), r = px(x - nx * 2.5, y - ny * 2.5), dl = c - l, dr = c - r;
+      d[k] = (dl > 0) === (dr > 0) ? Math.min(Math.abs(dl), Math.abs(dr)) : 0; }
+    let m = 0; for (let k = 0; k < n; k++) m += d[k]; m /= n; const srt = Array.from(d).sort((p, q) => p - q);
+    return 0.5 * m + 0.5 * srt[Math.floor(n * 0.3)]; };
+  let best = null;
+  const tryLine = (gx, gy, ang, ey) => { const sn = Math.sin(ang); if (sn < 0.25 || !okAng(ang)) return; const L = (ey - gy) / sn; if (L < 0.8 * T || L > 2.6 * T) return;
+    const cx = gx + Math.cos(ang) * L, cy = ey, s = line(gx, gy, cx, cy); if (!best || s > best.s) best = { s, gx, gy, cx, cy, ang }; };
+  const D = Math.PI / 180;
+  for (let dx = -0.2; dx <= 0.201; dx += 0.1) for (let dy = -0.1; dy <= 0.301; dy += 0.1)
+    for (let a = 15; a <= 165; a += 1.5) for (let e = -0.4; e <= 0.601; e += 0.2) tryLine(hx + dx * T, hy + dy * T, a * D, footY + e * T);
+  if (!best) return null;
+  const b0 = Object.assign({}, best), ey0 = b0.cy;
+  for (let dx = -0.05; dx <= 0.0501; dx += 0.025) for (let dy = -0.05; dy <= 0.0501; dy += 0.025)
+    for (let a = -2; a <= 2.001; a += 0.25) for (let e = -0.1; e <= 0.101; e += 0.05) tryLine(b0.gx + dx * T, b0.gy + dy * T, b0.ang + a * D, ey0 + e * T);
+  const B = best, L = Math.hypot(B.cx - B.gx, B.cy - B.gy), ux = (B.cx - B.gx) / L, uy = (B.cy - B.gy) / L;
+  // follow the shaft on to the clubhead while it still stands out (short faint gaps allowed: the lower shaft is
+  // often faint against grass); where it fades, the clubhead is placed where the straight shaft meets the ground
+  let end = 0.6 * L, miss = 0; const step = 0.06 * T;
+  for (let t = 0.6 * L; t < 3 * T; t += step) { const s = line(B.gx + ux * t, B.gy + uy * t, B.gx + ux * (t + step), B.gy + uy * (t + step), 0, 1);
+    if (s >= 0.3 * B.s) { end = t + step; miss = 0 } else if (++miss > 3) break; }
+  const ground = footY + 0.1 * T, tg = uy > 0.2 ? (ground - B.gy) / uy : end;
+  const head = { x: B.gx + ux * Math.max(end, Math.min(tg, 3 * T)), y: B.gy + uy * Math.max(end, Math.min(tg, 3 * T)) };
+  // it must stand out from lines just beside it
+  const side = Math.max(line(B.gx, B.gy, B.cx, B.cy, 0.2, 0.97, 7), line(B.gx, B.gy, B.cx, B.cy, 0.2, 0.97, -7));
+  const conf = B.s / (side + 1);
+  return { gx: B.gx, gy: B.gy, cx: head.x, cy: head.y, seenTo: end / L, ang: B.ang / D, s: B.s, conf, ok: B.s >= 10 && conf >= 3 };
+}
+
+// ---------- Swing-to-swing consistency ----------
+// Good players repeat their positions: how much a position varies from swing to swing tracks skill closely (e.g.
+// spine tilt across swings, r ≈ 0.8 with scoring, Frontiers 2023). Given the measurements from several swings
+// filmed from the same angle, each check's spread (standard deviation) is compared with the width of its 'good'
+// band; anything no bigger than the tracking's own wobble is reported as steady.
+function consistency(list, view) {
+  const ms = list.filter(m => m && m.view === view); if (ms.length < 3) return null;
+  const out = [];
+  const v = view === 'down-the-line' ? 'dtl' : 'fo';
+  for (const c of CHECKS) {
+    if (c.view !== 'all' && c.view !== v) continue;
+    const vs = ms.map(m => m[c.key]).filter(x => x != null && !isNaN(x)); if (vs.length < 3) continue;
+    const mean = vs.reduce((a, b) => a + b, 0) / vs.length, sd = Math.sqrt(vs.reduce((a, b) => a + (b - mean) ** 2, 0) / (vs.length - 1));
+    const good = c.A.filter(a => a[1] >= 9.5).map(a => a[0]), width = good.length > 1 ? Math.max(...good) - Math.min(...good) : (Math.max(...c.A.map(a => a[0])) - Math.min(...c.A.map(a => a[0]))) / 6;
+    const noise = NOISE[c.id] || 0, ratio = sd <= 1.5 * noise ? 0 : sd / Math.max(1e-9, width);
+    out.push({ id: c.id, name: c.name, n: vs.length, sd, ratio, fmt: c.fmt, mean, state: ratio < 0.3 ? 'steady' : ratio < 0.6 ? 'varies' : 'all over' });
+  }
+  out.sort((a, b) => b.ratio * (CHECKS.find(c => c.id === b.id).w) - a.ratio * (CHECKS.find(c => c.id === a.id).w));
+  const steady = out.filter(o => o.state === 'steady').length;
+  return { n: ms.length, items: out, steadyShare: out.length ? steady / out.length : 1 };
+}
+
+// ---------- Since last time ----------
+// What a coach checks first at the next lesson: did the thing we worked on change? Compares this swing with the
+// previous one from the same angle, check by check. A change only counts when it's bigger than three times the
+// tracking's own wobble and moves the score by at least a point.
+function progress(now, prev, view) {
+  if (!now || !prev || prev.view !== view) return null;
+  const a = checks(now, view), b = checks(prev, view), out = [];
+  for (const c of a) { const p = b.find(x => x.id === c.id); if (!p || c.info || p.info) continue;
+    const dv = c.value - p.value, ds = c.score - p.score, sd = NOISE[c.id] || 0;
+    if (Math.abs(ds) >= 1 && Math.abs(dv) > 3 * sd) out.push({ id: c.id, name: c.name, from: p.shown, to: c.shown, ds, better: ds > 0, w: c.w }); }
+  out.sort((x, y) => Math.abs(y.ds) * y.w - Math.abs(x.ds) * x.w);
+  return { better: out.filter(o => o.better), worse: out.filter(o => !o.better) };
+}
+const api = { progress, CUES, consistency, detectShaft, MISSES, missLink, analyse, features, phases, score, checks, level, faults, advice, lerp, FAULTS, CHECKS, AREA_LIST, findWindow, L };
 if (typeof module !== 'undefined') module.exports = api; else root.SwingMetrics = api;
 })(this);
