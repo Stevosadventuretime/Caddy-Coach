@@ -7,6 +7,7 @@ const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const len = v => Math.hypot(v[0], v[1], v[2]);
 const deg = r => r * 180 / Math.PI;
+const ang2 = (a, b, c) => { const ux = a.x - b.x, uy = a.y - b.y, vx = c.x - b.x, vy = c.y - b.y, d = Math.hypot(ux, uy) * Math.hypot(vx, vy); return d ? deg(Math.acos(Math.max(-1, Math.min(1, (ux * vx + uy * vy) / d)))) : null; };
 const ang3 = (a, b, c) => { const u = sub(a, b), v = sub(c, b); return deg(Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / (len(u) * len(v)))))); };
 const median = a => { const s = a.filter(x => x != null && !isNaN(x)).sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -24,9 +25,11 @@ function features(f) {
     headX: (p[L.nose].x - an.x), headY: (an.y - p[L.nose].y),             // pixels; scaled by address torso later
     hipX: (hip.x - an.x),
     vis: [L.lSh, L.rSh, L.lHip, L.rHip, L.lWr, L.rWr].reduce((a, i) => a + p[i].vis, 0) / 6 };
+  // joint angles from the flat picture: a straight arm or leg always looks straight, and research on phone
+  // body tracking finds the 2D picture far steadier than its 3D guess
+  o.lElbow = ang2(p[L.lSh], p[L.lEl], p[L.lWr]); o.rElbow = ang2(p[L.rSh], p[L.rEl], p[L.rWr]);
+  o.lKnee = ang2(p[L.lHip], p[L.lKn], p[L.lAn]); o.rKnee = ang2(p[L.rHip], p[L.rKn], p[L.rAn]);
   if (w && w.length) {
-    o.lElbow = ang3(w[L.lSh], w[L.lEl], w[L.lWr]); o.rElbow = ang3(w[L.rSh], w[L.rEl], w[L.rWr]);
-    o.lKnee = ang3(w[L.lHip], w[L.lKn], w[L.lAn]); o.rKnee = ang3(w[L.rHip], w[L.rKn], w[L.rAn]);
     const hv = sub(w[L.rHip], w[L.lHip]), wm = [(w[L.lWr][0] + w[L.rWr][0]) / 2, 0, (w[L.lWr][2] + w[L.rWr][2]) / 2];
     o.handSide = (wm[0] * hv[0] + wm[2] * hv[2]) / (Math.hypot(hv[0], hv[2]) || 1);
   }
@@ -59,19 +62,28 @@ function phases(F) {
   let fin = -1;
   for (let i = imp + 1; i < F.length && F[i].t - F[imp].t < 1.6; i++) if (fin < 0 || F[i].h > F[fin].h + 0.02) fin = i;
   if (fin < 0) fin = F.length - 1;
-  const sp = F.map((f, i) => i ? Math.hypot(f.wr.x - F[i - 1].wr.x, f.wr.y - F[i - 1].wr.y) / T / Math.max(1e-3, f.t - F[i - 1].t) : 0);
-  let addr = -1;
-  for (let i = top - 1; i >= 2; i--) if (F[i].h < 0.35 && sp[i] < 0.35 && sp[i - 1] < 0.35) { addr = i; break; }
-  if (addr < 0) for (let i = top; i >= 1; i--) if (F[i].h < 0.35 && sp[i] < 0.6) { addr = i; break; }
-  if (addr < 0) addr = 0;
-  // takeaway: hands leave the address position by 10% of a torso length (interpolated between frames)
-  let take = addr, takeT = F[addr].t;
-  const still = F.filter((f, i) => i <= addr && f.t >= F[addr].t - 0.4);
-  const ax = still.reduce((p, f) => p + f.wr.x, 0) / still.length, ay = still.reduce((p, f) => p + f.wr.y, 0) / still.length;
+  // takeaway and address are found from the top backwards, so where the clip happens to start (or a waggle or a
+  // tracking glitch before the swing) never moves them. Reference hand position: where the hands sat before the
+  // backswing; takeaway: going back from the top, the moment the hands come back within 7%, 10% and 13% of a torso
+  // length of it (beyond the tracking jitter there), averaged; two frames in a row must be back, so one odd frame
+  // in the backswing doesn't stop it early. Then the reference is re-taken just before that takeaway, and once more.
+  const med = a => median(a);
+  let ax = 0, ay = 0, jit = 0, take = 0, takeT = F[0].t;
   const dist = i => Math.hypot(F[i].wr.x - ax, F[i].wr.y - ay) / T;
-  // the moment the hands have moved 7%, 10% and 13% of a torso length, averaged: steadier than one threshold
-  const crossAt = th => { for (let i = addr + 1; i < top; i++) if (dist(i) > th) { const d0 = dist(i - 1), d1 = dist(i); return { i: i - 1, t: F[i - 1].t + (F[i].t - F[i - 1].t) * clamp((th - d0) / Math.max(1e-6, d1 - d0), 0, 1) }; } return null; };
-  { const xs = [0.07, 0.1, 0.13].map(crossAt).filter(Boolean); if (xs.length) { takeT = xs.reduce((a, x) => a + x.t, 0) / xs.length; take = xs[Math.min(1, xs.length - 1)].i; } }
+  const setRef = fs => { if (!fs.length) return false; ax = med(fs.map(f => f.wr.x)); ay = med(fs.map(f => f.wr.y)); jit = fs.length > 3 ? med(fs.map(f => Math.hypot(f.wr.x - ax, f.wr.y - ay) / T)) : 0; return true; };
+  const tTop = F[top].t;
+  if (!setRef(F.filter(f => f.t >= tTop - 1.5 && f.t <= tTop - 0.6 && f.h < 0.35))) setRef(F.filter((f, i) => i < top && f.h < 0.35)) || setRef([F[0]]);
+  const backTo = th0 => { const th = th0 + jit;
+    for (let i = top - 1; i >= 1; i--) if (dist(i) <= th && dist(i - 1) <= th) { const d0 = dist(i), d1 = dist(i + 1); return { i, t: F[i].t + (F[i + 1].t - F[i].t) * clamp((th - d0) / Math.max(1e-6, d1 - d0), 0, 1) }; }
+    return null; };
+  for (let pass = 0; pass < 3; pass++) {
+    const xs = [0.07, 0.1, 0.13].map(backTo).filter(Boolean);
+    if (!xs.length) break;
+    takeT = xs.reduce((a, x) => a + x.t, 0) / xs.length; take = xs[Math.min(1, xs.length - 1)].i;
+    if (pass < 2 && !setRef(F.filter(f => f.t >= takeT - 0.5 && f.t <= takeT - 0.1))) break;
+  }
+  // address: the last frame a tenth of a second before the takeaway
+  let addr = 0; for (let i = 0; i <= take; i++) if (F[i].t <= takeT - 0.1) addr = i;
   // sub-frame timing: quadratic fit through the extreme frame and its neighbours
   const peak = i => { if (i <= 0 || i >= F.length - 1) return F[i].t;
     const [x0, x1, x2] = [F[i - 1].t, F[i].t, F[i + 1].t], [y0, y1, y2] = [F[i - 1].h, F[i].h, F[i + 1].h];
@@ -115,17 +127,22 @@ function analyse(frames, opt) {
   const at = (k) => median(addrSet.map(f => f[k]));
   const shW0 = at('shW'), hipW0 = at('hipW'), T0 = at('T') || T;
   for (const f of F) { f.headX /= T0; f.headY /= T0; f.hipX /= T0; }
-  const view = opt.view || (shW0 < 0.45 ? 'down-the-line' : shW0 > 0.7 ? 'face-on' : 'angled');
+  // the golfer says which way they filmed; the picture only checks it. Shoulders look wide face-on and narrow
+  // down the line; a clear contradiction is flagged instead of quietly running the wrong checks.
+  const looks = shW0 < 0.45 ? 'down-the-line' : shW0 > 0.7 ? 'face-on' : 'angled';
+  const view = opt.view || (looks === 'angled' ? 'face-on' : looks);
   // face-on: the hands finish on the target side, and the lead foot is the one on that side
   const tgImg = Math.sign(Fi.wr.x - Tp.wr.x) || 1, leftOnTarget = Math.sign(median(addrSet.map(f => f.pts[L.lAn].x - f.pts[L.rAn].x))) === tgImg;
   const right = opt.hand ? opt.hand === 'right' : view !== 'down-the-line' ? leftOnTarget : (Tp.handSide != null && A.handSide != null ? Tp.handSide >= A.handSide : true);
   const lead = right ? 'l' : 'r';
   const toBall = Math.sign(A.wr.x - A.hip.x) || 1;
   const between = (a, b) => F.filter(f => f.t >= a.t && f.t <= b.t);
-  const m = { view, handed: right ? 'right' : 'left' };
+  const m = { view, handed: right ? 'right' : 'left', view_looks: looks, shoulder_width_ratio: r2(shW0) };
+  if (opt.view && ((opt.view === 'down-the-line' && shW0 > 0.75) || (opt.view === 'face-on' && shW0 < 0.4))) m.view_mismatch = looks;
   // tempo from hand speed where it's clear, else from positions
   const tA = P.topS != null ? P.takeS : P.takeT, tT = P.topS != null ? P.topS : P.topT;
   m.backswing_s = r2(tT - tA); m.downswing_s = r2(P.impT - tT); m.tempo_ratio = r1((tT - tA) / Math.max(0.05, P.impT - tT));
+  { const dts = []; for (let i = 1; i < F.length; i++) { const d = F[i].t - F[i - 1].t; if (d > 0.004 && d < 0.1) dts.push(d); } const md = median(dts); m.fps = md ? Math.round(1 / md) : null; }
   m.spine_address_deg = r0(Math.abs(at('tilt'))); m.spine_top_deg = r0(Math.abs(Tp.tilt)); m.spine_impact_deg = r0(Math.abs(I.tilt));
   m.spine_change_deg = r0(Math.abs(at('tilt')) - Math.abs(I.tilt));                    // + = more upright at impact
   const hx0 = at('headX'), hy0 = at('headY'), hip0 = at('hipX');
@@ -231,7 +248,7 @@ const CHECKS = [
     A: [[-8, 2], [-4, 4], [0, 7], [2, 9], [8, 10], [12, 9], [18, 6]] },
   { id: 'posture', view: 'dtl', phase: 'Setup', area: 'Setup posture', w: 1.2, name: 'Hip hinge (forward bend)', key: 'spine_address_deg', fmt: DG, target: 'about 28–38° from vertical',
     A: [[10, 1], [16, 3], [22, 5.5], [27, 8], [30, 9.5], [38, 9.5], [44, 7], [50, 4], [58, 1]] },
-  { id: 'knees', view: 'all', phase: 'Setup', area: 'Setup posture', w: 0.6, name: 'Knee flex', key: 'knee_flex_address_deg', fmt: DG, target: 'soft flex, about 145–158° at the knee',
+  { id: 'knees', view: 'dtl', phase: 'Setup', area: 'Setup posture', w: 0.6, name: 'Knee flex', key: 'knee_flex_address_deg', fmt: DG, target: 'soft flex, about 145–158° at the knee',
     A: [[125, 2], [135, 5], [143, 8], [148, 9.5], [158, 9.5], [163, 7.5], [168, 5], [175, 2]] },
   { id: 'armHang', view: 'dtl', phase: 'Setup', area: 'Setup posture', w: 0.6, name: 'Arms hanging under the shoulders', key: 'arm_hang', fmt: PC, target: 'hands just inside to slightly beyond the shoulders',
     A: [[-0.15, 2], [-0.05, 5], [0.02, 8], [0.08, 9.5], [0.22, 9.5], [0.32, 7], [0.45, 4], [0.6, 1.5]] },
@@ -246,8 +263,8 @@ const CHECKS = [
     A: [[10, 3], [20, 6], [30, 8.5], [36, 10], [50, 10], [60, 8], [70, 6]] },
   { id: 'hipDepth', view: 'dtl', phase: 'Backswing', area: 'Spine angle', w: 1.0, name: 'Hips staying back going back', key: 'hip_depth_top', fmt: PC, target: 'hips no closer to the ball at the top',
     A: [[-0.1, 10], [0.02, 10], [0.06, 8], [0.12, 5], [0.2, 2]] },
-  { id: 'leadArm', view: 'all', phase: 'Top', area: 'Backswing and top', w: 0.7, name: 'Lead arm width at the top', key: 'lead_arm_top_deg', fmt: DG, target: 'long and wide (tour players read 135–150° on this tracking)',
-    A: [[100, 2], [115, 5], [125, 7], [135, 8.5], [142, 9.5], [150, 10]] },
+  { id: 'leadArm', view: 'fo', phase: 'Top', area: 'Backswing and top', w: 0.7, name: 'Lead arm width at the top', key: 'lead_arm_top_deg', fmt: DG, target: 'long and wide: the lead arm close to straight (160°+ seen face-on)',
+    A: [[120, 2], [135, 4.5], [145, 6.5], [155, 8.5], [163, 9.5], [170, 10]] },
   { id: 'handsTopFo', view: 'fo', phase: 'Top', area: 'Backswing and top', w: 0.8, name: 'Hands height at the top', key: 'hands_height_top', fmt: v => v.toFixed(2), target: '1.4+ torso lengths above the hips',
     A: [[0.9, 2], [1.1, 4.5], [1.25, 7], [1.4, 9], [1.5, 10]] },
   { id: 'handsTopDtl', view: 'dtl', phase: 'Top', area: 'Backswing and top', w: 0.8, name: 'Hands height at the top', key: 'hands_height_top', fmt: v => v.toFixed(2), target: '1.0+ (hands above the shoulders)',
@@ -285,8 +302,8 @@ const CHECKS = [
   { id: 'headRise', view: 'dtl', phase: 'Impact', area: 'Head stability', w: 0.8, name: 'Head height at impact', key: 'head_rise_impact', fmt: PC, target: 'about where it started (+ = lifted up)',
     A: [[-0.2, 5], [-0.1, 8.5], [-0.03, 10], [0.04, 9.5], [0.1, 6.5], [0.16, 4], [0.25, 1.5]] },
   // ----- follow-through and finish
-  { id: 'chickenWing', view: 'fo', phase: 'Finish', area: 'Balance and finish', w: 1.1, name: 'Lead arm extending through the ball (chicken wing check)', key: 'lead_arm_through_deg', fmt: DG, target: 'long lead arm after impact (tour players read 140°+ here)',
-    A: [[95, 1], [110, 3], [122, 5.5], [132, 7.5], [140, 9], [146, 10]] },
+  { id: 'chickenWing', view: 'fo', phase: 'Finish', area: 'Balance and finish', w: 1.1, name: 'Lead arm extending through the ball (chicken wing check)', key: 'lead_arm_through_deg', fmt: DG, target: 'long lead arm after impact (155°+ seen face-on)',
+    A: [[110, 1], [125, 3], [138, 5.5], [148, 7.5], [156, 9], [163, 10]] },
   { id: 'finishWeight', view: 'fo', phase: 'Finish', area: 'Balance and finish', w: 1.0, name: 'Weight on the lead foot at the finish', key: 'finish_over_lead', fmt: PC, target: 'hips over the lead foot',
     A: [[-0.9, 1], [-0.7, 3], [-0.5, 6], [-0.35, 8], [-0.25, 9.5]] },
   { id: 'trailHeel', view: 'fo', phase: 'Finish', area: 'Balance and finish', w: 0.6, name: 'Up on the trail toe', key: 'trail_heel_up_finish', fmt: PCa, target: 'trail heel well off the ground',
@@ -299,7 +316,12 @@ const CHECKS = [
     A: [[0.1, 10], [0.3, 8.5], [0.5, 6], [0.8, 3]] },
 ];
 // how much each reading typically moves between two films of the same swing (measured by re-running clips with the trim moved a frame or two)
-const NOISE = { tempo_ratio: 0.35, downswing_s: 0.02, backswing_s: 0.04, lead_arm_through_deg: 6, hand_path_out: 0.03, head_max_drop: 0.02, head_max_side: 0.02, finish_head_wobble: 0.05, early_ext_max: 0.015, spine_change_deg: 1.5, hip_open_impact_deg: 3, side_tilt_impact_deg: 1.5, hip_shift_impact: 0.03, sway_gap_impact: 0.03 };
+// how much each reading moves between two looks at the same swing (measured on real swings by re-running them
+// with the trim moved), by check. A reading this close to a band edge is called borderline, not a fault.
+const NOISE = { tempo: 0.35, dsTime: 0.02, posture: 1.0, knees: 2.0, armHang: 0.04, hipDepth: 0.015, leadArm: 3, handsTopDtl: 0.02, handsTopFo: 0.02,
+  ott: 0.03, earlyExt: 0.015, standUp: 1.5, headDepth: 0.02, headDrop: 0.02, headRise: 0.03, finishDtl: 0.03, finishFo: 0.05, hold: 0.05,
+  stance: 0.02, setupTilt: 1, sway: 0.02, reverse: 1, shTurn: 3, hipTurn: 5, swayGap: 0.03, hipShift: 0.03, slide: 0.02, hipOpen: 4,
+  impactTilt: 1.5, headImpact: 0.02, headSide: 0.02, chickenWing: 3, finishWeight: 0.06, trailHeel: 0.02 };
 const AREA_LIST = ['Setup posture', 'Spine angle', 'Head stability', 'Hip and shoulder rotation', 'Backswing and top', 'Tempo and sequencing', 'Impact position', 'Balance and finish'];
 function checks(m, view) {
   const v = view === 'face-on' ? 'fo' : view === 'down-the-line' ? 'dtl' : 'fo';
@@ -309,14 +331,23 @@ function checks(m, view) {
     const val = m[c.key]; if (val == null || isNaN(val)) continue;
     // a reading has some wobble from frame to frame; score the range it could be, so being a hair either side of a
     // band edge doesn't swing the score
-    const sd = NOISE[c.key] || 0, s = Math.max(0, Math.min(10, sd ? [-1, -0.5, 0, 0.5, 1].reduce((a, k) => a + lerp(val + k * sd, c.A), 0) / 5 : lerp(val, c.A)));
+    const sd = NOISE[c.id] || 0, s = Math.max(0, Math.min(10, sd ? [-1, -0.5, 0, 0.5, 1].reduce((a, k) => a + lerp(val + k * sd, c.A), 0) / 5 : lerp(val, c.A)));
+    // the score range the reading could really be in (two noise widths either side): a check is only a clear
+    // fault when even its kindest reading is a fault, and only clearly fine when even its harshest is fine
+    const lo = Math.min(lerp(val - 2 * sd, c.A), lerp(val + 2 * sd, c.A), lerp(val, c.A)), hi = Math.max(lerp(val - 2 * sd, c.A), lerp(val + 2 * sd, c.A), lerp(val, c.A));
+    // tempo needs enough frames in a quarter-second downswing: below 50 frames a second it's shown, not judged
+    // and filmed down the line the start of the takeaway moves the hands toward or away from the camera, so the
+    // backswing (and the tempo ratio) can't be timed reliably: shown, not judged
+    const lowFps = (c.id === 'tempo' || c.id === 'dsTime') && m.fps != null && m.fps < 50;
+    const info = lowFps || (c.id === 'tempo' && v === 'dtl');
     out.push({ id: c.id, phase: c.phase, area: c.area, w: c.w, name: c.name, value: val, shown: c.fmt(val), target: c.target, score: Math.round(s * 10) / 10,
-      verdict: s >= 8.5 ? 'tour' : s >= 6.5 ? 'ok' : s >= 4 ? 'fault' : 'major' });
+      infoWhy: info ? (lowFps ? 'fps' : 'angle') : undefined,
+      verdict: info ? 'info' : hi < 6.5 ? (s >= 4 ? 'fault' : 'major') : lo >= 6.5 ? (s >= 8.5 ? 'tour' : 'ok') : 'borderline', info });
   }
   return out;
 }
 function score(m, view) {
-  const C = checks(m, view), s = {};
+  const C = checks(m, view).filter(c => !c.info), s = {};
   for (const a of AREA_LIST) {
     const cs = C.filter(c => c.area === a); if (!cs.length) { s[a] = null; continue; }
     const mean = cs.reduce((p, c) => p + c.score * c.w, 0) / cs.reduce((p, c) => p + c.w, 0), lo = Math.min(...cs.map(c => c.score));
@@ -325,11 +356,14 @@ function score(m, view) {
   s['Clubface and path (estimate)'] = null;
   // overall: weighted by how much each position matters, then held down by the worst faults
   const W = C.reduce((p, c) => p + c.w, 0), base = C.reduce((p, c) => p + c.score * c.w, 0) / (W || 1);
-  const weak = C.filter(c => c.score < 6.5).sort((a, b) => a.score - b.score);
-  const close = C.filter(c => c.score >= 6.5 && c.score < 8.5).length;
-  let o = base - 0.3 * weak.length - 0.05 * close;
-  // the weakest position holds the overall down (half of any amount above it + 3.2), without one borderline reading deciding everything
-  if (weak.length) { const cap = weak[0].score + 3.2; if (o > cap) o = cap + (o - cap) * 0.5; }
+  // each position below the fault line costs up to 0.3 and each 'nearly there' one a little, phased in over a
+  // point of score rather than switched on at a line, so a reading a hair either side never jumps the overall
+  const ramp = (x, a, b) => Math.max(0, Math.min(1, (x - a) / (b - a)));
+  const pen = C.reduce((p, c) => p + 0.3 * ramp(-c.score, -7, -6) + 0.05 * ramp(c.score, 6, 6.5) * ramp(-c.score, -8.5, -8), 0);
+  let o = base - pen;
+  // the weakest position holds the overall down (half of any amount above it + 3.2), phased in the same way
+  const mn = C.length ? Math.min(...C.map(c => c.score)) : 10, cap = mn + 3.2;
+  if (o > cap) o -= (o - cap) * 0.5 * ramp(-mn, -7, -6);
   s.overall = Math.max(1, Math.min(10, Math.round(o * 10) / 10));
   return s;
 }
@@ -471,15 +505,28 @@ function advice(c) {
   return Object.assign({ severity: c.score < 4 ? 'major' : c.score < 5.5 ? 'moderate' : c.score < 6.5 ? 'minor' : 'polish' }, f);
 }
 // the faults to work on, most important first (how bad × how much it matters)
+const PHASE_ORDER = ['Setup', 'Backswing', 'Top', 'Downswing', 'Impact', 'Finish'];
 function faults(C) {
-  return C.filter(c => c.score < 6.5).map(c => Object.assign({}, c, { advice: advice(c), pri: (6.5 - c.score) * c.w }))
-    .filter(c => c.advice && c.advice.title).sort((a, b) => b.pri - a.pri);
+  // everything scoring below the fault line, clear faults and borderline readings ranked together by how much they
+  // matter (so a reading a hair either side of the line doesn't drop out of the list); borderline ones are marked.
+  // A coach fixes the earliest cause first, so among faults of similar size the one earlier in the swing leads.
+  return C.filter(c => !c.info && (c.verdict === 'fault' || c.verdict === 'major' || (c.verdict === 'borderline' && c.score < 6.5))).map(c => { const ph = Math.max(0, PHASE_ORDER.indexOf(c.phase));
+    return Object.assign({}, c, { advice: advice(c), borderline: c.verdict === 'borderline', pri: (6.5 - c.score) * c.w * (1.25 - 0.05 * ph) }); })
+    .filter(c => c.advice && c.advice.title).sort((a, b) => b.pri - a.pri || a.id.localeCompare(b.id));
 }
 
 // Rough swing window from a sparse scan: the first time the hands go high after a set-up.
 function findWindow(frames) {
   const F = frames.filter(f => f.pts).map(features).sort((a, b) => a.t - b.t);
-  for (let i = 1; i < F.length; i++) if (F[i].h > 0.7 && F.slice(0, i).some(f => f.h < 0.35)) return { t0: F[i].t - 1.6, t1: F[i].t + 2.0, hi: F[i].t };
+  // samples are a few per second, so the very top is usually missed and the highest sample can flip between two
+  // nearly equal ones. Instead anchor on the moment the hands rise through 0.45 torso lengths above the address,
+  // placed between the two samples either side: a tiny tracking difference then moves the trim only a tiny amount.
+  for (let i = 1; i < F.length; i++) if (F[i].h > 0.45 && F[i - 1].h <= 0.45 && F.slice(0, i).some(f => f.h < 0.3)) {
+    let pk = F[i].h; for (let j = i + 1; j < F.length && F[j].t - F[i].t <= 1.0; j++) pk = Math.max(pk, F[j].h);
+    if (pk < 0.55) continue;
+    const a = F[i - 1], b = F[i], tc = a.t + (b.t - a.t) * (0.45 - a.h) / Math.max(1e-6, b.h - a.h);
+    return { t0: tc - 1.2, t1: tc + 2.4, hi: tc };
+  }
   return null;
 }
 const api = { analyse, features, phases, score, checks, level, faults, advice, lerp, FAULTS, CHECKS, AREA_LIST, findWindow, L };
