@@ -234,9 +234,38 @@ function finish(J) {
   return J;
 }
 function poseOf(dr, info) { return info.f == null ? shiftJ(rig(info.P), rigShift()) : compose(info.f, deltaOf(info)); }
-function keyJoints(dr, i) { return usesCapture(dr) ? poseOf(dr, keyInfo(dr, i)) : rig(dr.seq[i].P); }
+
+// ---------- posture: knees no more bent than a real golfer's ----------
+// The rig and the captured swing both put the hips too low for the legs (0.46 m thigh, 0.44 m shin), so the knees
+// bent 45-65 degrees at address where good players flex about 15-30. This raises the pelvis and pushes it back so
+// each knee bends 40% as much, keeping the shoulders, head, arms, hands and club exactly where they were (the club
+// still meets the ball), then re-solves the knees. Spine tilt grows as the hips go back, as it does in a real setup.
+const KNEE_KEEP = 0.4;
+function kneeFlex(hip, knee, ank) { const a = sub(hip, knee), b = sub(ank, knee); return 180 - Math.acos(Math.max(-1, Math.min(1, dot(a, b) / (len(a) * len(b))))) * 180 / Math.PI; }
+function legReach(a, b, flex) { return Math.sqrt(a * a + b * b + 2 * a * b * Math.cos(flex * D2R)); }
+function standTall(J) {
+  if (!J || !J.pel || !J.lk || !J.tk || !J.la || !J.ta || !J.neck || J._tall) return J;
+  const legs = [['lhip', 'lk', 'la'], ['thip', 'tk', 'ta']].map(([h, k, a]) => {
+    const th = len(sub(J[h], J[k])), sh = len(sub(J[k], J[a])), f = kneeFlex(J[h], J[k], J[a]);
+    return { h, k, a, th, sh, f, want: legReach(th, sh, Math.max(3, f * KNEE_KEEP)), pole: norm(sub(J[k], add(J[a], mul(sub(J[h], J[a]), 0.5)))) }; });
+  const L = len(sub(J.neck, J.pel)), back = [0, 0, -1];
+  // find how far up (dy) the pelvis must go; it also slides back (dz) so the pelvis-to-neck length stays the same
+  const place = dy => { const up = [J.pel[0], J.pel[1] + dy, J.pel[2]]; const dx = J.neck[0] - up[0], dyn = J.neck[1] - up[1];
+    const dzAbs = Math.sqrt(Math.max(0, L * L - dx * dx - dyn * dyn)), z = J.neck[2] - Math.sign(J.neck[2] - J.pel[2] || 1) * dzAbs; return [up[0], up[1], z]; };
+  // whichever leg reaches its target first sets the height, so neither leg is ever over-stretched or locked
+  const miss = dy => { const P = place(dy), d = sub(P, J.pel); let e = -1; for (const g of legs) e = Math.max(e, len(sub(add(J[g.h], d), J[g.a])) - g.want); return e; };
+  let lo = 0, hi = 0.25; if (miss(0) >= 0) return J;
+  for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (miss(m) < 0) lo = m; else hi = m; }
+  const P = place(lo), d = sub(P, J.pel), O = Object.assign({}, J);
+  O.pel = P; for (const k of ['lhip', 'thip', 'seat', 'bum', 'sdBelt']) if (isV(J[k])) O[k] = add(J[k], d);
+  for (const g of legs) O[g.k] = ik(O[g.a], O[g.h], g.sh, g.th, g.pole);
+  const s = norm(sub(J.neck, P)), cr = len(sub(J.chest, J.pel)) / (L || 1); O.s = s; O.chest = add(P, mul(sub(J.neck, P), cr));
+  O._tall = 1; return O; }
+function keyJoints(dr, i) { return standTall(keyJoints0(dr, i)); }
+function keyJoints0(dr, i) { return usesCapture(dr) ? poseOf(dr, keyInfo(dr, i)) : rig(dr.seq[i].P); }
 function startJ(dr) { prep(dr); return keyJoints(dr, 0); }
-function jointsAt(dr, t) {
+function jointsAt(dr, t) { return standTall(jointsAt0(dr, t)); }
+function jointsAt0(dr, t) {
   prep(dr); const s = sampleAt(dr, t);
   if (!usesCapture(dr)) return rig(s.p);
   const n = dr.seq.length, i = s.i, pi = (i - 1 + n) % n, B = keyInfo(dr, i), A = keyInfo(dr, pi);
@@ -260,7 +289,8 @@ function jointsAt(dr, t) {
   return finish(J);
 }
 // the red "not this" pose for key i: the golfer's own pose with the fault added
-function ghostAt(dr, i) {
+function ghostAt(dr, i) { const J = ghostAt0(dr, i); return J && standTall(J); }
+function ghostAt0(dr, i) {
   prep(dr); const key = dr.seq[i]; if (!key || !key.G) return null;
   if (!usesCapture(dr)) return rig(key.G);
   const gk = (key.ghost && key.ghost.k) || key.k;
