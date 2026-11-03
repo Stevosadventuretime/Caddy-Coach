@@ -395,7 +395,14 @@ function sbConsensus(rows){const by={},out={};rows.forEach(r=>{(by[r.hole]=by[r.
 async function sbRows(table,key,fresh){const ck=`cc_sb_${table}_${key}`,c=lsGet(ck,null);if(c&&Date.now()-c.t<(fresh||6e5))return c.rows;
  try{const rows=await sbGet(table,`course_key=eq.${encodeURIComponent(key)}&select=*&order=created_at.desc&limit=3000`);lsSet(ck,{t:Date.now(),rows});return rows}catch(e){if(c)return c.rows;throw e}}
 // add the shared greens to a course; greens you set yourself on this phone always win
-async function sbApply(c,fresh){if(!SB.on()||!c)return 0;let rows;try{rows=await sbRows('hole_maps',sbKey(c),fresh)}catch(_){return 0}
+// shared hole maps are filed by course name, and some names are used by more than one club (two "Astbury Golf
+// Course"s, for one). Only holes within 3 miles of the course are used; if the app doesn't know where the course is,
+// the biggest group of holes that sit together wins and any others are ignored.
+function sbHere(c,rows){rows=(rows||[]).filter(r=>r&&r.green_lat!=null&&r.green_lon!=null);if(!rows.length)return rows;
+ const s=c&&c._site,la=s&&s.lat!=null?s.lat:c&&c.lat,lo=s&&s.lon!=null?s.lon:c&&(c.lon!=null?c.lon:c.lng);
+ if(la!=null&&lo!=null)return rows.filter(r=>miles(la,lo,r.green_lat,r.green_lon)<3);
+ let best=[];for(const r of rows){const g=rows.filter(q=>miles(r.green_lat,r.green_lon,q.green_lat,q.green_lon)<3);if(g.length>best.length)best=g}return best}
+async function sbApply(c,fresh){if(!SB.on()||!c)return 0;let rows;try{rows=sbHere(c,await sbRows('hole_maps',sbKey(c),fresh))}catch(_){return 0}
  const con=sbConsensus(rows);c.greens=c.greens||{};let n=0;
  for(const[h,g]of Object.entries(con)){const mine=c.greens[h];if(mine&&!mine.shared)continue;c.greens[h]=g;n++}
  if(n){if(GPS.pick)Object.keys(GPS.pick).forEach(k=>{if(k.startsWith(c.key+':'))delete GPS.pick[k]});await RStore.saveCourse(c).catch(()=>{})}return n}

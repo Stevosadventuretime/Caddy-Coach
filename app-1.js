@@ -88,7 +88,7 @@ async function renderHomeMap(){const el=$('homeMapSlot');if(!el)return;el.innerH
  if(HOSTED_IN_CLAUDE||!cr||!cr.key)return;const k=keyBase(cr.key),st=lsGet('cc_homemap_'+k,null);if(st&&(st.done||(st.later&&Date.now()-st.later<14*864e5)))return;
  const kn=KNOWN_COURSES.find(x=>keyBase(x.key)===k),n=(kn&&kn.tees&&kn.tees[0].holes.length)||18;let m=0;
  try{const saved=await RStore.getCourse(cr.key).catch(()=>null);const hs=new Set(Object.entries(saved&&saved.greens||{}).filter(([,g])=>g&&g.tee).map(([h])=>+h));
-  if(SB.on())(await sbRows('hole_maps',k).catch(()=>[])).forEach(r=>{if(r.tee_lat!=null)hs.add(+r.hole)});m=hs.size}catch(_){}
+  if(SB.on())sbHere(cr,await sbRows('hole_maps',k).catch(()=>[])).forEach(r=>{if(r.tee_lat!=null)hs.add(+r.hole)});m=hs.size}catch(_){}
  if(m>=n)return;const name=String(cr.name||'your course').replace(/\s+golf (club|course)$/i,'');
  el.innerHTML=`<div class="card" id="homeMap"><b>Map ${esc(name)} for everyone</b><p class="mut" style="margin:4px 0 0">${m?`${m} of ${n} holes are mapped. `:''}Tap the tee, the front, middle and back of each green, and a fairway target on the satellite map: about 15 minutes, at home or as you play. Every golfer there then gets exact distances.</p>
   <div class="gpsActs" style="margin-top:12px"><button type="button" class="pri" data-cm-home="go">${m?'Carry on mapping':'Map my home course'}</button><button type="button" class="later" data-cm-home="later">Not now</button></div></div>`}
