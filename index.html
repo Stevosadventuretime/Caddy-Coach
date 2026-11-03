@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Caddy Coach">
 <style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}#ccSplash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;align-content:center;gap:18px;background:radial-gradient(120% 80% at 50% 35%,#16553c,#0b2f21);color:#f3f6f1;transition:opacity .35s ease}#ccSplash img{width:96px;height:96px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.35)}#ccSplash b{font:760 30px/1 Archivo,'Instrument Sans',system-ui,sans-serif;font-stretch:72%;letter-spacing:.01em}#ccSplash i{display:block;width:120px;height:3px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}#ccSplash i::after{content:'';display:block;height:100%;width:40%;background:#f3c43a;animation:ccLd 1s ease-in-out infinite alternate}@keyframes ccLd{from{transform:translateX(-10%)}to{transform:translateX(160%)}}@media (prefers-reduced-motion:reduce){#ccSplash i::after{animation:none}}#ccSplash.out{opacity:0;pointer-events:none}</style>
-<script>window.CC_VER='bb0baf1395'</script></head><body>
+<script>window.CC_VER='ad027009db'</script></head><body>
 <div id="ccSplash" aria-hidden="true"><img src="icons/icon-192.png" alt=""><b>Caddy Coach</b><i></i></div>
 <script>(function(){let done=0;const go=d=>{if(done++)return;const s=document.getElementById('ccSplash');if(!s)return;setTimeout(()=>{s.classList.add('out');setTimeout(()=>s.remove(),400)},d)};addEventListener('DOMContentLoaded',()=>go(350));addEventListener('load',()=>go(0));setTimeout(()=>go(0),4000)})()</script>
 <title>Caddy Coach</title>
@@ -1547,6 +1547,17 @@ details.fixC .fixBody{display:grid;gap:12px;margin-top:12px}
 .palTab td:not(:first-child),.palTab th:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
 .palTab tr.me td{font-weight:700}
 .palMatch{margin:10px 0 0;font-size:14.5px}
+.games{margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}.games .palMatch:first-child{margin-top:0}.gamesH{margin:0 0 6px;font:600 15px var(--f-ui)}
+.games .gamesH+.palMatch{margin-top:0}
+.rtOpts{display:grid;gap:0;padding:4px 16px}.optRow{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:48px;padding:6px 0;background:none;border:0;border-radius:0;color:var(--ink);font:500 15px var(--f-ui);text-align:left}.optRow+.optRow{border-top:1px solid var(--line)}
+.optRow i{flex:none;position:relative;width:44px;height:26px;border-radius:13px;background:var(--line2)}.optRow i::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .15s}
+.optRow[aria-checked="true"] i{background:var(--chart)}.optRow[aria-checked="true"] i::after{left:21px}
+@media (prefers-reduced-motion:reduce){.optRow i::after{transition:none}}
+.sgBars{display:grid;gap:8px;margin:6px 0 0}.sgRow{display:grid;grid-template-columns:118px 1fr 52px;align-items:center;gap:8px;font-size:14px}
+.sgTrack{position:relative;height:12px;background:var(--line);border-radius:6px}.sgTrack i{position:absolute;top:0;bottom:0;border-radius:6px}.sgTrack i.neg{background:var(--pin)}.sgTrack i.pos{background:var(--chart)}.sgTrack b{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;background:var(--ink)}
+.sgRow output{font-variant-numeric:tabular-nums;font-weight:700;text-align:right}
+.perChips{margin:0 0 10px}
+.seg4{display:grid;gap:4px;grid-template-columns:repeat(4,1fr)}.seg4 button{min-height:40px;padding:0 4px;border-radius:10px;font:600 14px var(--f-ui)}.seg4 button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--canvas)}
 .rtWx{margin:12px 0 0;font-size:13.5px;color:var(--muted);line-height:1.45}.rtWx b{color:var(--ink);font-weight:600;margin-right:4px}
 .shareRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.shareRow button{flex:1 1 140px;min-height:44px}
 .copyBox{width:100%;margin-top:10px;font:12.5px/1.4 ui-monospace,Menlo,monospace;padding:10px;border-radius:10px;border:1px solid var(--line2);background:var(--canvas);color:var(--ink)}
