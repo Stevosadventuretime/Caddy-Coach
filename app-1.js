@@ -1392,7 +1392,7 @@ function rtNewLive(){const {t,hs}=rtHoles(),c=RT.course;const pk=RT.pick&&keyBas
  if(!HOSTED_IN_CLAUDE)setTimeout(()=>gpsSite(c).catch(()=>{}),0);const id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
  return{id,status:'live',createdAt:Date.now(),date:hcpToday(),course:{key:c.key,name:c.name,club:c.club||'',town:c.town||'',lat:c.lat??(pk&&pk.lat)??null,lon:c.lon??(pk&&pk.lon)??null,osm:c.osm||(pk&&pk.osm)||null},tee:{name:t.name,colour:t.colour},range:c.tees[0].holes.length===9?'9':RT.range,
   holes:hs.map(h=>({n:h.n,par:h.par,yards:h.yards,si:h.si,score:null})),i:0,cardSource:c.source,...(()=>{const hc=rtCourseHcp(hs,t);return hc?{ch:hc.ch,hi:hc.hi,cr:hc.cr,sl:hc.sl}:{}})(),
-  notes:Object.assign({},c.notes||{}),others:(RT.pals||[]).map(p=>({name:p.name,hi:p.hi,ch:palCh(p,hs,t),sc:hs.map(()=>null)})),grp:RT.grp||null,wx:WX.now?Object.assign({},WX.now):null}}
+  notes:Object.assign({},c.notes||{}),others:(RT.pals||[]).map(p=>({name:p.name,hi:p.hi,ch:palCh(p,hs,t),sc:hs.map(()=>null)})),games:(()=>{const g=RT.games||gamesGet(),n=(RT.pals||[]).length;return n?{skins:!!g.skins,fbb:!!g.fbb&&n===3,fbbP:g.fbbP}:null})(),grp:RT.grp||null,wx:WX.now?Object.assign({},WX.now):null}}
 let _liveT=0;function rtSaveLive(){clearTimeout(_liveT);const r=RT.live;if(r&&r.mapOnly)return;if(r&&r.grp&&typeof grpPush==='function')grpPush(r);_liveT=setTimeout(()=>{RStore.setLive(r).catch(e=>console.error(e))},350)}
 function tally(holes){let total=0,par=0,thru=0;const k={e:0,b:0,p:0,o:0,d:0};for(const h of holes){if(h.score==null)continue;thru++;total+=h.score;par+=h.par;const d=h.score-h.par;if(d<=-2)k.e++;else if(d===-1)k.b++;else if(d===0)k.p++;else if(d===1)k.o++;else k.d++}
  const fullPar=holes.reduce((a,h)=>a+h.par,0);return{total,par,toPar:total-par,thru,k,fullPar}}
@@ -1471,7 +1471,7 @@ function rtHcpBoxHTML(t,hs){const rec=typeof HcpStore!=='undefined'&&HcpStore.re
  return `<form class="rtHcp" data-rt-form="tee-rate"><p>Add the course rating and slope for the ${esc(t.name)} tees to play with your handicap (index ${WHS.fmt(hi)}). They're on the scorecard or the club's website.</p>
   <div class="hcIn"><label>Course rating<input id="rtCR" inputmode="decimal" autocomplete="off" maxlength="4" placeholder="70.4"></label><label>Slope<input id="rtSl" inputmode="numeric" autocomplete="off" maxlength="3" placeholder="125"></label></div>
   ${RT.rateErr?`<p class="rtMsg" role="alert">${esc(RT.rateErr)}</p>`:''}<button type="submit" style="margin-top:10px;width:100%">Save rating and slope</button></form>`}
-function rtPlayHTML(){trkStart();const r=RT.live,i=r.i,h=r.holes[i],tl=tally(r.holes),n=r.holes.length,last=i===n-1;
+function rtPlayHTML(){trkStart();wakeKeep();const r=RT.live,i=r.i,h=r.holes[i],tl=tally(r.holes),n=r.holes.length,last=i===n-1;
  const sc=h.score,q=[-1,0,1,2,3].map(d=>h.par+d).filter(v=>v>=1),names={'-2':'Eagle','-1':'Birdie','0':'Par','1':'Bogey','2':'Double','3':'Triple'};
  const nt=rtNet(r),st=nt?nt.sh[i]:null,netNames={'-2':'net eagle','-1':'net birdie','0':'net par','1':'net bogey'};
  const cap=sc==null?'Tap a score':(names[String(sc-h.par)]||(sc-h.par<-2?'Albatross':`+${sc-h.par}`))+(nt&&st?` · ${netNames[String(sc-st-h.par)]||(sc-st-h.par<-2?'net albatross':`net +${sc-st-h.par}`)}`:'')+(nt?` · ${rtPts(h,st)} pt${rtPts(h,st)===1?'':'s'}`:'');
@@ -1489,8 +1489,10 @@ function rtPlayHTML(){trkStart();const r=RT.live,i=r.i,h=r.holes[i],tl=tally(r.h
    <div class="hsRow"><span id="hsPt">Putts</span><div class="seg5" role="group" aria-labelledby="hsPt">${[0,1,2,3,4].map(v=>`<button type="button" data-rt-putts="${v}" aria-pressed="${h.putts===v}">${v===4?'4+':v}</button>`).join('')}</div></div>
    ${h.putts>=1?`<div class="hsRow"><span id="hsFp">First putt</span><div class="seg6" role="group" aria-labelledby="hsFp">${FP.map(([k,l])=>`<button type="button" data-rt-fp="${k}" aria-pressed="${h.fp===k}">${l.replace(' ft','')}</button>`).join('')}</div></div>`:''}
    <div class="hsRow"><span>Bunker</span><button type="button" class="hsTog" data-rt-sand aria-pressed="${!!h.sand}">${h.sand?'Played from a greenside bunker':'Greenside bunker? Tap if you were in one'}</button></div>
+   <div class="hsRow"><span id="hsPen">Penalties</span><div class="seg4" role="group" aria-labelledby="hsPen">${[0,1,2,3].map(v=>`<button type="button" data-rt-pen="${v}" aria-pressed="${(h.pen||0)===v&&h.pen!=null}">${v===3?'3+':v}</button>`).join('')}</div></div>
    ${h.putts!=null&&sc!=null&&sc-h.putts>=1?`<p class="hsGir">${sc-h.putts<=h.par-2?'Green in regulation':'Missed the green in regulation'} (on in ${sc-h.putts})</p>`:''}</div></div>
  ${palsPlayHTML(r)}${(()=>{if(r.grp){if(Date.now()-GRP.t>14000)setTimeout(grpPoll,0);grpLoop()}return grpLiveHTML(r)})()}
+ ${HOSTED_IN_CLAUDE?'':`<div class="rtOpts card">${[['opt-autonext','cc_autonext','Next hole when you walk off the green'],['opt-wake','cc_wake','Keep the screen on']].map(([a,k,l])=>`<button type="button" class="optRow" data-rt="${a}" role="switch" aria-checked="${!!lsGet(k,1)}"><span>${l}</span><i aria-hidden="true"></i></button>`).join('')}</div>`}
  <div class="rtNav"><button type="button" data-rt="prev" ${i===0?'disabled':''}>Previous hole</button>${last?`<button type="button" class="pri" data-rt="finish">Finish round</button>`:`<button type="button" class="pri" data-rt="next">Next hole</button>`}</div>
  <div class="card"><h2>Scorecard</h2><p class="mut" style="margin:0 0 10px;font-size:13.5px">Tap a score to go to that hole.${nt?' Dots show the holes you get shots on.':''}</p>${cardGrid(r.holes,{tap:1,cur:i,sh:nt&&nt.sh})}${scKey()}
   ${RT.finArm?`<p class="rtMsg" role="alert">${n-tl.thru} hole${n-tl.thru===1?' has':'s have'} no score. Finish anyway?</p><div class="rtTwo" style="margin-top:10px"><button type="button" data-rt="finish-no">Keep playing</button><button type="button" class="pri" data-rt="finish-yes">Finish round</button></div>`:''}
@@ -1501,7 +1503,7 @@ function rtSummary(r){const tl=tally(r.holes),nt=rtNet(r);
  <div class="rtStats"><div><b>${tl.k.e}</b><span>Eagles+</span></div><div><b>${tl.k.b}</b><span>Birdies</span></div><div><b>${tl.k.p}</b><span>Pars</span></div><div><b>${tl.k.o}</b><span>Bogeys</span></div><div><b>${tl.k.d}</b><span>Double+</span></div></div>${rtStatsHTML(r.holes)}`}
 const rtShareRow=()=>`${lbRoundHTML(RT.doneRound||RT.detail)}<div class="shareRow"><button type="button" data-rt="share-card">Share this round</button><button type="button" data-rt="copy-card">Copy scorecard</button></div>${RT.copyText?`<textarea class="copyBox" readonly rows="6" aria-label="Your scorecard as text">${esc(RT.copyText)}</textarea>`:''}`;
 function rtDoneHTML(){const r=RT.doneRound;return `<div class="card"><p class="rtLab" style="margin-top:0">Round saved</p>${rtSummary(r)}</div>
- ${palsSummaryHTML(r)}${r.grp?grpLiveHTML(r):''}${hcpRoundHTML(r)}<div class="card"><h2>Scorecard</h2>${cardGrid(r.holes,{sh:rtShots(r)})}${scKey()}${rtShareRow()}</div>
+ ${palsSummaryHTML(r)}${r.grp?grpLiveHTML(r):''}${sgHTML([r],'Strokes gained this round')}${hcpRoundHTML(r)}<div class="card"><h2>Scorecard</h2>${cardGrid(r.holes,{sh:rtShots(r)})}${scKey()}${rtShareRow()}</div>
  <div class="rtTwo"><button type="button" data-rt="to-mine">My rounds</button><button type="button" class="pri" data-rt="find">New round</button></div>`}
 function fmtRoundDate(d){try{return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}catch(_){return d}}
 function rtListHTML(){const rs=RT.rounds;
@@ -1511,7 +1513,7 @@ function rtListHTML(){const rs=RT.rounds;
  const best=full.length?Math.min(...full.map(t=>t.total)):null,avg=full.length?full.reduce((a,t)=>a+t.toPar,0)/full.length:null;
  return `<div class="rtOver"><div><b>${rs.length}</b><span>Round${rs.length===1?'':'s'} played</span></div><div><b>${best??'–'}</b><span>Best 18</span></div><div><b>${avg==null?'–':toParShort(Math.round(avg*10)/10)}</b><span>Average vs par</span></div></div>
  <div class="card"><div class="rtList">${rs.map(r=>{const t=tally(r.holes);return `<button type="button" class="rtRow" data-rt-open="${esc(r.id)}"><span><b>${esc(r.course.name)}</b><small>${fmtRoundDate(r.date)} · ${esc(r.tee.name)} tees · ${r.holes.length===9?'9 holes':t.thru<18?`${t.thru} holes`:'18 holes'}</small></span><span class="rtR">${t.total||'–'}<small> ${t.thru?toParShort(t.toPar):''}${r.ch!=null&&t.thru?` · ${rtNet(r).pts} pts`:''}</small></span></button>`}).join('')}</div><button type="button" class="rtLink" data-rt="csv" style="margin-top:10px">Download all your rounds as a spreadsheet</button></div>${rtTrendsHTML(rs)}`}
-function rtDetailHTML(){const r=RT.detail;return `<div class="card">${backBtn('list','My rounds')}${rtSummary(r)}</div>${palsSummaryHTML(r)}${hcpRoundHTML(r)}<div class="card"><h2>Scorecard</h2>${cardGrid(r.holes,{sh:rtShots(r)})}${scKey()}${rtShareRow()}</div>
+function rtDetailHTML(){const r=RT.detail;return `<div class="card">${backBtn('list','My rounds')}${rtSummary(r)}</div>${palsSummaryHTML(r)}${sgHTML([r],'Strokes gained this round')}${hcpRoundHTML(r)}<div class="card"><h2>Scorecard</h2>${cardGrid(r.holes,{sh:rtShots(r)})}${scKey()}${rtShareRow()}</div>
  <button type="button" class="danger" data-rt="del-round" style="min-height:48px">${RT.delArm?'Tap again to delete this round':'Delete round'}</button>`}
 
 // ---------- events ----------
@@ -1535,6 +1537,8 @@ document.addEventListener('click',async e=>{const p8=$('p8');if(!p8||!p8.contain
  if(d.rtMh){RT.mh=+d.rtMh;const m=$('rtMName');if(m)RT.query=m.value;rtRender();return}
  if(d.rtStep){const h=RT.live.holes[RT.live.i];rtSetScore((h.score??h.par)+(+d.rtStep));return}
  if(d.rtSet){rtSetScore(+d.rtSet);return}
+ if(d.rtPer!=null){RT.per=d.rtPer;lsSet('cc_per',d.rtPer);rtRender();return}
+ if(d.rtPen!=null){const h=RT.live.holes[RT.live.i],v=+d.rtPen;h.pen=h.pen===v?null:v;rtSaveLive();rtRender();return}
  if(d.rtPutts!=null){const h=RT.live.holes[RT.live.i],v=+d.rtPutts;h.putts=h.putts===v?null:v;if(h.score==null&&h.putts!=null){h.score=h.par;trkLearn(h)}if(h.putts!=null&&h.score!=null&&h.putts>h.score)h.score=h.putts;rtSaveLive();rtRender();return}
  if(d.rtFw){const h=RT.live.holes[RT.live.i];h.fw=h.fw===d.rtFw?null:d.rtFw;rtSaveLive();rtRender();return}
  if(d.rtFp){const h=RT.live.holes[RT.live.i];h.fp=h.fp===d.rtFp?null:d.rtFp;rtSaveLive();rtRender();return}
@@ -1563,6 +1567,7 @@ document.addEventListener('click',async e=>{const p8=$('p8');if(!p8||!p8.contain
  if(a==='start'){rtSaveCourse();RT.live=rtNewLive();RT.view='play';RT.edit=false;RT.finArm=false;await RStore.setLive(RT.live).catch(()=>{});RT.liveSaved=RT.live;rtRender();window.scrollTo(0,0);return}
  if(a==='resume'){RT.live=RT.liveSaved;RT.view='play';RT.edit=false;RT.finArm=false;rtRender();window.scrollTo(0,0);return}
  if(a==='abandon'||a==='abandon-play'){if(!RT.abArm){RT.abArm=true;return rtRender()}RT.abArm=false;trkStop();clearTimeout(_liveT);await RStore.setLive(null).catch(()=>{});RT.live=null;RT.liveSaved=null;RT.view='find';await rtLoadMyCourses();rtRender();return}
+ if(a==='opt-autonext'||a==='opt-wake'){const k=a==='opt-wake'?'cc_wake':'cc_autonext';lsSet(k,lsGet(k,1)?0:1);if(a==='opt-wake'&&!lsGet(k,1))wakeDrop();rtRender();return}
  if(a==='prev'||a==='next'){const r=RT.live;if(a==='next'&&r.holes[r.i].score==null)r.holes[r.i].score=r.holes[r.i].par;if(a==='next')(r.others||[]).forEach(p=>{if(p.sc[r.i]==null)p.sc[r.i]=r.holes[r.i].par});RT.noteEd=false;r.i=Math.max(0,Math.min(r.holes.length-1,r.i+(a==='next'?1:-1)));RT.edit=false;rtSaveLive();rtRender();window.scrollTo(0,0);return}
  if(a==='hole-edit'){RT.edit=!RT.edit;return rtRender()}
  if(a==='finish'){const r=RT.live,h=r.holes[r.i];if(h.score==null)h.score=h.par;const tl=tally(r.holes);if(tl.thru<r.holes.length){RT.finArm=true;rtRender();const m=$('rtBody').querySelector('[role=alert]');if(m)m.scrollIntoView({block:'center'});return}return rtFinish()}
@@ -1697,7 +1702,7 @@ function clubHTML(yds,lab){const k=clubPick(yds);if(!k)return '';
 function bagTrackedHTML(sel){const D=BG.dist||{},ids=bagOrder(Object.keys(D)).filter(id=>D[id].n>=1);
  if(!ids.length)return `<div class="card"><h2>From your rounds</h2><p class="mut" style="margin:0">On the hole map, tap “Mark a shot from here” before each shot. Caddy Coach measures how far every club really goes and offers to update these yardages.</p></div>`;
  return `<div class="card"><h2>From your rounds</h2><p class="mut" style="margin:0 0 8px">Measured by GPS between the shots you marked, so it includes the roll. ${ids.some(id=>D[id].n<3)?'A few shots per club give a steadier number.':''}</p>
-  <div class="bgTr">${ids.map(id=>{const d=D[id],y=(BG.bag&&BG.bag.yards[id])||{},woods=/^(D|\dW)$/.test(id),cur=woods?y.total:y.carry,diff=cur?d.avg-cur:null;return `<div class="bgTrRow${id===sel?' on':''}"><div><b>${esc(clubName(id))}</b><small>${d.n} shot${d.n===1?'':'s'}${d.n>1?` · ${d.lo}–${d.hi} yds`:''}${cur?` · your ${woods?'total':'carry'} ${cur}`:''}</small></div><span class="bgTrV">${d.avg}</span>${d.n>=2&&(diff==null||Math.abs(diff)>=4)?`<button type="button" class="chip" data-bg="use-dist" data-id="${id}">Use as ${woods?'total':'carry'}</button>`:''}</div>`}).join('')}</div></div>`}
+  <div class="bgTr">${ids.map(id=>{const d=D[id],y=(BG.bag&&BG.bag.yards[id])||{},woods=/^(D|\dW)$/.test(id),cur=woods?y.total:y.carry,diff=cur?d.avg-cur:null;return `<div class="bgTrRow${id===sel?' on':''}"><div><b>${esc(clubName(id))}</b><small>${d.n} shot${d.n===1?'':'s'}${d.n>=5?` · most go ${d.p10}–${d.p90} yds (a ${d.p90-d.p10} yd spread)`:d.n>1?` · ${d.lo}–${d.hi} yds`:''}${cur?` · your ${woods?'total':'carry'} ${cur}`:''}</small></div><span class="bgTrV">${d.avg}</span>${d.n>=2&&(diff==null||Math.abs(diff)>=4)?`<button type="button" class="chip" data-bg="use-dist" data-id="${id}">Use as ${woods?'total':'carry'}</button>`:''}</div>`}).join('')}</div></div>`}
 async function initBag(){clubDistances().then(d=>{BG.dist=d;if(!$('p9').hidden&&!BG.edit)renderBag()}).catch(()=>{});if(!BG.bag)BG.bag=await BagStore.load();if(!BG.sel||!BG.bag.clubs.includes(BG.sel))BG.sel=BG.bag.clubs.find(id=>!(BG.bag.yards[id]||{}).carry)||BG.bag.clubs[0];renderBag()}
 function renderBag(){const el=$('bgBody');if(!el)return;const b=BG.bag,ids=bagOrder(b.clubs),sel=BG.sel,y=b.yards[sel]||{};
  const set=ids.filter(id=>(b.yards[id]||{}).carry).length,max=Math.max(1,...ids.map(id=>Math.max((b.yards[id]||{}).carry||0,(b.yards[id]||{}).total||0)));
@@ -2140,10 +2145,24 @@ if(!HOSTED_IN_CLAUDE){const f=$('rtFoot');if(f)f.innerHTML='Course data © <a hr
 
 // ---------- learning greens from your round (standalone): where you spend a minute before entering your score is the green ----------
 const TRK={watch:null,fixes:[],start:{},hole:null};
+// next hole by itself: once a hole is scored (yours and your group's), walking 40 m from where you were when it was scored
+// moves the card on. Only from the furthest hole you've reached, so going back to fix an old score never jumps you forward.
+function autoNext(f){const r=RT.live;if(!r||RT.view!=='play'||!lsGet('cc_autonext',1)||f.acc>30)return;const i=r.i,h=r.holes[i];
+ if(h.score==null||i>=r.holes.length-1||r.holes[i+1].score!=null||(r.others||[]).some(p=>p.sc[i]==null)){if(RT.spot&&RT.spot.i!==i)RT.spot=null;return}
+ if(!RT.spot||RT.spot.id!==r.id||RT.spot.i!==i){RT.spot={id:r.id,i,lat:f.lat,lon:f.lon};return}
+ if(mBetween(RT.spot,f)<40)return;RT.spot=null;rtGoHole(i+1);toast(`On to hole ${r.holes[i+1].n}. You walked off hole ${h.n}.`)}
+function rtGoHole(j){const r=RT.live;if(!r)return;r.i=Math.max(0,Math.min(r.holes.length-1,j));RT.edit=false;RT.noteEd=false;rtSaveLive();
+ if(!$('gpsOv').hidden){GPS.tap=null;GPS.setMode=false;GPS.pendingGreen=null;GPS.framed=false;gpsTop();if(!HOSTED_IN_CLAUDE)gpsDrawHole(true);gpsPanel();if(typeof glanceRender==='function')glanceRender()}
+ rtRender()}
+// the screen stays on for the whole round (phones dim and lock mid-hole otherwise); you can turn it off on the round screen
+async function wakeKeep(){if(!RT.live||!lsGet('cc_wake',1)||RT.wake||!navigator.wakeLock||document.visibilityState!=='visible')return;
+ try{RT.wake=await navigator.wakeLock.request('screen');RT.wake.addEventListener('release',()=>{RT.wake=null})}catch(_){RT.wake=null}}
+function wakeDrop(){try{RT.wake&&RT.wake.release()}catch(_){}RT.wake=null}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&RT.live&&RT.view==='play')wakeKeep()});
 function trkStart(){if(HOSTED_IN_CLAUDE||TRK.watch!=null||!navigator.geolocation||!RT.live)return;gpsCourse().then(c=>c&&setTimeout(gfEnsure,1500)).catch(()=>{});
  TRK.watch=navigator.geolocation.watchPosition(p=>{const f={t:Date.now(),lat:p.coords.latitude,lon:p.coords.longitude,acc:p.coords.accuracy};TRK.fixes.push(f);TRK.fixes=TRK.fixes.filter(x=>f.t-x.t<600000);
-  const r=RT.live;if(!r)return;const h=r.holes[r.i];if(TRK.hole!==h.n){TRK.hole=h.n;TRK.start[h.n]=null}if(!TRK.start[h.n]&&f.acc<25)TRK.start[h.n]={lat:f.lat,lon:f.lon}},()=>{},{enableHighAccuracy:true,maximumAge:5000,timeout:30000})}
-function trkStop(){if(TRK.watch!=null){navigator.geolocation.clearWatch(TRK.watch);TRK.watch=null}TRK.fixes=[];TRK.start={};TRK.hole=null}
+  const r=RT.live;if(!r)return;const h=r.holes[r.i];if(TRK.hole!==h.n){TRK.hole=h.n;TRK.start[h.n]=null}if(!TRK.start[h.n]&&f.acc<25)TRK.start[h.n]={lat:f.lat,lon:f.lon};autoNext(f)},()=>{},{enableHighAccuracy:true,maximumAge:5000,timeout:30000})}
+function trkStop(){wakeDrop();if(TRK.watch!=null){navigator.geolocation.clearWatch(TRK.watch);TRK.watch=null}TRK.fixes=[];TRK.start={};TRK.hole=null}
 async function trkLearn(h){if(HOSTED_IN_CLAUDE||!RT.live)return;const now=Date.now(),all=TRK.fixes.filter(f=>now-f.t<100000&&f.acc<20).sort((a,b)=>a.t-b.t);if(all.length<4)return;
  let pts=[];for(const a of all){const c=all.filter(f=>mBetween(a,f)<22);if(c.length>=pts.length)pts=c}if(pts.length<4)return;
  const cen={lat:pts.reduce((a,f)=>a+f.lat,0)/pts.length,lon:pts.reduce((a,f)=>a+f.lon,0)/pts.length};

@@ -469,7 +469,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-shot],[dat
 // every measured shot from your rounds, by club (GPS distance includes the roll)
 async function clubDistances(){let rs=[];try{rs=await RStore.list()}catch(_){}if(RT.live)rs=rs.concat([RT.live]);const by={};
  for(const r of rs)for(const h of r.holes||[])for(const s of holeShots(h)){if(s.yds==null||s.yds<15||s.yds>380||!s.club)continue;(by[s.club]=by[s.club]||[]).push(s.yds)}
- const out={};for(const k in by){const a=by[k].slice().sort((x,y)=>x-y),n=a.length,trim=n>=5?a.slice(Math.floor(n*0.15),Math.ceil(n*0.85)):a;out[k]={n,avg:Math.round(trim.reduce((p,q)=>p+q,0)/trim.length),lo:a[0],hi:a[n-1]}}
+ const out={};for(const k in by){const a=by[k].slice().sort((x,y)=>x-y),n=a.length,trim=n>=5?a.slice(Math.floor(n*0.15),Math.ceil(n*0.85)):a;const q=f=>a[Math.min(n-1,Math.max(0,Math.round(f*(n-1))))];out[k]={n,avg:Math.round(trim.reduce((p,q)=>p+q,0)/trim.length),lo:a[0],hi:a[n-1],p10:q(.1),p90:q(.9)}}
  return out}
 
 // ---- hole notes: yours for each hole of a course, shown when you get there ----
@@ -484,7 +484,7 @@ function palCh(p,hs,t){if(p.hi==null||!t||!(+t.rating>0)||!(+t.slope>0))return n
 function palsHTML(t,hs){const P=RT.pals||[];
  return `<div class="pals"><p class="rtLab" style="margin:0 0 6px">Playing with</p>
   ${P.length?`<ul class="palList">${P.map((p,i)=>{const ch=palCh(p,hs,t);return `<li><b>${esc(p.name)}</b><span>${p.hi==null?'No handicap':`Index ${WHS.fmt(p.hi)}${ch!=null?` · plays off ${chTxt(ch)}`:''}`}</span><button type="button" class="rtLink" data-pal-del="${i}" aria-label="Remove ${esc(p.name)}">Remove</button></li>`}).join('')}</ul>`:''}
-  ${P.length<3?(RT.palAdd?`<form class="palForm" data-rt-form="pal"><input id="palName" maxlength="20" placeholder="Name" aria-label="Their name" autocomplete="off"><input id="palHi" inputmode="decimal" maxlength="5" placeholder="Index" aria-label="Their handicap index (optional)" autocomplete="off"><button type="submit">Add</button></form>${RT.palErr?`<p class="rtMsg" role="alert">${esc(RT.palErr)}</p>`:''}`:`<button type="button" class="rtLink" data-rt="pal-add">${P.length?'Add another player':'Add players to keep their scores too'}</button>`):''}</div>`}
+  ${P.length<3?(RT.palAdd?`<form class="palForm" data-rt-form="pal"><input id="palName" maxlength="20" placeholder="Name" aria-label="Their name" autocomplete="off"><input id="palHi" inputmode="decimal" maxlength="5" placeholder="Index" aria-label="Their handicap index (optional)" autocomplete="off"><button type="submit">Add</button></form>${RT.palErr?`<p class="rtMsg" role="alert">${esc(RT.palErr)}</p>`:''}`:`<button type="button" class="rtLink" data-rt="pal-add">${P.length?'Add another player':'Add players to keep their scores too'}</button>`):''}${gamesSetupHTML()}</div>`}
 const palShots=(p,holes)=>{if(p.ch==null)return null;const {r:rk}=WHS.ranks(holes);return holes.map((h,i)=>WHS.strokesOn(p.ch,rk[i],holes.length))};
 function palTotals(r){return(r.others||[]).map(p=>{const sh=palShots(p,r.holes);let g=0,n=0,pts=0,net=0;r.holes.forEach((h,i)=>{const s=p.sc[i];if(s==null)return;n++;g+=s;if(sh){pts+=rtPts({score:s,par:h.par},sh[i]);net+=s-sh[i]}});return{p,g,n,pts:sh?pts:null,net:sh?net:null}})}
 // match play against each friend: the higher handicap gets the difference, on the hardest holes
@@ -499,11 +499,44 @@ function matchStatus(r,p){const diff=(p.ch??0)-(r.ch??0),{r:rk}=WHS.ranks(r.hole
  return{txt:up===0?`All square thru ${played}`:`${up>0?'You':p.name} ${Math.abs(up)} up thru ${played}${Math.abs(up)===left?' (dormie)':''}`,up,done:false}}
 function palsPlayHTML(r){const O=r.others||[];if(!O.length)return '';const i=r.i,h=r.holes[i];
  return `<div class="card palsPlay"><h2>Your group</h2>${O.map((p,k)=>{const s=p.sc[i],sh=palShots(p,r.holes),st=sh?sh[i]:0;const m=matchStatus(r,p);return `<div class="palRow"><div><b>${esc(p.name)}</b><small>${st>0?`${st} shot${st===1?'':'s'} here · `:''}${esc(m.txt)}</small></div>
-   <div class="palStep"><button type="button" data-pal-step="${k}:-1" aria-label="${esc(p.name)}: one fewer">–</button><output>${s??'–'}</output><button type="button" data-pal-step="${k}:1" aria-label="${esc(p.name)}: one more">+</button></div></div>`}).join('')}</div>`}
+   <div class="palStep"><button type="button" data-pal-step="${k}:-1" aria-label="${esc(p.name)}: one fewer">–</button><output>${s??'–'}</output><button type="button" data-pal-step="${k}:1" aria-label="${esc(p.name)}: one more">+</button></div></div>`}).join('')}${gamesHTML(r)}</div>`}
 function palsSummaryHTML(r){if(!(r.others||[]).length)return '';const me=rtNet(r),tl=tally(r.holes),rows=[{name:'You',g:tl.total,n:tl.thru,pts:me?me.pts:null,net:me?me.net:null}].concat(palTotals(r).map(x=>({name:x.p.name,g:x.g,n:x.n,pts:x.pts,net:x.net})));
  const usePts=rows.every(x=>x.pts!=null);rows.sort((a,b)=>usePts?b.pts-a.pts:a.g-b.g);
  return `<div class="card"><h2>Your group</h2><table class="palTab"><thead><tr><th>Player</th><th>Gross</th><th>Net</th><th>Points</th></tr></thead><tbody>${rows.map(x=>`<tr${x.name==='You'?' class="me"':''}><td>${esc(x.name)}</td><td>${x.n?x.g:'–'}</td><td>${x.net??'–'}</td><td>${x.pts??'–'}</td></tr>`).join('')}</tbody></table>
-  ${(r.others||[]).map(p=>`<p class="palMatch">Match play against ${esc(p.name)}: <b>${esc(matchStatus(r,p).txt)}</b></p>`).join('')}</div>`}
+  ${(r.others||[]).map(p=>`<p class="palMatch">Match play against ${esc(p.name)}: <b>${esc(matchStatus(r,p).txt)}</b></p>`).join('')}${gamesHTML(r,true)}</div>`}
+
+// ---- side games with your group: skins, and four-ball better ball for a four ----
+const GAME_DEF={skins:false,fbb:false,fbbP:0};
+function gamesGet(){const g=Object.assign({},GAME_DEF,lsGet('cc_games',null)||{});g.fbbP=Math.max(0,Math.min(2,+g.fbbP||0));return g}
+function gamePlayers(r){return[{name:'You',ch:r.ch??null,sc:r.holes.map(h=>h.score??null)}].concat((r.others||[]).map(p=>({name:p.name,ch:p.ch??null,sc:p.sc})))}
+// skins: the lowest score on a hole wins it outright; a tie carries the skin on to the next hole. Net when everyone has a handicap.
+function skinsCalc(r){const P=gamePlayers(r);if(P.length<2)return null;const N=r.holes.length,{r:rk}=WHS.ranks(r.holes),net=P.every(p=>p.ch!=null);
+ const won=P.map(()=>0),holes=[];let carry=1;
+ for(let i=0;i<N;i++){if(P.some(p=>p.sc[i]==null)){holes.push(null);continue}
+  const s=P.map(p=>p.sc[i]-(net?WHS.strokesOn(p.ch,rk[i],N):0)),lo=Math.min(...s),w=s.filter(x=>x===lo).length===1?s.indexOf(lo):-1;
+  if(w>=0){won[w]+=carry;holes.push({w,v:carry});carry=1}else{holes.push({w:-1,v:0});carry++}}
+ return{P,won,holes,carry:carry-1,net}}
+// four-ball better ball Stableford: you and a partner against the other two, the better points of each pair count on every hole.
+// Each player gets 85% of their course handicap, the allowance the World Handicap System recommends for this format.
+function fbbCalc(r,pi){const P=gamePlayers(r);if(P.length!==4)return null;const pa=[0,1+(pi||0)],pb=[1,2,3].filter(k=>k!==pa[1]);
+ const N=r.holes.length,{r:rk}=WHS.ranks(r.holes),hasH=P.every(p=>p.ch!=null),ph=P.map(p=>hasH?Math.round(p.ch*0.85):0);
+ let A=0,B=0,thru=0;const per=[];
+ for(let i=0;i<N;i++){const h=r.holes[i],pts=P.map((p,k)=>p.sc[i]==null?null:rtPts({score:p.sc[i],par:h.par},WHS.strokesOn(ph[k],rk[i],N)));
+  const a=Math.max(...pa.map(k=>pts[k]??-1)),b=Math.max(...pb.map(k=>pts[k]??-1));if(a<0||b<0){per.push(null);continue}thru++;A+=a;B+=b;per.push([a,b])}
+ return{pa,pb,A,B,thru,per,ph,hasH,names:[pa.map(k=>P[k].name).join(' & '),pb.map(k=>P[k].name).join(' & ')]}}
+function skinsTxt(s){const ord=s.P.map((p,k)=>({n:p.name,w:s.won[k]})).sort((a,b)=>b.w-a.w);return ord.map(x=>`${x.n} ${x.w}`).join(' · ')+(s.carry?` · ${s.carry} carried over`:'')}
+function fbbTxt(f){if(!f.thru)return `${f.names[0]} v ${f.names[1]}: not started`;const d=f.A-f.B,pt=n=>n+(n===1?' pt':' pts');return `${f.names[0]} ${pt(f.A)} v ${f.names[1]} ${pt(f.B)}${f.thru<f.per.length?` thru ${f.thru}`:''}${d===0?' (level)':d>0?` (${f.names[0]} lead by ${d})`:` (${f.names[1]} lead by ${-d})`}`}
+function gamesHTML(r,end){const g=r.games||{};if(!(r.others||[]).length||(!g.skins&&!g.fbb))return '';const L=[];
+ if(g.skins){const s=skinsCalc(r);if(s)L.push(`<p class="palMatch"><b>Skins${s.net?'':' (gross)'}:</b> ${esc(skinsTxt(s))}</p>`)}
+ if(g.fbb){const f=fbbCalc(r,g.fbbP);if(f)L.push(`<p class="palMatch"><b>Four-ball better ball${f.hasH?'':' (gross)'}:</b> ${esc(fbbTxt(f))}</p>`)}
+ return L.length?`<div class="games">${end?'<h3 class="gamesH">Side games</h3>':''}${L.join('')}</div>`:''}
+function gamesText(r){const g=r.games||{},L=[];if(g.skins){const s=skinsCalc(r);if(s)L.push('Skins: '+skinsTxt(s))}if(g.fbb){const f=fbbCalc(r,g.fbbP);if(f)L.push('Four-ball better ball: '+fbbTxt(f))}return L}
+function gamesSetupHTML(){const P=RT.pals||[];if(!P.length)return '';const g=RT.games||(RT.games=gamesGet());
+ return `<div class="gamesSet"><p class="rtLab" style="margin:12px 0 6px">Side games</p><div class="chips" role="group" aria-label="Side games"><button type="button" class="chip" data-game="skins" aria-pressed="${!!g.skins}">Skins</button>${P.length===3?`<button type="button" class="chip" data-game="fbb" aria-pressed="${!!g.fbb}">Four-ball better ball</button>`:''}</div>
+  ${P.length===3&&g.fbb?`<p class="rtLab" style="margin:10px 0 6px">Your partner</p><div class="chips" role="group" aria-label="Your partner">${P.map((p,i)=>`<button type="button" class="chip" data-game-p="${i}" aria-pressed="${g.fbbP===i}">${esc(p.name)}</button>`).join('')}</div>`:''}
+  <p class="mut" style="font-size:13px;margin:8px 0 0">${P.length===3?'':'Four-ball better ball needs four players. '}Match play against each player is always worked out for you.</p></div>`}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-game],[data-game-p]');if(!b)return;const g=RT.games||gamesGet();
+ if(b.dataset.game)g[b.dataset.game]=!g[b.dataset.game];else g.fbbP=+b.dataset.gameP;lsSet('cc_games',g);RT.games=g;rtRender()});
 
 // ---- share cards: a picture of your round or your swing, for WhatsApp, Instagram or anywhere ----
 const SC_FONT='"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
@@ -731,8 +764,9 @@ function roundText(r){const tl=tally(r.holes),nt=rtNet(r),st=rtStats(r.holes),L=
  L.push(`${r.course.name} · ${r.tee.name} tees · ${fmtRoundDate(r.date)}`);
  L.push(`Score ${tl.total} (${toParShort(tl.toPar)})${nt?` · Net ${nt.net} · ${nt.pts} Stableford points · course handicap ${chTxt(r.ch)}`:''}`);
  L.push('Hole  '+r.holes.map(h=>String(h.n).padStart(3)).join(''));L.push('Par   '+r.holes.map(h=>String(h.par).padStart(3)).join(''));L.push('Score '+r.holes.map(h=>String(h.score??'-').padStart(3)).join(''));
- if(st.pN)L.push(`Putts ${st.putts}${st.fwN?` · Fairways ${st.fw}/${st.fwN}`:''} · Greens ${st.gir}/${st.girN}`);
+ if(st.pN)L.push(`Putts ${st.putts}${st.fwN?` · Fairways ${st.fw}/${st.fwN}`:''} · Greens ${st.gir}/${st.girN}`);if(st.penN)L.push(`Penalty shots ${st.pen}`);
  (r.others||[]).forEach(p=>{const g=p.sc.reduce((a,v)=>a+(v||0),0);L.push(`${p.name}: ${g}`)});
+ (r.others||[]).forEach(p=>L.push(`Match play v ${p.name}: ${matchStatus(r,p).txt}`));if(typeof gamesText==='function')L.push(...gamesText(r));
  return L.join('\n')}
 function roundsCSV(rs){const head=['Date','Course','Tees','Holes','Par','Score','To par','Course handicap','Net','Stableford','Putts','Fairways hit','Fairways','Greens in regulation'].concat(Array.from({length:18},(_,i)=>'H'+(i+1)));
  const q=v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
@@ -756,25 +790,75 @@ const shotsTxt=n=>n===0?'No shots':n>0?`${n} shot${n===1?'':'s'}`:`Give back ${-
 const chTxt=ch=>ch<0?'+'+(-ch):String(ch);
 // ---- round stats: fairways, greens in regulation, putts ----
 const FP=[['a','Under 3 ft'],['b','3–6 ft'],['c','6–10 ft'],['d','10–20 ft'],['e','20–40 ft'],['f','40 ft+']];
-function rtStats(holes){let fw=0,fwN=0,fl=0,fr=0,gir=0,girN=0,putts=0,pN=0,ud=0,udN=0,sand=0,sandN=0,three=0,one=0;const fp={};
- for(const h of holes){if(h.score==null)continue;
+function rtStats(holes){let fw=0,fwN=0,fl=0,fr=0,gir=0,girN=0,putts=0,pN=0,ud=0,udN=0,sand=0,sandN=0,three=0,one=0,pen=0,penN=0;const fp={};
+ for(const h of holes){if(h.score==null)continue;if(h.pen!=null){penN++;pen+=h.pen}
   if(h.par>=4&&h.fw){fwN++;if(h.fw==='hit')fw++;else if(h.fw==='left')fl++;else if(h.fw==='right')fr++}
   if(h.putts!=null){pN++;putts+=h.putts;girN++;const g=h.score-h.putts<=h.par-2;if(g)gir++;else{udN++;if(h.score<=h.par)ud++}if(h.putts>=3)three++;if(h.putts===1)one++;
    if(h.fp){const b=fp[h.fp]=fp[h.fp]||{n:0,made:0,putts:0};b.n++;b.putts+=h.putts;if(h.putts<=1)b.made++}}
   if(h.sand){sandN++;if(h.score<=h.par)sand++}}
- return{fw,fwN,fl,fr,gir,girN,putts,pN,ud,udN,sand,sandN,three,one,fp}}
-function rtStatsHTML(holes){const s=rtStats(holes);if(!s.fwN&&!s.pN)return '';const pc=(a,b)=>b?Math.round(a/b*100)+'%':'–';
- return `${s.pN?`<div class="rtStats rtStats3"><div><b>${s.udN?`${s.ud}/${s.udN}`:'–'}</b><span>Up and downs</span></div><div><b>${s.sandN?`${s.sand}/${s.sandN}`:'–'}</b><span>Sand saves</span></div><div><b>${s.three}</b><span>Three-putts</span></div></div>`:''}<div class="rtStats rtStats3"><div><b>${s.fwN?`${s.fw}/${s.fwN}`:'–'}</b><span>Fairways${s.fwN&&(s.fl||s.fr)?` · missed ${s.fl} left, ${s.fr} right`:''}</span></div><div><b>${s.girN?`${s.gir}/${s.girN}`:'–'}</b><span>Greens in regulation</span></div><div><b>${s.pN?s.putts:'–'}</b><span>Putts${s.pN?` · ${(s.putts/s.pN).toFixed(1)} a hole`:''}</span></div></div>`}
+ return{fw,fwN,fl,fr,gir,girN,putts,pN,ud,udN,sand,sandN,three,one,fp,pen,penN}}
+function rtStatsHTML(holes){const s=rtStats(holes);if(!s.fwN&&!s.pN&&!s.penN)return '';const penL=s.penN?`<p class="mut" style="font-size:13.5px;margin:10px 0 0">Penalty shots: <b>${s.pen}</b>${s.penN<holes.filter(h=>h.score!=null).length?` (logged on ${s.penN} hole${s.penN===1?'':'s'})`:''}</p>`:'';if(!s.fwN&&!s.pN)return penL;const pc=(a,b)=>b?Math.round(a/b*100)+'%':'–';
+ return `${s.pN?`<div class="rtStats rtStats3"><div><b>${s.udN?`${s.ud}/${s.udN}`:'–'}</b><span>Up and downs</span></div><div><b>${s.sandN?`${s.sand}/${s.sandN}`:'–'}</b><span>Sand saves</span></div><div><b>${s.three}</b><span>Three-putts</span></div></div>`:''}<div class="rtStats rtStats3"><div><b>${s.fwN?`${s.fw}/${s.fwN}`:'–'}</b><span>Fairways${s.fwN&&(s.fl||s.fr)?` · missed ${s.fl} left, ${s.fr} right`:''}</span></div><div><b>${s.girN?`${s.gir}/${s.girN}`:'–'}</b><span>Greens in regulation</span></div><div><b>${s.pN?s.putts:'–'}</b><span>Putts${s.pN?` · ${(s.putts/s.pN).toFixed(1)} a hole`:''}</span></div></div>${penL}`}
+
+// ---- strokes gained: where you gain and lose shots compared with a tour professional ----
+// Expected strokes to hole out: PGA Tour 2003–2010, from Mark Broadie, "Assessing Golfer Performance on the PGA TOUR" (Columbia
+// Business School), table B.1; putts from Broadie's research as simplified for teaching (GolferHD Python golf analytics).
+const SGT={d:[10,20,30,40,50,60,70,80,90,100,120,140,160,180,200,220,240,260,280,300,320,340,360,380,400,420,440,460,480,500,520,540,560,580,600],
+ tee:[null,null,null,null,null,null,null,null,null,2.92,2.99,2.97,2.99,3.05,3.12,3.17,3.25,3.45,3.65,3.71,3.79,3.86,3.92,3.96,3.99,4.02,4.08,4.17,4.28,4.41,4.54,4.65,4.74,4.79,4.82],
+ fw:[2.18,2.40,2.52,2.60,2.66,2.70,2.72,2.75,2.77,2.80,2.85,2.91,2.98,3.08,3.19,3.32,3.45,3.58,3.69,3.78,3.84,3.88,3.95,4.03,4.11,4.19,4.27,4.34,4.42,4.50,4.58,4.66,4.74,4.82,4.89],
+ rough:[2.34,2.59,2.70,2.78,2.87,2.91,2.93,2.96,2.99,3.02,3.08,3.15,3.23,3.31,3.42,3.53,3.64,3.74,3.83,3.90,3.95,4.02,4.11,4.21,4.30,4.40,4.49,4.58,4.68,4.77,4.87,4.96,5.06,5.15,5.25],
+ sand:[2.43,2.53,2.66,2.82,2.92,3.15,3.21,3.24,3.24,3.23,3.21,3.22,3.28,3.40,3.55,3.70,3.84,3.93,4.00,4.04,4.12,4.26,4.41,4.55,4.69,4.83,4.97,5.11,5.25,5.40,5.54,5.68,5.82,5.96,6.10],
+ gft:[2,3,5,8,10,15,20,30,40,50,60,90],g:[1.01,1.04,1.15,1.33,1.41,1.56,1.67,1.82,1.93,2.02,2.09,2.24]};
+const FPFT={a:2,b:4.5,c:8,d:15,e:30,f:50};
+function sgLook(xs,ys,x){let lo=0;while(lo<xs.length&&ys[lo]==null)lo++;if(x<=xs[lo])return ys[lo];if(x>=xs[xs.length-1])return ys[ys.length-1];
+ for(let k=lo;k<xs.length-1;k++)if(x<=xs[k+1]){const t=(x-xs[k])/(xs[k+1]-xs[k]);return ys[k]+t*(ys[k+1]-ys[k])}return ys[ys.length-1]}
+const sgE=(lie,yds)=>sgLook(SGT.d,SGT[lie],yds),sgG=ft=>sgLook(SGT.gft,SGT.g,ft);
+// one hole: putting from your first-putt distance; the whole hole from its length; and, when you marked every shot on the hole map,
+// each shot split into off the tee, approach (over 30 yds) and around the green. Lies other than the tee shot's aren't recorded,
+// so later shots count as from the fairway, or a greenside bunker when you ticked one.
+function sgHole(h){if(h.score==null)return null;const o={};
+ if(h.putts!=null&&h.putts>=1&&h.fp&&FPFT[h.fp])o.putt=sgG(FPFT[h.fp])-h.putts;
+ if(h.yards&&h.yards>=60)o.total=sgE('tee',Math.max(100,h.yards))-h.score;
+ const sh=h.shots||[],pen=h.pen||0;
+ if(o.putt!=null&&h.end&&sh.length&&sh.length+h.putts+pen===h.score){const ft=FPFT[h.fp];let ok=true;const parts={tee:0,app:0,arg:0};
+  const dist=sh.map(x=>ydsBetween(x,h.end));
+  for(let k=0;k<sh.length;k++){const d=dist[k],last=k===sh.length-1;
+   const lie=k===0?'tee':k===1&&(h.fw==='left'||h.fw==='right')?'rough':last&&h.sand&&d<=40?'sand':'fw';
+   if(lie==='tee'&&d<100&&h.par>3){ok=false;break}
+   const eS=sgE(lie==='tee'&&d<100?'fw':lie,d),eE=last?sgG(ft):sgE(k+1===1&&(h.fw==='left'||h.fw==='right')?'rough':(k+1===sh.length-1&&h.sand&&dist[k+1]<=40)?'sand':'fw',dist[k+1]);
+   const g=eS-eE-1-(k===0?pen:0),cat=k===0&&h.par>=4?'tee':d>30?'app':'arg';parts[cat]+=g}
+  if(ok)Object.assign(o,parts,{full:1})}
+ return Object.keys(o).length?o:null}
+// add up over rounds, per 18 holes for each part
+function sgSum(rs){const S={tee:[0,0],app:[0,0],arg:[0,0],putt:[0,0],t2g:[0,0],total:[0,0]};
+ for(const r of rs)for(const h of r.holes||[]){const g=sgHole(h);if(!g)continue;
+  if(g.putt!=null){S.putt[0]+=g.putt;S.putt[1]++}if(g.total!=null){S.total[0]+=g.total;S.total[1]++}
+  if(g.full){for(const k of['tee','app','arg']){S[k][0]+=g[k];S[k][1]++}}
+  if(g.total!=null&&g.putt!=null){S.t2g[0]+=g.total-g.putt;S.t2g[1]++}}
+ const per=k=>S[k][1]?S[k][0]/S[k][1]*18:null;return{tee:per('tee'),app:per('app'),arg:per('arg'),putt:per('putt'),t2g:per('t2g'),total:per('total'),n:S,full:S.tee[1]}}
+const SG_LAB={tee:'Off the tee',app:'Approach',arg:'Around the green',t2g:'Tee to green',putt:'Putting'};
+function sgHTML(rs,title,note){const g=sgSum(rs);if(g.putt==null&&g.total==null)return '';
+ const keys=g.full>=9?['tee','app','arg','putt']:['t2g','putt'],vals=keys.map(k=>g[k]).filter(v=>v!=null);if(!vals.length)return '';
+ const mx=Math.max(4,...vals.map(Math.abs)),f=v=>(v>0?'+':v<0?'−':'')+Math.abs(v).toFixed(1);
+ const worst=keys.filter(k=>g[k]!=null).sort((a,b)=>g[a]-g[b])[0],best=keys.filter(k=>g[k]!=null).sort((a,b)=>g[b]-g[a])[0];
+ return `<div class="card sgCard"><h2>${title||'Strokes gained'}</h2><p class="mut" style="margin:0 0 8px">Shots gained or lost per 18 holes against a tour professional${note?' '+note:''}. Everyone loses shots to a tour pro: what matters is where you lose the most.</p>
+  <div class="sgBars" role="list">${keys.map(k=>{const v=g[k];if(v==null)return '';const w=Math.min(50,Math.abs(v)/mx*50);return `<div class="sgRow" role="listitem"><span>${SG_LAB[k]}</span><div class="sgTrack" aria-hidden="true"><b></b><i class="${v<0?'neg':'pos'}" style="${v<0?`right:50%;width:${w}%`:`left:50%;width:${w}%`}"></i></div><output>${f(v)}</output></div>`}).join('')}</div>
+  ${g.total!=null?`<p class="gpsP sm" style="margin:10px 0 0">Whole game: <b>${f(g.total)}</b> shots per 18 holes.</p>`:''}
+  ${worst&&worst!==best?`<p class="hcNote" style="margin-top:10px">${SG_LAB[worst]} costs you the most${g[worst]!=null&&g[best]!=null?`, about ${Math.abs(g[worst]-g[best]).toFixed(1)} shots more per round than ${SG_LAB[best].toLowerCase()}`:''}. That's the part of your game to practise first.</p>`:''}
+  ${g.full<9?`<p class="mut" style="font-size:13px;margin:8px 0 0">${g.n.putt[1]?'':'Log your putts and first-putt distance on each hole. '}Mark your shots on the hole map to split tee to green into off the tee, approach and around the green.</p>`:''}</div>`}
 // across your rounds: how you score and where the shots go
 function rtTrendsHTML(rs){const full=rs.filter(r=>r.holes.length===18&&tally(r.holes).thru===18).slice().sort((a,b)=>(a.finishedAt||a.createdAt||0)-(b.finishedAt||b.createdAt||0)).slice(-12);
  const shortD=d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})}catch(_){return d}};
  const sc=full.map(r=>{const t=tally(r.holes);return{y:t.total,lab:shortD(r.date),tip:`${t.total} (${toParShort(t.toPar)}) at ${r.course.name}`}});
  const withPts=full.filter(r=>r.ch!=null).map(r=>{const n=rtNet(r);return{y:n.pts,lab:shortD(r.date),tip:`${n.pts} points at ${r.course.name}`}});
- const recent=rs.slice(0,10),agg=recent.map(r=>rtStats(r.holes)).reduce((a,s)=>{for(const k in s)a[k]=(a[k]||0)+s[k];return a},{});
+ const per=RT.per||(RT.per=lsGet('cc_per','10')),yr=String(new Date().getFullYear()),recent=per==='all'?rs:per==='year'?rs.filter(r=>String(r.date||'').startsWith(yr)):rs.slice(0,+per),agg=recent.map(r=>rtStats(r.holes)).reduce((a,s)=>{for(const k in s)a[k]=(a[k]||0)+s[k];return a},{});
  const statN=recent.filter(r=>{const s=rtStats(r.holes);return s.fwN||s.pN}).length;
+ const perLab={'5':'last 5 rounds','10':'last 10 rounds','year':'rounds this year','all':'all your rounds'}[per]||'';
  let h='';
  if(sc.length>=2)h+=`<div class="card"><h2>Your scoring</h2><p class="mut" style="margin:0 0 6px">Strokes in your last ${sc.length} full 18-hole rounds. Tap a point for the round.</p>${trendChart(sc,{title:'Strokes per 18-hole round',invert:true})}<p class="tcNote">Lower is better, so the line rises as you improve.</p></div>`;
  if(withPts.length>=2)h+=`<div class="card"><h2>Stableford points</h2><p class="mut" style="margin:0 0 6px">Points with your handicap in your last ${withPts.length} rounds where it was set. 36 means you played to your handicap.</p>${trendChart(withPts,{title:'Stableford points per round'})}</div>`;
+ if(rs.length>1)h+=`<div class="chips perChips" role="group" aria-label="Which rounds the stats below use">${[['5','Last 5'],['10','Last 10'],['year','This year'],['all','All']].map(([k,l])=>`<button type="button" class="chip" data-rt-per="${k}" aria-pressed="${per===k}">${l}</button>`).join('')}</div>`;
+ h+=sgHTML(recent,'Strokes gained',`(${perLab})`);
  if(statN){const pc=(a,b)=>b?Math.round(a/b*100):null,fwp=pc(agg.fw,agg.fwN),gp=pc(agg.gir,agg.girN),miss=agg.fl+agg.fr;
   const tip=fwp!=null&&miss>=3&&Math.max(agg.fl,agg.fr)/miss>=0.65?`Most of your missed fairways go ${agg.fl>agg.fr?'left':'right'} (${Math.max(agg.fl,agg.fr)} of ${miss}). The Practice tab's Guide explains what sends the ball that way.`:'';
   h+=`<div class="card"><h2>Where your shots go</h2><p class="mut" style="margin:0 0 10px">From the last ${statN} round${statN===1?'':'s'} where you logged fairways or putts.</p>
