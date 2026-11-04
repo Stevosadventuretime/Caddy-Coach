@@ -24,12 +24,20 @@ function parse(buf) {
   meta.bi = {}; meta.bones.forEach((b, i) => { meta.bi[b.n] = i; b.H = v3(b.h); b.T = v3(b.t); });
   return { meta, geo: g };
 }
-function load(base) {
-  if (DATA) return Promise.resolve(DATA);
-  if (LOADING) return LOADING;
-  base = base || '';
-  // golfer-mesh.wasm is not WebAssembly: it's the golfer's binary mesh, named .wasm so every host serves it as binary
-  LOADING = Promise.all([
+// Two figures: the Rocketbox human (golfer-rb.wasm, MIT licence, textured like a photo) is the default; the older
+// MakeHuman figure (golfer-mesh.wasm) is the fallback if it fails to load, or with ?golfer=classic in the address.
+const texL = (url, set) => new Promise(ok => new T.TextureLoader().load(url, t => { if (set) set(t); ok(t); }, undefined, () => ok(null)));
+function loadRB(base) {
+  return fetch(base + 'golfer-rb.wasm').then(r => { if (!r.ok) throw new Error('golfer ' + r.status); return r.arrayBuffer(); }).then(buf => {
+    const D = parse(buf), tx = D.meta.tex || {};
+    const col = t => { t.encoding = T.sRGBEncoding; t.anisotropy = 4; };
+    return Promise.all([texL(base + tx.body, col), texL(base + tx.bodyN), texL(base + tx.head, col), texL(base + tx.headN), texL(base + tx.hair, col), texL(base + 'golfer-pores.jpg', t => { t.wrapS = t.wrapT = T.RepeatWrapping; })])
+      .then(([body, bodyN, head, headN, hair, pores]) => { if (!body || !head) throw new Error('golfer textures');
+        TEX = { body, bodyN, head, headN, hair, pores }; DATA = D; return DATA; });
+  });
+}
+function loadClassic(base) {
+  return Promise.all([
     fetch(base + 'golfer-mesh.wasm').then(r => { if (!r.ok) throw new Error('golfer ' + r.status); return r.arrayBuffer(); }),
     new Promise((ok, no) => new T.TextureLoader().load(base + 'golfer-skin.jpg', ok, undefined, no)),
     new Promise(ok => new T.TextureLoader().load(base + 'golfer-eye.jpg', ok, undefined, () => ok(null))),
@@ -43,7 +51,15 @@ function load(base) {
     if (shoe) { shoe.encoding = T.sRGBEncoding; shoe.flipY = false; shoe.anisotropy = 4; } if (shoeN) shoeN.flipY = false;
     if (cap) { cap.encoding = T.sRGBEncoding; cap.flipY = false; cap.anisotropy = 4; } if (capN) capN.flipY = false;
     if (hair) { hair.encoding = T.sRGBEncoding; hair.anisotropy = 4; }
-    TEX = { skin, eye, shoe, shoeN, cap, capN, hair, pique, twill, pores }; DATA = parse(buf); return DATA; })
+    TEX = { skin, eye, shoe, shoeN, cap, capN, hair, pique, twill, pores }; DATA = parse(buf); return DATA; });
+}
+function load(base) {
+  if (DATA) return Promise.resolve(DATA);
+  if (LOADING) return LOADING;
+  base = base || '';
+  // golfer-*.wasm files are not WebAssembly: they're the golfer's binary mesh, named .wasm so every host serves them as binary
+  let classic = false; try { classic = /[?&]golfer=classic\b/.test(root.location.search); } catch (e) {}
+  LOADING = (classic ? loadClassic(base) : loadRB(base).catch(e => { console.warn('realistic golfer unavailable, using the classic figure', e); TEX = null; DATA = null; return loadClassic(base); }))
     .catch(e => { LOADING = null; throw e; });
   return LOADING;
 }
@@ -79,6 +95,16 @@ function patch(m, opt) {
 function materials(ghost) {
   if (ghost) { const g = patch(new T.MeshStandardMaterial({ color: 0xff3b2b, emissive: 0x8a1408, transparent: true, opacity: 0.45, roughness: 0.6, depthWrite: false, skinning: true }), { ghost: true, aoK: 0.3 }); g.color.convertSRGBToLinear(); return () => g; }
   const P = (o, x) => { const m = new T.MeshPhysicalMaterial(Object.assign({ skinning: true }, o)); if (o.color !== undefined) m.color.convertSRGBToLinear(); if (o.sheen) m.sheen.convertSRGBToLinear(); return patch(m, x || {}); };
+  if (DATA.meta.kind === 'rb') {
+    const N = (t, k) => t ? { normalMap: t, normalScale: new T.Vector2(k, k) } : {};
+    const R = {
+      rbBody: P(Object.assign({ map: TEX.body, roughness: 0.78, sheen: new T.Color(0x2a2a2a) }, N(TEX.bodyN, 0.9)), { aoK: 0.85 }),
+      rbHead: P(Object.assign({ map: TEX.head, roughness: 0.52, clearcoat: 0.08, clearcoatRoughness: 0.5, sheen: new T.Color(0x3a1d14) }, N(TEX.headN, 0.8)), { sss: true, aoK: 0.9 }),
+      // hair cards: matte (the cards' normals don't follow the hair, so any shine shows up as silver streaks)
+      rbHair: P({ map: TEX.hair, alphaTest: 0.5, side: T.DoubleSide, roughness: 0.9, envMapIntensity: 0.25, metalness: 0, reflectivity: 0.1 }, { aoK: 0.9 }),
+    };
+    return k => R[k] || R.rbBody;
+  }
   const M = {
     skin: P({ map: TEX.skin, roughness: 0.5, clearcoat: 0.12, clearcoatRoughness: 0.45, sheen: new T.Color(0x3a1d14) }, { sss: true, aoK: 0.9, detail: { tex: TEX.pores, k: 46, s: 0.28 } }),
     shirt: P({ color: 0x23395a, roughness: 0.88, sheen: new T.Color(0x3a5070) }, { detail: { tex: TEX.pique, k: 90, s: 0.6 } }),
