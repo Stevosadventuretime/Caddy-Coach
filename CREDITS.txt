@@ -1,7 +1,7 @@
 Caddy Coach credits
 
-3D golfer (golfer-rb.wasm and the golfer-rb-*.jpg / golfer-rb-*.png textures)
-  Body, face, hair, clothes and textures come from the Microsoft Rocketbox avatar library
+3D golfer's head (golfer-rb.wasm and the golfer-rb-*.jpg / golfer-rb-*.png textures)
+  The face, hair and neck come from the Microsoft Rocketbox avatar library
   (github.com/microsoft/Microsoft-Rocketbox, avatar Male_Adult_01), re-skinned onto the
   Caddy Coach skeleton. Licence:
 
@@ -20,7 +20,7 @@ Caddy Coach credits
   IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
   USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-Classic 3D golfer (golfer-mesh.wasm, used as a fallback)
+3D golfer's body and clothes (golfer-mesh.wasm and the other golfer-*.jpg / golfer-hair.png textures)
   Body shape, skeleton, skin weights and eyes come from MakeHuman (makehumancommunity.org),
   released under CC0 1.0 (public domain). The clothes, shoes, cap, hair, textures, grip and
   posing were made for Caddy Coach.
