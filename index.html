@@ -1862,6 +1862,13 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 .heroImg{position:relative;margin:4px 0 10px;border-radius:var(--r-l);overflow:hidden;aspect-ratio:900/378;background:var(--board)}
 .heroImg img{display:block;width:100%;height:100%;object-fit:cover}
 .heroImg figcaption{position:absolute;left:0;right:0;bottom:0;padding:28px 16px 12px;background:linear-gradient(transparent,rgba(8,30,20,.78));color:#fff;font:760 30px/1 var(--f-disp);font-stretch:72%}
+.heroImg video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .6s}
+.heroImg video.on{opacity:1}
+.films{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 14px}
+@media (max-width:560px){.films{grid-template-columns:1fr}}
+.films figure{margin:0}
+.films video{display:block;width:100%;aspect-ratio:16/9;border-radius:var(--r-l);background:#0b0c0c}
+.films figcaption{font-size:13px;color:var(--mut,#667);margin-top:5px}
 .heroImg.sm{margin:-16px -16px 14px;border-radius:var(--r-l) var(--r-l) 0 0;aspect-ratio:900/300}
 .wpItems .wpGo{display:block;margin-top:4px;text-align:left}
 
@@ -2020,7 +2027,11 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
  <div class="card" id="weekPlan" hidden></div>
  <div class="card" id="planTop" hidden></div>
  <div class="lib">
-  <figure class="heroImg"><img src="hero-swing.jpg" alt="" loading="lazy" decoding="async" onerror="this.parentElement.hidden=true"><figcaption>Drill library</figcaption></figure>
+  <figure class="heroImg"><img src="hero-swing.jpg" alt="" loading="lazy" decoding="async" onerror="this.parentElement.hidden=true"><video id="heroVid" muted loop playsinline preload="none" aria-hidden="true" tabindex="-1" data-src="media/swing-real.mp4"></video><figcaption>Drill library</figcaption></figure>
+  <div class="films" aria-label="Swing films">
+   <figure><video controls playsinline preload="none" poster="media/swing-real.jpg" src="media/swing-real.mp4"></video><figcaption>A full swing, rendered with real light</figcaption></figure>
+   <figure><video controls playsinline preload="none" poster="media/swing-check.jpg" src="media/swing-check.mp4"></video><figcaption>Swing check: tempo, spine tilt and head movement</figcaption></figure>
+  </div>
   <p class="mut" style="margin:0 0 14px">Every drill has a 3D demo and a live mode that coaches you through your camera.</p>
   <div class="chips scroll" id="whereChips" style="margin-bottom:10px" aria-label="Where"></div>
   <div class="chips scroll" id="areaChips" aria-label="Swing area"></div>
@@ -2210,4 +2221,10 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 <script src="app-3.js"></script>
 
 <script>if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(e=>console.warn('Offline mode unavailable',e)));</script>
+<script>
+(()=>{const v=document.getElementById('heroVid');if(!v||!('IntersectionObserver' in window))return;
+ const calm=matchMedia('(prefers-reduced-motion: reduce)').matches||(navigator.connection&&navigator.connection.saveData);if(calm)return;
+ v.addEventListener('playing',()=>v.classList.add('on'));
+ new IntersectionObserver(es=>{for(const e of es){if(e.isIntersecting){if(!v.src)v.src=v.dataset.src;v.play().catch(()=>{})}else v.pause()}},{threshold:0.3}).observe(v)})();
+</script>
 </body></html>

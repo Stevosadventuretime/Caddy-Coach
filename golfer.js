@@ -24,12 +24,20 @@ function parse(buf) {
   meta.bi = {}; meta.bones.forEach((b, i) => { meta.bi[b.n] = i; b.H = v3(b.h); b.T = v3(b.t); });
   return { meta, geo: g };
 }
-function load(base) {
-  if (DATA) return Promise.resolve(DATA);
-  if (LOADING) return LOADING;
-  base = base || '';
-  // golfer-mesh.wasm is not WebAssembly: it's the golfer's binary mesh, named .wasm so every host serves it as binary
-  LOADING = Promise.all([
+// Two figures: the Rocketbox human (golfer-rb.wasm, MIT licence, textured like a photo) is the default; the older
+// MakeHuman figure (golfer-mesh.wasm) is the fallback if it fails to load, or with ?golfer=classic in the address.
+const texL = (url, set) => new Promise(ok => new T.TextureLoader().load(url, t => { if (set) set(t); ok(t); }, undefined, () => ok(null)));
+function loadRB(base) {
+  return fetch(base + 'golfer-rb.wasm').then(r => { if (!r.ok) throw new Error('golfer ' + r.status); return r.arrayBuffer(); }).then(buf => {
+    const D = parse(buf), tx = D.meta.tex || {};
+    const col = t => { t.encoding = T.sRGBEncoding; t.anisotropy = 4; };
+    return Promise.all([texL(base + tx.body, col), texL(base + tx.bodyN), texL(base + tx.head, col), texL(base + tx.headN), texL(base + tx.hair, col), texL(base + 'golfer-pores.jpg', t => { t.wrapS = t.wrapT = T.RepeatWrapping; })])
+      .then(([body, bodyN, head, headN, hair, pores]) => { if (!body || !head) throw new Error('golfer textures');
+        return { D, TX: { body, bodyN, head, headN, hair, pores } }; });
+  });
+}
+function loadClassic(base) {
+  return Promise.all([
     fetch(base + 'golfer-mesh.wasm').then(r => { if (!r.ok) throw new Error('golfer ' + r.status); return r.arrayBuffer(); }),
     new Promise((ok, no) => new T.TextureLoader().load(base + 'golfer-skin.jpg', ok, undefined, no)),
     new Promise(ok => new T.TextureLoader().load(base + 'golfer-eye.jpg', ok, undefined, () => ok(null))),
@@ -43,10 +51,36 @@ function load(base) {
     if (shoe) { shoe.encoding = T.sRGBEncoding; shoe.flipY = false; shoe.anisotropy = 4; } if (shoeN) shoeN.flipY = false;
     if (cap) { cap.encoding = T.sRGBEncoding; cap.flipY = false; cap.anisotropy = 4; } if (capN) capN.flipY = false;
     if (hair) { hair.encoding = T.sRGBEncoding; hair.anisotropy = 4; }
-    TEX = { skin, eye, shoe, shoeN, cap, capN, hair, pique, twill, pores }; DATA = parse(buf); return DATA; })
+    TEX = { skin, eye, shoe, shoeN, cap, capN, hair, pique, twill, pores }; DATA = parse(buf); return DATA; });
+}
+// The drill golfer is the classic figure's body and clothes (polo, trousers, belt, shoes, glove) with the Rocketbox
+// head and neck: a real face and hair on the familiar outfit. The cap is left off: refitted to the new head it hid the
+// face. ?golfer=classic shows the old head and cap.
+let RB = null;
+function load(base) {
+  if (DATA) return Promise.resolve(DATA);
+  if (LOADING) return LOADING;
+  base = base || '';
+  // golfer-*.wasm files are not WebAssembly: they're the golfer's binary mesh, named .wasm so every host serves them as binary
+  let classic = false; try { classic = /[?&]golfer=classic\b/.test(root.location.search); } catch (e) {}
+  LOADING = Promise.all([loadClassic(base), classic ? null : loadRB(base).catch(e => { console.warn('realistic head unavailable, using the classic figure', e); return null; })])
+    .then(([d, rb]) => { RB = rb; return d; })
     .catch(e => { LOADING = null; throw e; });
   return LOADING;
 }
+// a copy of a mesh's geometry keeping only some triangles (by material and body part), with groups rebuilt
+function subGeo(D, keep) {
+  const g = D.geo, idx = g.index.array, part = g.attributes.part.array, meta = D.meta, out = [], groups = [];
+  meta.groups.forEach((gr, gi) => { const st = out.length;
+    for (let i = gr.start; i < gr.start + gr.count; i += 3) { const a = idx[i], b = idx[i + 1], c = idx[i + 2];
+      if (keep(gr.mat, [part[a], part[b], part[c]])) out.push(a, b, c); }
+    if (out.length > st) groups.push({ start: st, count: out.length - st, gi }); });
+  const ng = new T.BufferGeometry(); for (const k in g.attributes) ng.setAttribute(k, g.attributes[k]);
+  ng.setIndex(new T.BufferAttribute(out.length > 65535 * 3 || meta.i32 ? new Uint32Array(out) : new Uint16Array(out), 1));
+  groups.forEach((x, i) => ng.addGroup(x.start, x.count, x.gi)); ng.boundingSphere = g.boundingSphere;
+  return ng;
+}
+const HEADP = [3, 10];   // body parts: head, neck
 
 // ---------- materials ----------
 // every material gets: baked ambient occlusion, and a pulsing green glow on highlighted body parts
@@ -79,6 +113,16 @@ function patch(m, opt) {
 function materials(ghost) {
   if (ghost) { const g = patch(new T.MeshStandardMaterial({ color: 0xff3b2b, emissive: 0x8a1408, transparent: true, opacity: 0.45, roughness: 0.6, depthWrite: false, skinning: true }), { ghost: true, aoK: 0.3 }); g.color.convertSRGBToLinear(); return () => g; }
   const P = (o, x) => { const m = new T.MeshPhysicalMaterial(Object.assign({ skinning: true }, o)); if (o.color !== undefined) m.color.convertSRGBToLinear(); if (o.sheen) m.sheen.convertSRGBToLinear(); return patch(m, x || {}); };
+  if (DATA.meta.kind === 'rb') {
+    const N = (t, k) => t ? { normalMap: t, normalScale: new T.Vector2(k, k) } : {};
+    const R = {
+      rbBody: P(Object.assign({ map: TEX.body, roughness: 0.78, sheen: new T.Color(0x2a2a2a) }, N(TEX.bodyN, 0.9)), { aoK: 0.85 }),
+      rbHead: P(Object.assign({ map: TEX.head, roughness: 0.52, clearcoat: 0.08, clearcoatRoughness: 0.5, sheen: new T.Color(0x3a1d14) }, N(TEX.headN, 0.8)), { sss: true, aoK: 0.9 }),
+      // hair cards: matte (the cards' normals don't follow the hair, so any shine shows up as silver streaks)
+      rbHair: P({ map: TEX.hair, alphaTest: 0.5, side: T.DoubleSide, roughness: 0.9, envMapIntensity: 0.25, metalness: 0, reflectivity: 0.1 }, { aoK: 0.9 }),
+    };
+    return k => R[k] || R.rbBody;
+  }
   const M = {
     skin: P({ map: TEX.skin, roughness: 0.5, clearcoat: 0.12, clearcoatRoughness: 0.45, sheen: new T.Color(0x3a1d14) }, { sss: true, aoK: 0.9, detail: { tex: TEX.pores, k: 46, s: 0.28 } }),
     shirt: P({ color: 0x23395a, roughness: 0.88, sheen: new T.Color(0x3a5070) }, { detail: { tex: TEX.pique, k: 90, s: 0.6 } }),
@@ -107,11 +151,24 @@ function materials(ghost) {
 
 // ---------- figure ----------
 function make(ghost) {
+  const body = make1(ghost, RB && !ghost ? (mat, ps) => !(['hair1', 'hair2', 'hair3', 'hair4', 'eye', 'cornea', 'cap'].includes(mat) || (mat === 'skin' && ps.every(p => p === 3))) : null);
+  if (!RB || ghost) return body;
+  // the Rocketbox head, posed by the same skeleton (its own rest pose and neck length)
+  const keepD = DATA, keepT = TEX; DATA = RB.D; TEX = RB.TX;
+  // face, neck and hair only: the avatar's body texture is its own striped shirt
+  let head; try { head = make1(false, (mat, ps) => mat !== 'rbBody' && ps.some(p => HEADP.includes(p))); } finally { DATA = keepD; TEX = keepT; }
+  const G = new T.Group(); G.add(body.mesh); G.add(head.mesh);
+  const fig = { G, mesh: body.mesh, bones: body.bones, meta: body.meta, ghost: false, mats: body.mats.concat(head.mats), parts: [body, head],
+    pose: (J, o) => { body.pose(J, o); head.pose(J, o); fig.elbows = body.elbows; },
+    highlight: (parts, t) => { body.highlight(parts, t); head.highlight(parts, t); } };
+  return fig;
+}
+function make1(ghost, keep) {
   const D = DATA, meta = D.meta;
   const bones = meta.bones.map(b => { const o = new T.Bone(); o.name = b.n; o.matrixAutoUpdate = false; return o; });
   const inv = meta.bones.map(b => new T.Matrix4().makeTranslation(-b.h[0], -b.h[1], -b.h[2]));
   const mat = materials(ghost), mats = meta.groups.map(g => mat(g.mat));
-  const mesh = new T.SkinnedMesh(D.geo, mats);
+  const mesh = new T.SkinnedMesh(keep ? subGeo(D, keep) : D.geo, mats);
   bones.forEach(b => mesh.add(b));
   const skel = new T.Skeleton(bones, inv); mesh.bind(skel, new T.Matrix4());
   mesh.castShadow = !ghost; mesh.receiveShadow = !ghost; mesh.frustumCulled = false;

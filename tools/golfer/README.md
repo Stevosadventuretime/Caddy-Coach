@@ -23,3 +23,17 @@ It also bakes ambient occlusion and paints the skin texture.
    `out/golfer-hair.png` alongside it.
 
 `build2.py` is the previous version, kept for reference.
+
+## Realistic head (default)
+
+`build_rb.py` makes `golfer-rb.wasm` and the `golfer-rb-*` textures from a Microsoft Rocketbox avatar
+(MIT licence). It re-skins the avatar onto the same skeleton
+the drill rig drives, so `golfer.js` poses it exactly like the classic figure (which stays as the fallback,
+and is used with `?golfer=classic`). Run it with Blender's Python module (`pip install bpy`):
+
+    python3 build_rb.py <Rocketbox>/Assets/Avatars/Adults/Male_Adult_01 out/
+
+then copy `out/golfer-rb*` to the site and re-run `tools/posters/make_posters.py`.
+
+`golfer.js` shows the classic body and clothes with the Rocketbox face, neck and hair (the classic head,
+hair and cap are hidden). The cap is left off because, refitted to the bigger head, it hid the face.

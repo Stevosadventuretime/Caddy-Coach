@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright
 
 SITE = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else '.')
 OUT = os.path.join(SITE, 'posters')
-INPUTS = ['three.min.js', 'drillstudio.js', 'drills.js', 'golfer.js', 'golfer-mesh.wasm', 'swing-model.json'] + \
+INPUTS = ['three.min.js', 'drillstudio.js', 'drills.js', 'golfer.js', 'golfer-mesh.wasm', 'golfer-rb.wasm', 'swing-model.json'] + \
     sorted(f for f in os.listdir(SITE) if f.startswith('golfer-') and f.endswith(('.jpg', '.png')))
 W, H = 240, 300
 HARNESS = '''<!doctype html><meta charset="utf-8"><body>

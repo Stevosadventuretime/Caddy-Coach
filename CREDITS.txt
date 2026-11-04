@@ -1,9 +1,32 @@
 Caddy Coach credits
 
-3D golfer (golfer-mesh.wasm and the golfer-*.jpg / golfer-hair.png textures)
+3D golfer's head (golfer-rb.wasm and the golfer-rb-*.jpg / golfer-rb-*.png textures)
+  The face, hair and neck come from the Microsoft Rocketbox avatar library
+  (github.com/microsoft/Microsoft-Rocketbox, avatar Male_Adult_01), re-skinned onto the
+  Caddy Coach skeleton. Licence:
+
+  MIT License
+  Copyright (c) 2020 Microsoft
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+  associated documentation files (the "Software"), to deal in the Software without restriction, including
+  without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+  following conditions:
+  The above copyright notice and this permission notice shall be included in all copies or substantial
+  portions of the Software.
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+  LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+  EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+  IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+  USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+3D golfer's body and clothes (golfer-mesh.wasm and the other golfer-*.jpg / golfer-hair.png textures)
   Body shape, skeleton, skin weights and eyes come from MakeHuman (makehumancommunity.org),
   released under CC0 1.0 (public domain). The clothes, shoes, cap, hair, textures, grip and
   posing were made for Caddy Coach.
+
+Swing films (media/)
+  Rendered from the app's own swing data with the golfer above (Blender Cycles and three.js).
 
 Real swing motion (swing-model.json)
   The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding
