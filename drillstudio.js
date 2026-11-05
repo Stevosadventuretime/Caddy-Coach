@@ -235,6 +235,53 @@ function finish(J) {
 }
 function poseOf(dr, info) { return info.f == null ? shiftJ(rig(info.P), rigShift()) : compose(info.f, deltaOf(info)); }
 
+// ---------- arms: a firm lead arm ----------
+// The captured swing holds the hands too close to the lead shoulder, so the lead elbow is bent 120-135 degrees at
+// address, the top and impact, where good players keep that arm close to straight. That bent, folding arm is what
+// made him look floppy, as if he had no bones. Near the ball the body makes room (the upper body tips up and back
+// about the pelvis, club untouched, so it still meets the ball); with the club in the air the hands swing out on a
+// wider arc. After impact, once the hands are past the body, the arm is left to fold as it naturally does.
+const LEAD_ANGLE = 168;
+const sm3 = (a, b, x) => { const u = clamp((x - a) / (b - a), 0, 1); return u * u * (3 - 2 * u); };
+function rotAbout(p, o, k, ang) {   // rotate point p about the axis k (unit) through o
+  const v = sub(p, o), c = Math.cos(ang), sn = Math.sin(ang), kv = cross(k, v), kd = dot(k, v);
+  return add(o, add(add(mul(v, c), mul(kv, sn)), mul(k, kd * (1 - c))));
+}
+function rotDir(v, k, ang) { return rotAbout(v, [0, 0, 0], k, ang); }
+function firmArms(J) {
+  if (!J || J._firm || !J.club || !J.lh || !J.ls || !J.le || !J.ts || !J.th || !J.pel || !J.neck || (J.arms && J.arms !== 'club')) return J;
+  const ua = len(sub(J.le, J.ls)), fa = len(sub(J.lh, J.le)), want = Math.sqrt(ua * ua + fa * fa - 2 * ua * fa * Math.cos(LEAD_ANGLE * D2R));
+  const fold = 1 - sm3(0.08, 0.3, J.lh[0] - J.pel[0]);           // after impact, with the hands past him, the arm may fold
+  const short = () => clamp(want - len(sub(O.lh, O.ls)), 0, 0.12) * fold;
+  const O = Object.assign({}, J); if (short() < 1e-4) return J;
+  const head = J.club[1], pin = 1 - sm3(0.15, 0.5, head[1]);     // club head near the ground: it must stay on the ball
+  // 1) with the club on the ball, the body makes the room: the upper body tips up and back about the pelvis
+  //    (a little taller over the ball) until the lead arm hangs nearly straight. Hands and club don't move.
+  if (pin > 0.01) {
+    const UP = ['chest', 'neck', 'head', 'ls', 'ts', 'le', 'te'], DIRS = ['s', 'Lt', 'F', 'face'];
+    for (let it = 0; it < 6; it++) {
+      const c = short() * pin; if (c < 1e-4) break;
+      const a0 = sub(O.ls, O.pel), tgt = sub(sub(O.ls, mul(norm(sub(O.lh, O.ls)), c)), O.pel);
+      let k = cross(a0, tgt); const kl = len(k); if (kl < 1e-9) break; k = mul(k, 1 / kl);
+      const ang = Math.acos(clamp(dot(norm(a0), norm(tgt)), -1, 1));
+      for (const n of UP) if (isV(O[n])) O[n] = rotAbout(O[n], O.pel, k, ang);
+      for (const n of DIRS) if (isV(O[n])) O[n] = norm(rotDir(O[n], k, ang));
+    }
+  }
+  // 2) with the club up in the air, the hands (and club) swing out on a wider arc instead
+  const c2 = short() * (1 - pin);
+  if (c2 > 1e-4) {
+    const v = mul(norm(sub(O.lh, O.ls)), c2);
+    for (const n of ['lh', 'lw', 'th', 'tw', 'hands', 'clubhead', 'clubtip']) if (isV(O[n])) O[n] = add(O[n], v);
+    O.club = [add(O.club[0], v), add(O.club[1], v)];
+  }
+  // the trail shoulder reaches for the trail hand if it's now out of reach
+  if (!(J.tdrop > 0.5)) {
+    const ut = len(sub(J.te, J.ts)), ft = len(sub(J.th, J.te)), reach = (ut + ft) * 0.995, d = len(sub(O.th, O.ts));
+    if (d > reach) { O.ts = add(O.ts, mul(norm(sub(O.th, O.ts)), d - reach)); O.Lt = norm(sub(O.ls, O.ts)); }
+  }
+  O._firm = true; return O;
+}
 // ---------- posture: knees no more bent than a real golfer's ----------
 // The rig and the captured swing both put the hips too low for the legs (0.46 m thigh, 0.44 m shin), so the knees
 // bent 45-65 degrees at address where good players flex about 15-30. This raises the pelvis and pushes it back so
@@ -261,10 +308,10 @@ function standTall(J) {
   for (const g of legs) O[g.k] = ik(O[g.a], O[g.h], g.sh, g.th, g.pole);
   const s = norm(sub(J.neck, P)), cr = len(sub(J.chest, J.pel)) / (L || 1); O.s = s; O.chest = add(P, mul(sub(J.neck, P), cr));
   O._tall = 1; return O; }
-function keyJoints(dr, i) { return standTall(keyJoints0(dr, i)); }
+function keyJoints(dr, i) { return firmArms(standTall(keyJoints0(dr, i))); }
 function keyJoints0(dr, i) { return usesCapture(dr) ? poseOf(dr, keyInfo(dr, i)) : rig(dr.seq[i].P); }
 function startJ(dr) { prep(dr); return keyJoints(dr, 0); }
-function jointsAt(dr, t) { return standTall(jointsAt0(dr, t)); }
+function jointsAt(dr, t) { return firmArms(standTall(jointsAt0(dr, t))); }
 function jointsAt0(dr, t) {
   prep(dr); const s = sampleAt(dr, t);
   if (!usesCapture(dr)) return rig(s.p);
@@ -324,7 +371,7 @@ function monoCubic(T, F, t, rest0, rest1) {   // Fritsch-Carlson monotone interp
   return (2 * u3 - 3 * u2 + 1) * F[k] + (u3 - 2 * u2 + u) * hh * m[k] + (-2 * u3 + 3 * u2) * F[k + 1] + (u3 - u2) * hh * m[k + 1];
 }
 // the red "not this" pose for key i: the golfer's own pose with the fault added
-function ghostAt(dr, i) { const J = ghostAt0(dr, i); return J && standTall(J); }
+function ghostAt(dr, i) { const J = ghostAt0(dr, i); return J && firmArms(standTall(J)); }
 function ghostAt0(dr, i) {
   prep(dr); const key = dr.seq[i]; if (!key || !key.G) return null;
   if (!usesCapture(dr)) return rig(key.G);
