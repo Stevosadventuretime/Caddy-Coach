@@ -275,7 +275,7 @@ function jointsAt0(dr, t) {
   // through the downswing (e.g. address -> impact) isn't a real swing, so that blends instead
   const top = SWING.phases.top, fin = SWING.phases.finish;
   if (A.f != null && B.f != null && B.f > A.f && !(A.f < top && B.f > top && B.f < fin))
-    return compose(A.f + (B.f - A.f) * s.raw, lerpDelta(deltaOf(A), deltaOf(B), s.u));
+    return compose(runFrame(dr, i, s.t, A.f + (B.f - A.f) * s.raw), lerpDelta(deltaOf(A), deltaOf(B), s.u));
   // going back (e.g. finish -> address) rewinds the capture, eased, so the club comes back round rather than through him
   if (A.f != null && B.f != null && B.f < A.f) {
     // at an even hand speed (by distance along the hand path), not frame by frame, so the fast part doesn't whip past
@@ -287,6 +287,41 @@ function jointsAt0(dr, t) {
   const J = lerpJ(poseOf(dr, A), poseOf(dr, B), s.u);
   if (J.club && J.arms === 'club' && J.sd) { const a = poseOf(dr, A).club, L = a ? len(sub(a[1], a[0])) : 0.95; J.club = [sub(J.lh, mul(J.sd, 0.06)), add(J.lh, mul(J.sd, L - 0.06))]; }
   return finish(J);
+}
+// Keys that follow each other with no pause (e.g. takeaway -> half -> top) are one continuous movement. Playing each
+// key's stretch of the capture at its own even speed made the speed jump at every key, like a robot hitting marks.
+function runFrame(dr, i, t, fallback) {
+  const tl = dr._tl, seq = dr.seq, n = seq.length, top = SWING.phases.top, fin = SWING.phases.finish;
+  const fwd = j => {   // is the move into key j a forward step through the capture?
+    if (j <= 0 || j >= n || seq[j]._held || seq[j - 1]._held) return false;
+    const A = keyInfo(dr, j - 1), B = keyInfo(dr, j);
+    return A.f != null && B.f != null && B.f > A.f && !(A.f < top && B.f > top && B.f < fin);
+  };
+  const flows = j => tl[j].h - tl[j].e < 1e-6;   // no pause after arriving at key j
+  if (!fwd(i)) return fallback;
+  // the run starts at key a (it may pause there first) and moves through to key b without stopping
+  let a = i - 1, b = i; while (a > 0 && fwd(a) && flows(a)) a--; while (b + 1 < n && flows(b) && fwd(b + 1)) b++;
+  if (b === a + 1) return fallback;
+  // each key still lands at its own time (so counts and labels line up), but the speed flows smoothly through the
+  // keys (a monotone cubic through the key times) instead of jumping at each one; it starts from rest after a pause
+  // and comes to rest where he stops
+  const T = [tl[a + 1].s], Fr = [keyInfo(dr, a).f];
+  for (let j = a + 1; j <= b; j++) { T.push(tl[j].e); Fr.push(keyInfo(dr, j).f); }
+  return monoCubic(T, Fr, t, (a === 0 || !flows(a)), !flows(b));
+}
+function monoCubic(T, F, t, rest0, rest1) {   // Fritsch-Carlson monotone interpolation of F over T
+  const n = T.length, d = [], m = [];
+  for (let k = 0; k < n - 1; k++) d.push((F[k + 1] - F[k]) / Math.max(1e-6, T[k + 1] - T[k]));
+  for (let k = 0; k < n; k++) {
+    if (k === 0) m.push(rest0 ? 0 : d[0]); else if (k === n - 1) m.push(rest1 ? 0 : d[n - 2]);
+    else m.push(d[k - 1] * d[k] <= 0 ? 0 : (d[k - 1] + d[k]) / 2);
+  }
+  for (let k = 0; k < n - 1; k++) { if (d[k] === 0) { m[k] = m[k + 1] = 0; continue; }
+    const a = m[k] / d[k], b = m[k + 1] / d[k], h = a * a + b * b; if (h > 9) { const q = 3 / Math.sqrt(h); m[k] = q * a * d[k]; m[k + 1] = q * b * d[k]; } }
+  if (t <= T[0]) return F[0]; if (t >= T[n - 1]) return F[n - 1];
+  let k = 0; while (k < n - 2 && t > T[k + 1]) k++;
+  const hh = T[k + 1] - T[k], u = (t - T[k]) / hh, u2 = u * u, u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * F[k] + (u3 - 2 * u2 + u) * hh * m[k] + (-2 * u3 + 3 * u2) * F[k + 1] + (u3 - u2) * hh * m[k + 1];
 }
 // the red "not this" pose for key i: the golfer's own pose with the fault added
 function ghostAt(dr, i) { const J = ghostAt0(dr, i); return J && standTall(J); }
@@ -805,6 +840,29 @@ const QUAL = { s: 1, min: 0.7 };
 try { const q = JSON.parse(localStorage.getItem('cc_q3d') || 'null'); if (q && q.v === root.CC_VER && q.s >= QUAL.min && q.s <= 1) QUAL.s = q.s; } catch (e) { }
 function saveQual() { try { localStorage.setItem('cc_q3d', JSON.stringify({ s: QUAL.s, v: root.CC_VER })); } catch (e) { } }
 function slowFrames(dts) { const d = dts.slice().sort((a, b) => a - b); return d[d.length >> 1] > 24; }
+// ---------- life: a real person is never perfectly still ----------
+// While the demo holds a position (or moves slowly) the golfer breathes, his weight drifts a little between his feet,
+// his head settles and the club head hovers. Feet stay planted; knees take half the drift. Fades out as he swings.
+const REDUCED = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
+const LIFE_POS_SKIP = { la: 1, ta: 1, lt: 1, tt: 1 }, LIFE_KNEE = { lk: 1, tk: 1 }, LIFE_UPPER = { chest: 1, neck: 1, head: 1, ls: 1, ts: 1, le: 0.5, te: 0.5 };
+function lifeAt(J, t, w) {
+  if (!J || w <= 0.001) return J;
+  const n = (a, b, c) => Math.sin(t * a + c) * 0.6 + Math.sin(t * b + c * 1.7) * 0.4;
+  const sway = [0.007 * n(1.31, 2.17, 0.4) * w, 0, 0.004 * n(0.97, 1.83, 2.1) * w];
+  const br = 0.0035 * Math.sin(t * 2 * Math.PI / 3.9) * w;          // one breath every ~4 s
+  const o = {};
+  for (const k in J) {
+    const v = J[k];
+    if (MOTION_VEC[k] || LIFE_POS_SKIP[k]) { o[k] = v; continue; }
+    const kk = LIFE_KNEE[k] ? 0.5 : 1, up = (LIFE_UPPER[k] || 0) * br;
+    if (isV(v)) o[k] = [v[0] + sway[0] * kk, v[1] + up, v[2] + sway[2] * kk];
+    else if (isPair(v)) o[k] = [add(v[0], sway), add(v[1], sway)];
+    else o[k] = v;
+  }
+  // the head settles: a slow look a degree or two either way
+  if (isV(J.face)) { const a = 0.025 * n(0.61, 1.13, 1.0) * w, c = Math.cos(a), sn = Math.sin(a), f = J.face; o.face = [f[0] * c + f[2] * sn, f[1], -f[0] * sn + f[2] * c]; }
+  return o;
+}
 function Player(wrap, dr, opt) {
   opt = opt || {}; prep(dr);
   const gl = webgl();
@@ -824,7 +882,7 @@ function Player(wrap, dr, opt) {
     if (st.dead) return;
     const ms = now - st.last, dt = Math.min(0.1, ms / 1000); st.last = now;
     if (gl && st.playing && !document.hidden && ms < 1000 && warm-- <= 0) { dts.push(ms); if (dts.length >= 30) { if (slowFrames(dts) && QUAL.s > QUAL.min) { QUAL.s = Math.max(QUAL.min, QUAL.s * 0.85); size(); saveQual(); } dts.length = 0; } }
-    if (st.playing) { st.t += dt * st.speed; if (st.t >= dr._dur) st.t = 0; }
+    if (st.playing) { st.t += dt * st.speed; st.lt = (st.lt || 0) + dt * st.speed; if (st.t >= dr._dur) st.t = 0; }
     // paused with the camera settled: the picture can't change, so don't redraw it (saves the battery and keeps the phone cool)
     if (gl && !sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) st.dirty = true;
     if (st.gen !== STATS.shared) { st.gen = STATS.shared; st.dirty = true; }   // a card picture borrowed the shared canvas
@@ -836,7 +894,12 @@ function Player(wrap, dr, opt) {
     if (!W) size();
     // the card pictures share this renderer and may have shrunk it: put it back to the player's size
     if (gl) { R.getSize(_sz); if (_sz.x !== gw() || _sz.y !== gh() || R.getPixelRatio() !== 1) { R.setPixelRatio(1); R.setSize(gw(), gh(), false); } if (Math.abs(sc.cam.aspect - W / H) > 1e-3) { sc.cam.aspect = W / H; sc.cam.updateProjectionMatrix(); } }
-    const s = sampleAt(dr, st.t), J = jointsAt(dr, st.t), key = s.key;
+    const s = sampleAt(dr, st.t), key = s.key;
+    // how much "life" to add: full when the hands are near still, none mid-swing (measured, so it fades smoothly)
+    let J = jointsAt(dr, st.t);
+    if (!REDUCED && J && J.lh) { const J2 = jointsAt(dr, Math.min(dr._dur - 1e-3, st.t + 0.05)), sp = J2 && J2.lh ? len(sub(J2.lh, J.lh)) / 0.05 : 0;
+      const want = clamp(1 - sp / 0.35, 0, 1); st.life = st.life == null ? want : st.life + (want - st.life) * 0.15;
+      J = lifeAt(J, st.lt || 0, st.life); }
     if (key.step !== st.step) { st.step = key.step; opt.onStep && opt.onStep(key.step); }
     // camera: ease toward this key's view
     const want = camState(viewFor(key), key.camo || dr.camo);
