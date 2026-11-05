@@ -56,15 +56,16 @@ function loadClassic(base) {
 // The drill golfer is the classic figure's body and clothes (polo, trousers, belt, shoes, glove) with the Rocketbox
 // head and neck: a real face and hair on the familiar outfit. The cap is left off: refitted to the new head it hid the
 // face. ?golfer=classic shows the old head and cap.
-let RB = null;
+let RB = null, DONE = false;   // DONE: both figures settled (the classic one alone must not count as ready, or a
+// drill opened while the head is still downloading would keep the old head)
 function load(base) {
-  if (DATA) return Promise.resolve(DATA);
+  if (DATA && DONE) return Promise.resolve(DATA);
   if (LOADING) return LOADING;
   base = base || '';
   // golfer-*.wasm files are not WebAssembly: they're the golfer's binary mesh, named .wasm so every host serves them as binary
   let classic = false; try { classic = /[?&]golfer=classic\b/.test(root.location.search); } catch (e) {}
   LOADING = Promise.all([loadClassic(base), classic ? null : loadRB(base).catch(e => { console.warn('realistic head unavailable, using the classic figure', e); return null; })])
-    .then(([d, rb]) => { RB = rb; return d; })
+    .then(([d, rb]) => { RB = rb; DONE = true; return d; })
     .catch(e => { LOADING = null; throw e; });
   return LOADING;
 }
@@ -222,7 +223,7 @@ function poseGolfer(fig, J, o) {
   const neckP = A(J.neck);
   const pTop = pel.clone().addScaledVector(Yh, Lhip);
   const spTail = pTop.clone().addScaledVector(s, Lsp * 0.96);
-  const mid = H.clone().add(Lt).normalize();
+  const mid = H.clone().multiplyScalar(0.4).add(Lt.clone().multiplyScalar(0.6)).normalize();   // the lower back twists part way toward the shoulders
   setBone(fig, 'hips', pel, pTop, H, X);
   setBone(fig, 'spine', pTop, spTail, mid, X);
   const chM = setBone(fig, 'chest', spTail, neckP, Lt, X).clone();
@@ -251,7 +252,10 @@ function poseGolfer(fig, J, o) {
     // elbow: two-bone reach from shoulder to wrist with the mesh's own arm lengths, bending the way the rig's elbow points
     const rigEl = A(el), toW = wrist.clone().sub(shV), Lw = toW.length(), dW = toW.clone().normalize();
     let pole = rigEl.clone().sub(shV).projectOnPlane(dW); if (pole.lengthSq() < 1e-8) pole = new T.Vector3(0, -1, -0.3); pole.normalize();
-    const reach = Math.min(Lw, (Lu + Lf) * 0.999), along = (Lu * Lu - Lf * Lf + reach * reach) / (2 * reach), hgt = Math.sqrt(Math.max(0, Lu * Lu - along * along));
+    // soft elbows: a real arm is never locked dead straight, so near full reach the arm keeps a slight bend and the
+    // bones stretch a touch (at most ~3%) rather than snapping straight
+    const kS = Math.max(1, Lw / ((Lu + Lf) * 0.975)), Lu2 = Lu * kS, Lf2 = Lf * kS;
+    const reach = Math.min(Lw, (Lu2 + Lf2) * 0.999), along = (Lu2 * Lu2 - Lf2 * Lf2 + reach * reach) / (2 * reach), hgt = Math.sqrt(Math.max(0, Lu2 * Lu2 - along * along));
     const elV = shV.clone().addScaledVector(dW, along * Lw / reach).addScaledVector(pole, hgt);
     const du = elV.clone().sub(shV), df = wrist.clone().sub(elV);
     let n = new T.Vector3().crossVectors(du, df); if (n.lengthSq() < 1e-8) n = new T.Vector3().crossVectors(du, pole).negate(); n.normalize();
@@ -273,8 +277,17 @@ function poseGolfer(fig, J, o) {
     setBone(fig, 'thigh' + S, hipV, knV, ln, ln0);
     setBone(fig, 'shin' + S, knV, anV, ln, ln0);
     // foot: ankle to the toes, flat on the ground unless the heel is up
-    const toeV = A(toe), fdir = toeV.clone().sub(anV);
-    const f0 = ft.T.clone().sub(ft.H), fs0 = new T.Vector3().crossVectors(Yv, f0).normalize(), fs = new T.Vector3().crossVectors(Yv, fdir).normalize();
+    const toeV = A(toe); let fdir = toeV.clone().sub(anV);
+    const f0 = ft.T.clone().sub(ft.H), fs0 = new T.Vector3().crossVectors(Yv, f0).normalize();
+    // heel up, toes down: a foot that's meant to be on the ground pivots on its toes (they stay at their rest height)
+    // instead of tipping forward into the air. A foot lifted off the ground (stepping drills) is left as the rig says.
+    const toeY = ft.T.y, footL = f0.length(), lift = anV.y - toeY;
+    if (toeV.y < 0.12 && lift > -0.0 && fdir.y < 0) {
+      const hz = new T.Vector3(fdir.x, 0, fdir.z); if (hz.lengthSq() < 1e-8) hz.set(0, 0, 1); hz.normalize();
+      const dy = Math.min(lift, footL * 0.97), dh = Math.sqrt(Math.max(0, footL * footL - dy * dy));
+      fdir = hz.multiplyScalar(dh).add(new T.Vector3(0, -dy, 0));
+    }
+    const fs = new T.Vector3().crossVectors(Yv, fdir).normalize();
     setBone(fig, 'foot' + S, anV, anV.clone().add(fdir.normalize().multiplyScalar(f0.length())), fs, fs0, false);
   }
   // where the elbows really are (the mesh's own arm lengths), so labels can point at them
@@ -347,5 +360,5 @@ function fingers(fig, S, Mh, curl, thumb) {
     }
   }
 }
-root.CCGolfer = { load, make, ready: () => !!DATA, restPose, GRIP, CURL, _fingers: fingers, _handRest: handRest };
+root.CCGolfer = { load, make, ready: () => !!DATA && DONE, restPose, GRIP, CURL, _fingers: fingers, _handRest: handRest };
 })(typeof window !== 'undefined' ? window : this);
