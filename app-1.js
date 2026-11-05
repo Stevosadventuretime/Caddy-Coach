@@ -199,6 +199,9 @@ document.addEventListener('cc-golfer',()=>{document.querySelectorAll('img[data-p
  if(vis)posterQ.push(im);else{im.removeAttribute('src');if(posterIO)posterIO.observe(im.parentElement);else posterQ.push(im)}});drainPosters()});
 // ---------- the drill player ----------
 const DP={el:null,player:null,d:null,ret:null};
+// rendered swing films, shown inside the drill they belong to (tap to play; streamed, not kept offline)
+const DRILL_FILMS={tempo:[{src:'media/swing-real.mp4',poster:'media/swing-real.jpg',cap:'A full swing, rendered with real light'},{src:'media/swing-check.mp4',poster:'media/swing-check.jpg',cap:'Swing check: tempo, spine tilt and head movement'}]};
+function filmsHTML(d){const f=DRILL_FILMS[d.id];if(!f)return'';return `<h3>Watch the swing</h3><div class="films">${f.map(x=>`<figure><video controls playsinline preload="none" poster="${x.poster}" src="${x.src}"></video><figcaption>${esc(x.cap)}</figcaption></figure>`).join('')}</div>`}
 function dpHTML(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))];
  return `<div class="dpTop"><button type="button" class="dpBack" data-dp-close aria-label="Close drill"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2 id="dpTitle">${esc(d.name)}</h2></div>
  <div class="dpStageWrap"><div class="dpStage" id="dpStage" role="img" aria-label="3D demonstration of ${esc(d.name)}"></div>
@@ -214,6 +217,7 @@ function dpHTML(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))];
   <p class="dpWhy">${esc(d.why)}</p>
   <p class="dpBy">${esc(d.by)}</p>
   <div class="dpFacts"><span><b>Where</b>${whereLabel(d.where)}</span><span><b>Kit</b>${esc(d.kit)}</span><span><b>Time</b>${esc(d.time)}</span><span><b>Dose</b>${esc(d.dose)}</span></div>
+  ${filmsHTML(d)}
   <h3>Step by step</h3><ol class="dpSteps">${d.steps.map((s,i)=>`<li><button type="button" data-dp-step="${i}"><span>${i+1}</span><div>${esc(s)}<em>Feel: ${esc(d.feel[i]||'')}</em></div></button></li>`).join('')}</ol>
   ${(d.mistakes||[]).length?`<h3>Common mistakes</h3><ul class="dpMist">${d.mistakes.map(m=>`<li>${esc(m)}</li>`).join('')}</ul>`:''}
   <h3>Fixes</h3><div class="dpFix">${fx.map(f=>`<span>${esc(f)}</span>`).join('')}</div>
