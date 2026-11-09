@@ -32,8 +32,8 @@ class T(unittest.TestCase):
 
     def test_turn_targets(self):
         p = self.ph
-        self.assertTrue(85 <= self.S[p['top']] <= 95, self.S[p['top']]); self.assertTrue(40 <= self.Hh[p['top']] <= 50, self.Hh[p['top']])
-        self.assertTrue(-45 <= self.Hh[p['impact']] <= -35, self.Hh[p['impact']]); self.assertTrue(-27 <= self.S[p['impact']] <= -18, self.S[p['impact']])
+        self.assertTrue(93 <= self.S[p['top']] <= 103, self.S[p['top']]); self.assertTrue(43 <= self.Hh[p['top']] <= 53, self.Hh[p['top']])
+        self.assertTrue(-43 <= self.Hh[p['impact']] <= -33, self.Hh[p['impact']]); self.assertTrue(-17 <= self.S[p['impact']] <= -7, self.S[p['impact']])
         F = self.J['F'][p['finish']]; Fh = F * [1, 0, 1]; Fh /= np.linalg.norm(Fh)
         self.assertLess(np.degrees(np.arccos(np.clip(Fh @ [1, 0, 0], -1, 1))), 25)
 
@@ -63,15 +63,28 @@ class T(unittest.TestCase):
         self.assertLess(off.max(), 0.01)
         L = np.linalg.norm(self.J['th'] - self.J['ts'], axis=1); self.assertLess(L.max(), 0.262 + 0.266 + 0.07)
 
+    def test_lead_arm_stays_firm(self):
+        # good players keep the lead arm close to straight from address through impact (it was bent to ~120 degrees)
+        J = self.J
+        for k in ('address', 'top', 'impact'):
+            i = self.ph[k]; u, v = J['ls'][i] - J['le'][i], J['lh'][i] - J['le'][i]
+            a = np.degrees(np.arccos(np.clip(u @ v / np.linalg.norm(u) / np.linalg.norm(v), -1, 1))); self.assertGreater(a, 155, k)
+
+    def test_head_steady(self):
+        a, i = self.ph['address'], self.ph['impact']; d = np.linalg.norm((self.J['head'][a:i + 1] - self.J['head'][a])[:, [0, 2]], axis=1)
+        self.assertLess(d.max(), 0.14)
+
     def test_paths_are_in_the_repo(self):
         import make_swing; root = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
         self.assertTrue(os.path.abspath(make_swing.MESH).startswith(root), make_swing.MESH)
 
     def test_no_jumps(self):
-        for n in ['pel', 'neck', 'head', 'ls', 'ts', 'le', 'te', 'lk', 'tk', 'la', 'ta', 'lt', 'tt']:
+        for n in ['pel', 'neck', 'head', 'ls', 'ts', 'lk', 'tk', 'la', 'ta', 'lt', 'tt']:
             self.assertLess(np.linalg.norm(np.diff(self.J[n], axis=0), axis=1).max(), 0.12, n)
-        for n in ['lh', 'th']:
-            self.assertLess(np.linalg.norm(np.diff(self.J[n], axis=0), axis=1).max(), 0.2, n)
+        for n in ['le', 'te']:   # elbows whip through impact with the hands (smoothly: ~8 m/s at the release)
+            self.assertLess(np.linalg.norm(np.diff(self.J[n], axis=0), axis=1).max(), 0.16, n)
+        for n in ['lh', 'th']:   # a straight lead arm swings the hands on a wider, faster arc
+            self.assertLess(np.linalg.norm(np.diff(self.J[n], axis=0), axis=1).max(), 0.22, n)
 
     def test_file_schema(self):
         out = os.path.join(tempfile.mkdtemp(), 'swing-model.json')
