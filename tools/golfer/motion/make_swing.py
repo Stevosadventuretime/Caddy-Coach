@@ -16,7 +16,7 @@ def build():
 
 def to_json(path, J, ph, ball):
     n = len(J['pel']); keys = sorted(J)
-    def r(v, k): return np.round(v, 4 if k in VEC else 3).tolist()
+    def r(v, k): return np.round(v, 1 if k == 'roll' else 4 if k in VEC else 3).tolist()
     frames = [{k: r(J[k][f], k) for k in keys} for f in range(n)]
     return {'v': 1, 'fps': 60, 'phases': ph, 'ball': np.round(ball, 3).tolist(), 'frames': frames,
             'credit': 'CMU mocap ' + os.path.basename(path)[:-4] + ' (mocap.cs.cmu.edu), tour-adjusted'}

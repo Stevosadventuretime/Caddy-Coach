@@ -156,8 +156,10 @@ function make(ghost) {
   if (!RB || ghost) return body;
   // the Rocketbox head, posed by the same skeleton (its own rest pose and neck length)
   const keepD = DATA, keepT = TEX; DATA = RB.D; TEX = RB.TX;
-  // face, neck and hair only: the avatar's body texture is its own striped shirt
-  let head; try { head = make1(false, (mat, ps) => mat !== 'rbBody' && ps.some(p => HEADP.includes(p))); } finally { DATA = keepD; TEX = keepT; }
+  // face and neck only: the avatar's body texture is its own striped shirt. Its hair is left to the head texture
+  // (short hair painted on the scalp): the alpha-tested hair cards showed as black streaks with a pale patch between
+  // them on the crown, which read as a bald spot.
+  let head; try { head = make1(false, (mat, ps) => mat !== 'rbBody' && mat !== 'rbHair' && ps.some(p => HEADP.includes(p))); } finally { DATA = keepD; TEX = keepT; }
   const G = new T.Group(); G.add(body.mesh); G.add(head.mesh);
   const fig = { G, mesh: body.mesh, bones: body.bones, meta: body.meta, ghost: false, mats: body.mats.concat(head.mats), parts: [body, head],
     pose: (J, o) => { body.pose(J, o); head.pose(J, o); fig.elbows = body.elbows; },
@@ -325,6 +327,16 @@ function handFrame(J, S, lead, fig) {
     const across = new T.Vector3().crossVectors(sd, towardBody).normalize();
     let pn = lead ? across.clone() : across.clone().negate();
     if (pn.dot(w) * (lead ? 1 : -1) < 0 && Math.abs(pn.dot(w)) > 0.5) pn.negate();
+    if (J.arms === 'club' && !J.tdrop && typeof J.roll === 'number') {
+      // a full swing: the palms are worked out from the swing plane and how far the hands have rolled (J.roll, from the
+      // swing data: square at address and impact, toe up halfway back and halfway through). Working them out from the
+      // elbows flipped the lead palm away from the grip part-way back, so the lead hand came off the club.
+      // The plane holds the target line and slopes up from the ball to the shoulders (its normal is up and toward the
+      // golfer's front). Trail palm = where the clubface points; lead palm faces it from the other side of the grip.
+      const N = new T.Vector3(0, 0.28, 0.96).normalize();
+      const face = new T.Vector3().crossVectors(N, sd);
+      if (face.lengthSq() > 1e-6) { face.normalize().applyAxisAngle(sd, J.roll * Math.PI / 180); pn = lead ? face.negate() : face; }
+    }
     pn.applyAxisAngle(sd, GRIP.roll[S] * (lead ? 1 : -1)).normalize();
     pn.add(towardBody.clone().multiplyScalar(0.0)).normalize();
     const L = new T.Matrix4().makeBasis(sdL, pnL, new T.Vector3().crossVectors(sdL, pnL));
