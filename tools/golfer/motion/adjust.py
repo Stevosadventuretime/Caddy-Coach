@@ -137,7 +137,7 @@ def _shaft(J, ph):
 LEAD_ANGLE = dict(address=166, takeaway=170, half=170, top=162, down=166, impact=172)   # lead elbow (deg) good players keep
 
 def grip(J, ph, B):
-    """both hands on the grip, 8 cm apart along the shaft. The grip is placed from the lead arm: the lead hand stays
+    """both hands on the grip, 7 cm apart along the shaft (touching). The grip is placed from the lead arm: the lead hand stays
     where the capture put it, or further out along the arm if the capture had that elbow bent more than good players
     do (up to impact; after that it folds as captured). The trail hand sits below it on the shaft; if it can't reach,
     the trail shoulder comes forward/down to it (the lead arm is never pulled in to make room).
@@ -158,7 +158,7 @@ def grip(J, ph, B):
     target = gaussian_filter1d(np.minimum(target, L), 1.0)
     lw = J['ls'] + _unit(v) * target[:, None]
     J['lw'] = lw; J['lh'] = lw + off['l']
-    J['th'] = J['lh'] + d * 0.08; J['tw'] = J['th'] - off['t']
+    J['th'] = J['lh'] + d * 0.07; J['tw'] = J['th'] - off['t']   # hands touching: the trail hand's pinky over the lead hand
     # trail shoulder reaches for the trail hand when it's out of reach
     tv = J['tw'] - J['ts']; td = np.linalg.norm(tv, axis=1); over = np.maximum(0, td - L)
     J['ts'] = J['ts'] + _unit(tv) * gaussian_filter1d(over, 1.0)[:, None]
@@ -178,11 +178,27 @@ def club(J, ph, out_fps=60):
         full = np.degrees(np.arctan2(s_, d[k] @ need)); ax = ax / s_
         w = _ss(1 - np.abs(fr - k) / (win * out_fps))
         for j in np.where(w > 0)[0]: d[j] = _rot(ax, full * w[j]) @ d[j]
+    # the shaft never goes through his head or neck: in the follow-through it used to pass 2-11 cm from the centre of the
+    # head (through it). Each frame it swings about the hands, away from the head, until it clears; then it's smoothed
+    # so it eases round rather than jumping.
+    d0 = d.copy()
+    for j in range(n):
+        for _ in range(60):
+            worst = None
+            for k, r in (('head', 0.17), ('neck', 0.12)):
+                p = J[k][j]; a = J['lh'][j]; t = np.clip((p - a) @ d[j], 0, CLEN); q = a + d[j] * t; gap = np.linalg.norm(p - q)
+                if gap < r and (worst is None or r - gap > worst[0]): worst = (r - gap, p, q, a, t)
+            if worst is None: break
+            _, p, q, a, t = worst; away = _unit(q - p) if np.linalg.norm(q - p) > 1e-6 else _unit(np.cross(d[j], UP))
+            ax = np.cross(d[j], away); 
+            if np.linalg.norm(ax) < 1e-9: break
+            d[j] = _rot(_unit(ax), 2.0) @ d[j]
+    d = _unit(d0 + gaussian_filter1d(d - d0, 2.0, axis=0))
     J['sd'] = d; J['club'] = np.stack([J['lh'] - d * 0.06, J['lh'] + d * CLEN], 1)
     # keep the trail hand on the shaft after the wrist correction (the trail arm follows it)
     from retarget import _ik
     ua = np.linalg.norm(J['te'][0] - J['ts'][0]); fa = np.linalg.norm(J['tw'][0] - J['te'][0])
-    hand = J['th'] - J['tw']; J['th'] = J['lh'] + d * 0.08; J['tw'] = J['th'] - hand
+    hand = J['th'] - J['tw']; J['th'] = J['lh'] + d * 0.07; J['tw'] = J['th'] - hand
     J['te'], _ = _ik(J['ts'], J['tw'], ua, fa, _unit(J['te'] - (J['ts'] + J['tw']) / 2))
     J['clubhead'] = J['club'][:, 1]; J['hands'] = (J['lh'] + J['th']) / 2
     return J, ball
@@ -218,4 +234,11 @@ def frames(J, ph, ball):
     n = len(s); fr = np.arange(n); w = _ss((fr - ph['impact']) / max(ph['through'] + (ph['finish'] - ph['through']) // 2 - ph['impact'], 1))[:, None]
     J['face'] = _unit(look * (1 - w) + bodyF * w)
     for sd in 'lt': J[sd + 'kp'] = _unit(J[sd + 'k'] - (J[sd + 'hip'] + J[sd + 'a']) / 2)
+    # how far the hands (and the clubface) have rolled about the shaft, in degrees, measured from square to the swing
+    # plane: square at address and impact, toe up by halfway back, square to the plane at the top, toe up again
+    # halfway through. golfer.js turns the palms by this so both hands wrap the grip all the way round the swing.
+    keys = [k for k in ROLL if k in ph]
+    J['roll'] = np.interp(fr, [ph[k] for k in keys], [ROLL[k] for k in keys])
     return J
+
+ROLL = dict(address=0, takeaway=45, half=90, top=90, down=60, impact=0, through=-90, finish=-90)
