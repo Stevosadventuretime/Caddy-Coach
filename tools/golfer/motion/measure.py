@@ -46,11 +46,19 @@ def glitchy(names, pos, ph):
     slide = max(np.linalg.norm(pos[seg, ix[n]] - pos[a, ix[n]], axis=1).max() for n in ('LeftFoot', 'RightFoot'))
     return bool(jump or slide > 0.03)
 
+def sequence_ok(names, pos, ph):
+    """good players' downswing: the pelvis reaches its top turning speed first, then the chest, then the lead arm"""
+    ix = _ix(names); t, i = ph['top'], ph['impact']
+    def yaw(v): return np.unwrap(np.arctan2(v[:, 2], v[:, 0]))
+    lines = [pos[:, ix['LeftUpLeg']] - pos[:, ix['RightUpLeg']], pos[:, ix['LeftArm']] - pos[:, ix['RightArm']], pos[:, ix['LeftHand']] - pos[:, ix['LeftArm']]]
+    peaks = [int(np.argmax(np.abs(np.gradient(yaw(l))[t:i + 1]))) for l in lines]
+    return peaks[0] <= peaks[1] <= peaks[2]
+
 def choose(paths):
     best, bs = None, 1e9
     for p in paths:
         n, pos, ft = bvh.load(p); ph = phases(n, pos, 1 / ft)
-        if glitchy(n, pos, ph): continue
+        if glitchy(n, pos, ph) or not sequence_ok(n, pos, ph): continue   # broken capture, or body moving in the wrong order
         t = turns(n, pos, ph, 1 / ft)
         score = sum(abs(t[k] - v) for k, v in TARGET.items()) + 20 * abs(t['tempo'] - 3)
         if score < bs: best, bs = p, score

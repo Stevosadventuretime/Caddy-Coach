@@ -5,7 +5,9 @@ from scipy.ndimage import gaussian_filter1d
 UP = np.array([0, 1.0, 0])
 UPPER = ['neck', 'head', 'ls', 'le', 'lw', 'lh', 'ts', 'te', 'tw', 'th']
 PH = ['address', 'takeaway', 'half', 'top', 'down', 'impact', 'through', 'finish']
-TOP_SH, TOP_HIP, IMP_HIP, IMP_SH = 90.0, 45.0, -40.0, -22.5
+# skilled golfers (Okuda et al. 2010; Chu et al. 2010): shoulders ~98-102 and pelvis ~48 turned at the top; at impact
+# the pelvis is ~38 open and the shoulders ~12 open
+TOP_SH, TOP_HIP, IMP_HIP, IMP_SH = 98.0, 48.0, -38.0, -12.0
 CLEN = 0.89
 
 def _unit(v): return v / np.maximum(np.linalg.norm(v, axis=-1, keepdims=True), 1e-9)
@@ -55,6 +57,7 @@ def _legs(J, B):
 
 def turns(J, ph, B):
     J = {k: v.copy() for k, v in J.items()}; n = len(J['pel']); fr = np.arange(n)
+    head0 = J['head'].copy()
     for _ in range(3):
         S, H, sg = measure_turns(J, ph)
         # finish: turn the chest to face the target
@@ -77,6 +80,14 @@ def turns(J, ph, B):
             ax = _unit(J['neck'][j] - p); Rs = _rot(ax, (cS[j] - cH[j]) * sg)
             for k in UPPER: J[k][j] = p + Rs @ (J[k][j] - p)
         _legs(J, B)
+    # keep the head steady. Turning the hips about the pelvis swung the head (which sits forward of the pelvis) round
+    # in an arc of 15-20 cm; good players' heads barely move. The whole body above the feet slides so the head follows
+    # half of the capture's own drift (the amateur's head wandered 10-17 cm), and the knees re-solve.
+    a = ph['address']; want = head0[a] + 0.5 * (head0 - head0[a]); d = want - J['head']; d[:, 1] = 0
+    d = gaussian_filter1d(d, 2.0, axis=0)
+    for k in UPPER + ['pel', 'lhip', 'thip', 'chest', 'seat', 'bum']:
+        if k in J: J[k] = J[k] + d
+    _legs(J, B)
     return J
 
 HINGE = dict(address=28, takeaway=45, half=85, top=80, down=85, impact=24, through=-80, finish=-115)   # negative: the wrists re-hinge the other way after impact   # forearm-to-shaft angle
@@ -123,23 +134,37 @@ def _shaft(J, ph):
     d = dp if (J['lh'][h] + dp[h] * CLEN)[1] > (J['lh'][h] + dm[h] * CLEN)[1] else dm
     return _unit(gaussian_filter1d(d, 1.5, axis=0))
 
+LEAD_ANGLE = dict(address=166, takeaway=170, half=170, top=162, down=166, impact=172)   # lead elbow (deg) good players keep
+
 def grip(J, ph, B):
-    """both hands on the grip: centred where the captured hands are, 8 cm apart along the shaft, arms bent to reach
-    (if the grip is out of reach it comes in toward the shoulders until both arms reach it)"""
+    """both hands on the grip, 8 cm apart along the shaft. The grip is placed from the lead arm: the lead hand stays
+    where the capture put it, or further out along the arm if the capture had that elbow bent more than good players
+    do (up to impact; after that it folds as captured). The trail hand sits below it on the shaft; if it can't reach,
+    the trail shoulder comes forward/down to it (the lead arm is never pulled in to make room).
+    (The old version centred the grip between the hands and pulled it toward the shoulders until both arms reached,
+    which bent the lead elbow to ~120 degrees at impact: the main reason the golfer looked floppy.)"""
     from retarget import _ik
-    J = {k: v.copy() for k, v in J.items()}; d = _shaft(J, ph); L = B['uarm'] + B['forearm'] - 0.005
+    J = {k: v.copy() for k, v in J.items()}; d = _shaft(J, ph); n = len(d); fr = np.arange(n)
+    ua, fa = B['uarm'], B['forearm']; L = ua + fa - 0.005
     off = {sd: J[sd + 'h'] - J[sd + 'w'] for sd in 'lt'}
-    g = (J['lh'] + J['th']) / 2; mid = (J['ls'] + J['ts']) / 2
-    for j in range(len(g)):
-        for _ in range(40):
-            lw = g[j] - d[j] * 0.04 - off['l'][j]; tw = g[j] + d[j] * 0.04 - off['t'][j]
-            if np.linalg.norm(lw - J['ls'][j]) <= L and np.linalg.norm(tw - J['ts'][j]) <= L: break
-            g[j] = g[j] + (mid[j] - g[j]) * 0.05
-    g = gaussian_filter1d(g, 1.0, axis=0)
-    for sd, sg in (('l', -1), ('t', 1)):
-        J[sd + 'h'] = g + d * 0.04 * sg; J[sd + 'w'] = J[sd + 'h'] - off[sd]
+    # how straight the lead arm should be at each frame: tour values up to impact, then the capture's own fold
+    keys = [k for k in LEAD_ANGLE if k in ph]
+    want_ang = np.interp(fr, [ph[k] for k in keys], [LEAD_ANGLE[k] for k in keys])
+    keep = _ss((fr - ph['impact']) / max(1, (ph['through'] - ph['impact'])))      # 0 up to impact -> 1 by 'through'
+    reach = np.sqrt(ua * ua + fa * fa - 2 * ua * fa * np.cos(np.radians(want_ang)))
+    lw0 = J['lw']; v = lw0 - J['ls']; dist = np.linalg.norm(v, axis=1)
+    target = np.where(dist < reach, reach, dist) * (1 - keep) + dist * keep
+    # smooth the arm's length, not the hand's position (smoothing positions cuts the corner of the fast downswing arc)
+    target = gaussian_filter1d(np.minimum(target, L), 1.0)
+    lw = J['ls'] + _unit(v) * target[:, None]
+    J['lw'] = lw; J['lh'] = lw + off['l']
+    J['th'] = J['lh'] + d * 0.08; J['tw'] = J['th'] - off['t']
+    # trail shoulder reaches for the trail hand when it's out of reach
+    tv = J['tw'] - J['ts']; td = np.linalg.norm(tv, axis=1); over = np.maximum(0, td - L)
+    J['ts'] = J['ts'] + _unit(tv) * gaussian_filter1d(over, 1.0)[:, None]
+    for sd in 'lt':
         pole = _unit(gaussian_filter1d(J[sd + 'e'] - (J[sd + 's'] + J[sd + 'w']) / 2, 2.0, axis=0))
-        J[sd + 'e'], _ = _ik(J[sd + 's'], J[sd + 'w'], B['uarm'], B['forearm'], pole)
+        J[sd + 'e'], _ = _ik(J[sd + 's'], J[sd + 'w'], ua, fa, pole)
     return J
 
 def club(J, ph, out_fps=60):
