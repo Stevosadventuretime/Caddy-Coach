@@ -1096,7 +1096,7 @@ async function profSubmit(kind){profCollect();PROF.err={};
 // logging in: remember who it is, then start the app fresh under their profile
 async function profEnter(p,isNew){await Sess.set(p.username);if(isNew)lsSet('cc_welcome',p.username);location.reload()}
 // ---- privacy: what's kept where, a copy of everything, and deleting your account ----
-const APP_OWNER_EMAIL='';   // put the address people can contact you on here before launch
+const APP_OWNER_EMAIL='caddycoachapp@gmail.com';   // who golfers contact about their data (UK GDPR)
 function privacyHTML(){const back=PROF.me?'to-me':(PROF.privBack||'to-signup');
  return `<div class="pfCard pfPriv"><button type="button" class="link pfBack" data-pf="${back}">Back</button><h2>Privacy and your data</h2>
   <p>Caddy Coach is a coaching app for golfers. Here's what it keeps, where, and why.</p>
