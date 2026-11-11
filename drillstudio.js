@@ -454,6 +454,72 @@ const HL = { hips: ['pelvis', 'lglute', 'tglute', 'lhipj', 'thipj'], head: ['hea
 // half a second on a phone, so a background worker paints them while the list is read and the screen never stalls.
 // The same function paints on the page itself when a worker can't (older phones, or the build that makes the card pictures).
 function paintTex(name, mk) {
+  if (name === 'trees') {   // four trees for the range, side by side (512 x 1024 each): lit from the upper left, transparent around them
+    const W = 2048, H = 1024, c = mk(W, H), x = c.getContext('2d');
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const kinds = [{ k: 'oak', col: [62, 98, 50] }, { k: 'poplar', col: [70, 104, 48] }, { k: 'pine', col: [40, 70, 50] }, { k: 'birch', col: [96, 128, 62] }];
+    kinds.forEach((K, i) => {
+      const ox = i * 512, cw = 512, base = H - 6, cx = ox + cw / 2;
+      const crown = K.k === 'oak' ? { cy: H * 0.46, rx: cw * 0.46, ry: H * 0.37, top: H * 0.08 } : K.k === 'poplar' ? { cy: H * 0.46, rx: cw * 0.24, ry: H * 0.42, top: H * 0.03 }
+        : K.k === 'pine' ? { cy: H * 0.48, rx: cw * 0.36, ry: H * 0.46, top: H * 0.02 } : { cy: H * 0.47, rx: cw * 0.38, ry: H * 0.37, top: H * 0.08 };
+      const tw = K.k === 'pine' ? 16 : K.k === 'birch' ? 14 : 22, tTop = crown.cy + crown.ry * 0.2;
+      // trunk and a few limbs reaching into the crown
+      x.fillStyle = K.k === 'birch' ? '#d8d4c8' : '#4a3a2c'; x.beginPath(); x.moveTo(cx - tw, base); x.lineTo(cx - tw * 0.45, tTop); x.lineTo(cx + tw * 0.45, tTop); x.lineTo(cx + tw, base); x.fill();
+      if (K.k === 'birch') { x.fillStyle = '#3a3530'; for (let j = 0; j < 26; j++) x.fillRect(cx - tw * 0.8 + rnd() * tw * 1.2, tTop + rnd() * (base - tTop), 6 + rnd() * 8, 2); }
+      x.strokeStyle = K.k === 'birch' ? '#7d7668' : '#40322a'; x.lineCap = 'round';
+      for (let j = 0; j < (K.k === 'pine' ? 0 : 7); j++) { const y0 = tTop + rnd() * 60, a = (rnd() - 0.5) * 2.2; x.lineWidth = 5 + rnd() * 5; x.beginPath(); x.moveTo(cx, y0); x.quadraticCurveTo(cx + Math.sin(a) * 60, y0 - 80, cx + Math.sin(a) * crown.rx * 0.8, y0 - 120 - rnd() * 140); x.stroke(); }
+      // leaf masses: sub-crowns, then clusters inside each, dark ones first (the inside of the crown) and lit ones on top
+      const subs = [];
+      const inside = (px, py) => { if (K.k === 'pine') { const t = (py - crown.top) / (crown.cy + crown.ry - crown.top); return t > 0 && t < 1 && Math.abs(px - cx) < crown.rx * t * (0.75 + 0.25 * Math.sin(t * 40)); }
+        const dx = (px - cx) / crown.rx, dy = (py - crown.cy) / crown.ry; return dx * dx + dy * dy < 1; };
+      for (let j = 0; j < 400 && subs.length < (K.k === 'pine' ? 40 : 16); j++) { const px = cx + (rnd() * 2 - 1) * crown.rx, py = crown.top + rnd() * (crown.cy + crown.ry - crown.top); if (inside(px, py)) subs.push([px, py, (K.k === 'pine' ? 30 : 46) + rnd() * 40]); }
+      const L = [-0.62, -0.78];   // light from the upper left
+      for (const pass of [0, 1]) for (const [sx, sy, sr] of subs) {
+        const n = pass ? 110 : 60;
+        for (let j = 0; j < n; j++) {
+          const a = rnd() * 6.283, r = Math.sqrt(rnd()) * sr, px = sx + Math.cos(a) * r, py = sy + Math.sin(a) * r * 0.85;
+          const nx = (px - sx) / sr, ny = (py - sy) / sr, lit = Math.max(0, -(nx * L[0] + ny * L[1])), up = 1 - (py - crown.top) / (base - crown.top);
+          const k = pass ? 0.62 + 0.55 * lit + 0.18 * up : 0.38 + 0.12 * up, v = 0.92 + rnd() * 0.16;
+          x.fillStyle = `rgb(${Math.min(255, K.col[0] * k * v) | 0},${Math.min(255, K.col[1] * k * v) | 0},${Math.min(255, K.col[2] * k * v * (pass ? 0.95 : 1.1)) | 0})`;
+          x.beginPath(); x.ellipse(px, py, 5 + rnd() * (K.k === 'pine' ? 7 : 10), 4 + rnd() * 7, rnd() * 3, 0, 7); x.fill();
+        }
+      }
+      // ragged edges: loose leaves just outside the crown
+      for (let j = 0; j < 260; j++) { const [sx, sy, sr] = subs[(rnd() * subs.length) | 0], a = rnd() * 6.283, r = sr * (0.95 + rnd() * 0.3);
+        const k = 0.55 + rnd() * 0.5; x.fillStyle = `rgb(${K.col[0] * k | 0},${K.col[1] * k | 0},${K.col[2] * k | 0})`; x.beginPath(); x.arc(sx + Math.cos(a) * r, sy + Math.sin(a) * r * 0.85, 2 + rnd() * 4, 0, 7); x.fill(); }
+    });
+    return c;
+  }
+  if (name === 'planks') {   // light oak floorboards, 1.6 m square and tiling: 10 boards across, staggered ends, grain and a little colour variation
+    const S = 1024, c = mk(S, S), x = c.getContext('2d'), n = 10, bw = S / n;
+    let seed = 5; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < n; i++) {
+      let y = -rnd() * S;
+      while (y < S) {
+        const len = S * (0.45 + rnd() * 0.55), tone = 0.86 + rnd() * 0.22, warm = rnd() * 14;
+        const g = x.createLinearGradient(i * bw, 0, (i + 1) * bw, 0); const col = (k) => `rgb(${(204 + warm) * tone * k | 0},${163 * tone * k | 0},${118 * tone * k | 0})`;
+        g.addColorStop(0, col(0.96)); g.addColorStop(0.5, col(1.02)); g.addColorStop(1, col(0.95));
+        for (const yy of [y, y + S, y - S]) { x.fillStyle = g; x.fillRect(i * bw, yy, bw, len); }
+        x.save(); x.beginPath(); x.rect(i * bw, y, bw, len); x.rect(i * bw, y - S, bw, len); x.rect(i * bw, y + S, bw, len); x.clip();
+        for (let j = 0; j < 14; j++) { const gx = i * bw + 4 + rnd() * (bw - 8), ph = rnd() * 6; x.strokeStyle = `rgba(110,72,38,${0.06 + rnd() * 0.1})`; x.lineWidth = 0.6 + rnd() * 1.4; x.beginPath();
+          for (let t = 0; t <= S * 2; t += 16) { const px = gx + Math.sin(t / (60 + j * 7) + ph) * 2.5, py = y - S + t; t ? x.lineTo(px, py) : x.moveTo(px, py); } x.stroke(); }
+        if (rnd() < 0.35) { const kx = i * bw + 10 + rnd() * (bw - 20), ky = y + rnd() * len; x.fillStyle = 'rgba(120,80,45,.35)'; x.beginPath(); x.ellipse(kx, ky, 3, 6, 0, 0, 7); x.fill(); }
+        x.restore();
+        for (const yy of [y, y + S, y - S]) { x.fillStyle = 'rgba(70,45,25,.55)'; x.fillRect(i * bw, yy, bw, 2); }
+        y += len;
+      }
+      x.fillStyle = 'rgba(70,45,25,.5)'; x.fillRect(i * bw, 0, 2, S);
+    }
+    return c;
+  }
+  if (name === 'rug') {   // a round woven rug: muted sage with a darker border and a cream line
+    const S = 1024, c = mk(S, S), x = c.getContext('2d'), m = S / 2;
+    let seed = 3; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const ring = (r, col) => { x.fillStyle = col; x.beginPath(); x.arc(m, m, r, 0, 7); x.fill(); };
+    ring(m, '#4c5a54'); ring(m * 0.93, '#e6dccb'); ring(m * 0.91, '#6d7d74'); ring(m * 0.62, '#5d6d65'); ring(m * 0.6, '#768880');
+    for (let i = 0; i < 90000; i++) { const a = rnd() * 6.283, r = Math.sqrt(rnd()) * m; x.fillStyle = rnd() < 0.5 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.06)'; x.fillRect(m + Math.cos(a) * r, m + Math.sin(a) * r, 2, 2); }
+    return c;
+  }
   if (name === 'grass') {
     const w = 1024, h = 1024, c = mk(w, h), x = c.getContext('2d');
     x.fillStyle = '#5f9a47'; x.fillRect(0, 0, w, h);
@@ -482,35 +548,32 @@ function paintTex(name, mk) {
     x.fillStyle = '#f2ede4'; x.fillRect(0, H * 0.93, W, H * 0.07); x.fillStyle = 'rgba(0,0,0,.08)'; x.fillRect(0, H * 0.93, W, 3);
     return c;
   }
-  if (name === 'tree') {   // a painted, hazy tree line all the way round, like the edge of a fairway on a summer morning
+  if (name === 'tree') {   // the far backdrop all the way round: a summer sky with soft clouds over a hazy distant tree line (the near trees are 3D)
     const W = 4096, H = 640, c = mk(W, H), x = c.getContext('2d');
     let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    const sky = x.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#9fc0de'); sky.addColorStop(0.7, '#dbe7ee'); sky.addColorStop(1, '#e6eee9'); x.fillStyle = sky; x.fillRect(0, 0, W, H);
-    // rows of trees: far rows paler and bluer, near rows darker and more detailed
-    const rows = [{ y: 0.80, h: 0.22, col: [150, 172, 168], n: 140, r: [10, 22] }, { y: 0.84, h: 0.30, col: [112, 140, 118], n: 120, r: [14, 30] }, { y: 0.88, h: 0.40, col: [72, 104, 70], n: 100, r: [18, 40] }, { y: 0.92, h: 0.46, col: [52, 82, 50], n: 80, r: [22, 48] }];
-    for (const R of rows) {
-      for (let i = 0; i < R.n; i++) {
-        const cx = rnd() * W, base = H * R.y, th = H * R.h * (0.6 + rnd() * 0.5), r0 = R.r[0] + rnd() * (R.r[1] - R.r[0]);
-        const conifer = rnd() < 0.25;
-        for (let k = 0; k < 140; k++) {
-          const t = rnd(), yy = base - th * (0.25 + t * 0.75), w = conifer ? r0 * (1.1 - t) : r0 * (0.6 + 0.6 * Math.sin(t * Math.PI));
-          const xx = cx + (rnd() - 0.5) * w * 1.7, rr = w * (0.10 + rnd() * 0.16);
-          const l = (0.78 + rnd() * 0.32) * 1.08; x.fillStyle = `rgb(${R.col[0] * l | 0},${R.col[1] * l | 0},${R.col[2] * l | 0})`;
-          x.beginPath(); x.arc(xx, yy, rr, 0, 7); x.fill();
-        }
-        x.fillStyle = `rgb(${R.col[0] * 0.7 | 0},${R.col[1] * 0.65 | 0},${R.col[2] * 0.6 | 0})`; x.fillRect(cx - 2, base - th * 0.3, 4, th * 0.3);
-      }
-      // haze over each row so distance reads
-      x.fillStyle = 'rgba(214,228,234,0.18)'; x.fillRect(0, 0, W, H * R.y + 4);
+    const sky = x.createLinearGradient(0, 0, 0, H * 0.9); sky.addColorStop(0, '#5f93c9'); sky.addColorStop(0.6, '#9cc0e0'); sky.addColorStop(1, '#d6e4ea'); x.fillStyle = sky; x.fillRect(0, 0, W, H);
+    // fair-weather clouds: flat grey-blue bases, bright tops, smaller and flatter toward the horizon
+    for (let i = 0; i < 46; i++) {
+      const cy = H * (0.3 + rnd() * 0.42), sc = 0.5 + (cy / H) * 0.9 * 0, size = (1.1 - cy / H) * (60 + rnd() * 120), cx = rnd() * W;
+      for (let j = 0; j < 30; j++) { const px = cx + (rnd() - 0.5) * size * 3.2, py = cy - rnd() * size * 0.55, r = size * (0.25 + rnd() * 0.35);
+        const g = x.createRadialGradient(px, py - r * 0.3, r * 0.1, px, py, r); g.addColorStop(0, 'rgba(255,255,255,.85)'); g.addColorStop(0.7, 'rgba(240,244,248,.45)'); g.addColorStop(1, 'rgba(225,232,240,0)');
+        x.fillStyle = g; x.beginPath(); x.ellipse(px, py, r * 1.4, r * 0.8, 0, 0, 7); x.fill(); }
+      void sc;
     }
-    const g = x.createLinearGradient(0, H * 0.9, 0, H); g.addColorStop(0, 'rgba(96,140,70,0)'); g.addColorStop(1, 'rgba(96,140,70,1)'); x.fillStyle = g; x.fillRect(0, H * 0.9, W, H * 0.1);
-    // soft focus, as a camera focused on the golfer would see it
-    const c2 = mk(W, H), x2 = c2.getContext('2d'); x2.filter = 'blur(2.5px)'; x2.drawImage(c, 0, 0);
+    // two rows of far trees, pale and blue with distance
+    for (const R of [{ y: 0.9, h: 0.09, col: [150, 172, 176], n: 260 }, { y: 0.95, h: 0.1, col: [118, 146, 136], n: 220 }]) {
+      for (let i = 0; i < R.n; i++) { const cx = rnd() * W, base = H * R.y, th = H * R.h * (0.5 + rnd() * 0.7), r0 = 10 + rnd() * 22;
+        for (let k = 0; k < 40; k++) { const t = rnd(), l = 0.86 + rnd() * 0.22; x.fillStyle = `rgb(${R.col[0] * l | 0},${R.col[1] * l | 0},${R.col[2] * l | 0})`;
+          x.beginPath(); x.arc(cx + (rnd() - 0.5) * r0 * 1.6, base - th * (0.2 + t * 0.8), r0 * (0.2 + rnd() * 0.25) * (1.2 - t * 0.5), 0, 7); x.fill(); } }
+      x.fillStyle = 'rgba(214,226,230,0.22)'; x.fillRect(0, 0, W, H * R.y + 2);
+    }
+    x.fillStyle = '#8fae84'; x.fillRect(0, H * 0.95, W, H * 0.05);
+    const c2 = mk(W, H), x2 = c2.getContext('2d'); x2.filter = 'blur(1.2px)'; x2.drawImage(c, 0, 0);
     if (!x2.filter || x2.filter === 'none') x2.drawImage(c, 0, 0);
     return c2;
   }
 }
-const PAINTS = ['tree', 'grass', 'room', 'wood'], PAINTED = {};
+const PAINTS = ['tree', 'trees', 'grass', 'room', 'planks', 'rug'], PAINTED = {};
 let PAINTP = null;
 // ask a background worker to paint every picture; resolves when they're ready (or straight away if it can't)
 function prepTextures(ms) {
@@ -543,10 +606,15 @@ function textures() {
   grass.wrapS = grass.wrapT = T.RepeatWrapping; grass.repeat.set(10, 10);
   const stripes = mkC(512, 512, (x, w, h) => { for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? '#e8f0e0' : '#c9d6c0'; x.fillRect(i * w / 8, 0, w / 8, h); } });
   stripes.wrapS = stripes.wrapT = T.RepeatWrapping; stripes.repeat.set(5, 1); TX_STRIPES = stripes;
-  const wood = tex(painted('wood'));
+  const wood = tex(painted('planks')); wood.wrapS = wood.wrapT = T.RepeatWrapping; wood.repeat.set(14 / 1.6, 14 / 1.6);
+  const rug = tex(painted('rug')), trees = tex(painted('trees'));
+  // slow, large-scale patches of lighter and darker grass, so the fairway doesn't look printed
+  const macro = mkC(256, 256, (x, w, h) => { x.fillStyle = '#808080'; x.fillRect(0, 0, w, h); let sd = 9; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 260; i++) { const cx = r() * w, cy = r() * h, rr = 10 + r() * 40, v = r() < 0.5 ? 255 : 0; for (const [ox, oy] of [[0, 0], [w, 0], [-w, 0], [0, h], [0, -h]]) { const g = x.createRadialGradient(cx + ox, cy + oy, 0, cx + ox, cy + oy, rr); g.addColorStop(0, `rgba(${v},${v},${v},.18)`); g.addColorStop(1, `rgba(${v},${v},${v},0)`); x.fillStyle = g; x.fillRect(cx + ox - rr, cy + oy - rr, rr * 2, rr * 2); } } });
+  macro.wrapS = macro.wrapT = T.RepeatWrapping; macro.encoding = T.LinearEncoding;
   const sky = mkC(16, 256, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#8fb6dc'); g.addColorStop(0.55, '#d5e4ee'); g.addColorStop(1, '#eef2ef'); x.fillStyle = g; x.fillRect(0, 0, w, h); });
   const home = mkC(16, 256, (x, w, h) => { const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#e7e2da'); g.addColorStop(0.62, '#f1ede7'); g.addColorStop(1, '#ece8e2'); x.fillStyle = g; x.fillRect(0, 0, w, h); });
-  return (TX = { grass, wood, sky, home });
+  return (TX = { grass, wood, sky, home, rug, trees, macro });
 }
 
 // ---------- sky light for reflections, and the course around the golfer ----------
@@ -577,6 +645,57 @@ function treeLine() {
     BACK.renderOrder = -1;
   }
   return BACK.clone();
+}
+// ---------- the range: real trees around it and flags out on the range ----------
+// Trees are flat cut-outs that always turn to face the camera, so they stay sharp (the painted tree line behind them
+// was a 4096 px strip stretched round 290 m and always looked blurred). Four kinds, packed in one picture.
+const TREE_KINDS = [{ h: [10, 14], w: 0.62 }, { h: [13, 18], w: 0.4 }, { h: [11, 16], w: 0.5 }, { h: [8, 12], w: 0.5 }];
+let FOREST = null;
+function forestLayout() {
+  if (FOREST) return FOREST;
+  let sd = 21; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647, out = [[], [], [], []];
+  for (let i = 0; i < 150; i++) {
+    let a = r() * Math.PI * 2, d = 36 + r() * 24;
+    const ahead = Math.cos(a) > 0.82;                 // toward the target the range stays open: trees only far away
+    if (ahead) d = 95 + r() * 45;
+    const k = r() < 0.38 ? 0 : r() < 0.4 ? 1 : r() < 0.6 ? 2 : 3, K = TREE_KINDS[k], h = K.h[0] + r() * (K.h[1] - K.h[0]);
+    out[k].push({ x: Math.cos(a) * d, z: Math.sin(a) * d + 0.3, h, w: h * K.w * (0.9 + r() * 0.2), tint: 0.85 + r() * 0.25 });
+  }
+  return (FOREST = out);
+}
+function forest(S) {
+  const lay = forestLayout(), group = new T.Group(); group.userData.trees = [];
+  const mat = new T.MeshBasicMaterial({ map: TX.trees, alphaTest: 0.5, side: T.DoubleSide });
+  lay.forEach((list, k) => {
+    const g = new T.PlaneGeometry(1, 1); g.translate(0, 0.5, 0);
+    const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setX(i, (k + uv.getX(i)) / 4);
+    const m = new T.InstancedMesh(g, mat, list.length); m.frustumCulled = false;
+    list.forEach((t, i) => m.setColorAt(i, new T.Color(t.tint, t.tint, t.tint * 0.96)));
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    group.add(m); group.userData.trees.push({ m, list });
+  });
+  group.userData.cam = null; S.add(group); S.userData.forest = group; return group;
+}
+// turn every tree to face the camera (only when the camera has moved)
+const _q = T ? new T.Quaternion() : null, _s = T ? new T.Vector3() : null, _p = T ? new T.Vector3() : null, _mm = T ? new T.Matrix4() : null, _e = T ? new T.Euler() : null;
+function faceTrees(sc) {
+  const f = sc.S.userData.forest; if (!f) return;
+  const c = sc.S.worldToLocal(sc.cam.position.clone()), last = f.userData.cam;
+  if (last && last.distanceToSquared(c) < 1e-4) return; f.userData.cam = c;
+  for (const { m, list } of f.userData.trees) {
+    list.forEach((t, i) => { _e.set(0, Math.atan2(c.x - t.x, c.z - t.z), 0); _q.setFromEuler(_e); _p.set(t.x, 0, t.z); _s.set(t.w, t.h, 1); m.setMatrixAt(i, _mm.compose(_p, _q, _s)); });
+    m.instanceMatrix.needsUpdate = true;
+  }
+}
+// target greens with flags at about 50, 90 and 130 m, so the range has depth and a direction
+function rangeTargets(S) {
+  const g = new T.Group(), green = new T.MeshBasicMaterial({ color: new T.Color(0x5e9c45) }), pole = new T.MeshLambertMaterial({ color: 0xf4f4f0 });
+  for (const [x, z, r, col] of [[48, -7, 5, 0xd8332a], [88, 11, 7, 0xf2c12e], [130, -16, 9, 0xffffff]]) {
+    const gr = new T.Mesh(new T.CircleGeometry(r, 40), green); gr.rotation.x = -Math.PI / 2; gr.position.set(x, 0.02, z); gr.scale.set(1.35, 1, 1); g.add(gr);
+    const p = new T.Mesh(new T.CylinderGeometry(0.06, 0.06, 2.6, 6), pole); p.position.set(x, 1.3, z); g.add(p);
+    const fl = new T.Mesh(new T.PlaneGeometry(0.9, 0.6), new T.MeshLambertMaterial({ color: col, side: T.DoubleSide })); fl.position.set(x + 0.45, 2.3, z); g.add(fl);
+  }
+  S.add(g); return g;
 }
 // ---------- props ----------
 function cyl(r, mat, seg) { const g = new T.CylinderGeometry(r, r, 1, seg || 14); g.translate(0, 0.5, 0); const m = new T.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true; return m; }
@@ -664,21 +783,30 @@ function scene(dr) {
   const rim = new T.DirectionalLight(0xdfe9ff, 0.6); rim.position.set(-1.5, 3, -3.5); S.add(rim);
   const groundTex = home ? TXs.wood : TXs.grass;
   let ground;
-  if (home) { ground = new T.Mesh(new T.PlaneGeometry(14, 14), new T.MeshStandardMaterial({ map: groundTex, roughness: 0.6 })); S.add(roomBack()); }
+  if (home) { ground = new T.Mesh(new T.PlaneGeometry(14, 14), new T.MeshStandardMaterial({ map: groundTex, roughness: 0.5, envMapIntensity: 0.7 })); S.add(roomBack()); }
   else {
-    S.fog = new T.Fog(new T.Color(0xd9e5ec).convertSRGBToLinear(), 20, 60);
+    // aerial haze: far things fade toward the colour of the distant trees, gently (it used to go fully grey by 60 m, a hard band at the horizon)
+    S.fog = new T.Fog(new T.Color(0xc9d9da).convertSRGBToLinear(), 28, 170);
     // grass is fully rough, so simple diffuse lighting looks the same as the full PBR model at a fraction of the cost (it fills most of the screen)
     const gm = new T.MeshLambertMaterial({ map: groundTex, emissiveMap: groundTex, emissive: new T.Color(GFILL[0], GFILL[1], GFILL[2]), color: new T.Color(GKEY, GKEY, GKEY) });   // emissive stands in for the sky's fill light
-    gm.onBeforeCompile = sh => { sh.uniforms.stripes = { value: TX_STRIPES }; sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D stripes;').replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= mix(0.86, 1.0, texture2D(stripes, vUv * vec2(0.5, 0.1)).r);'); };
-    ground = new T.Mesh(new T.PlaneGeometry(120, 120), gm); S.add(treeLine());
+    // mown fairway: 4 m bands along the target line, light and dark as the mower went up and back, with slow patches of
+    // lighter and darker grass on top. The same shade goes on the sky-fill (emissive) part, which is most of the brightness.
+    gm.onBeforeCompile = sh => { sh.uniforms.macro = { value: TX.macro };
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D macro;')
+        .replace('#include <map_fragment>', '#include <map_fragment>\nfloat bandF = fract(vUv.y * 1.5); float band = smoothstep(0.0, 0.04, bandF) * (1.0 - smoothstep(0.5, 0.54, bandF));\nfloat gk = mix(0.84, 1.0, band) * mix(0.86, 1.1, texture2D(macro, vUv * 0.05).r);\ndiffuseColor.rgb *= gk * vec3(0.9, 0.9, 0.86);')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance *= gk * vec3(0.8, 0.83, 0.76);'); };
+    ground = new T.Mesh(new T.PlaneGeometry(400, 400), gm); TX.grass.repeat.set(400 / 12, 400 / 12); S.add(treeLine()); forest(S); rangeTargets(S);
   }
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; S.add(ground);
   if (!home) {
-    if (!TX.turf) { const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d'); x.fillStyle = '#3f7a4a'; x.fillRect(0, 0, 512, 512);
-      for (let i = 0; i < 40000; i++) { const l = 50 + Math.random() * 60; x.fillStyle = `rgba(${l * 0.6 | 0},${l * 1.45 | 0},${l * 0.75 | 0},0.35)`; x.fillRect(Math.random() * 512, Math.random() * 512, 1, 2); }
-      x.strokeStyle = 'rgba(20,40,25,.5)'; x.lineWidth = 10; x.strokeRect(5, 5, 502, 502); TX.turf = new T.CanvasTexture(c); TX.turf.encoding = T.sRGBEncoding; TX.turf.anisotropy = 4; }
-    const mat = new T.Mesh(new T.BoxGeometry(1.5, 0.014, 1.5), new T.MeshStandardMaterial({ map: TX.turf, roughness: 0.95 })); mat.position.set(0.05, 0.007, 0.3); mat.receiveShadow = true; S.add(mat); }
-  if (home && dr.rug !== false) { const rug = new T.Mesh(new T.CircleGeometry(1.1, 48), std(0x5d6a62, { roughness: 1 })); rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.004, 0.15); rug.receiveShadow = true; S.add(rug); }
+    // a practice-range hitting mat: dense dark turf in a black rubber frame
+    if (!TX.turf) { const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d'); x.fillStyle = '#24502c'; x.fillRect(0, 0, 512, 512);
+      for (let i = 0; i < 70000; i++) { const l = 40 + Math.random() * 70; x.fillStyle = `rgba(${l * 0.55 | 0},${l * 1.3 | 0},${l * 0.62 | 0},0.4)`; x.fillRect(Math.random() * 512, Math.random() * 512, 1, 1 + Math.random() * 2); }
+      for (let i = 0; i < 512; i += 4) { x.fillStyle = 'rgba(0,0,0,.05)'; x.fillRect(0, i, 512, 1); }
+      TX.turf = new T.CanvasTexture(c); TX.turf.encoding = T.sRGBEncoding; TX.turf.anisotropy = 4; TX.turf.wrapS = TX.turf.wrapT = T.RepeatWrapping; TX.turf.repeat.set(3, 3); }
+    const frame = new T.Mesh(new T.BoxGeometry(1.64, 0.012, 1.64), std(0x161816, { roughness: 0.85 })); frame.position.set(0.05, 0.006, 0.3); frame.receiveShadow = true; S.add(frame);
+    const mat = new T.Mesh(new T.BoxGeometry(1.5, 0.016, 1.5), new T.MeshStandardMaterial({ map: TX.turf, roughness: 1, envMapIntensity: 0.25 })); mat.position.set(0.05, 0.008, 0.3); mat.receiveShadow = true; S.add(mat); }
+  if (home && dr.rug !== false) { const rug = new T.Mesh(new T.CircleGeometry(1.1, 64), new T.MeshStandardMaterial({ map: TXs.rug, roughness: 1, envMapIntensity: 0.2 })); rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.004, 0.15); rug.receiveShadow = true; S.add(rug); }
   // target line: a dashed line on the ground toward the target, so every view shows which way the ball goes
   const tg = new T.Group(); for (let i = 0; i < 8; i++) { const d = box(0.16, 0.003, 0.018, std(0xffffff, { roughness: 0.8 }), [0.55 + i * 0.26, 0.004, ballOf(dr)[2]]); d.castShadow = false; tg.add(d); }
   const arr = new T.Mesh(new T.ConeGeometry(0.05, 0.14, 3), std(0xffffff)); arr.rotation.z = -Math.PI / 2; arr.position.set(2.75, 0.01, ballOf(dr)[2]); arr.scale.set(1, 1, 0.15); tg.add(arr); S.add(tg);
@@ -691,7 +819,7 @@ function scene(dr) {
   const stick = cyl(0.01, M.stick); S.add(stick); stick.visible = false;      // a stick across the chest, or a club down the spine
   let ball = null; if (dr.ball) { const b = new T.Mesh(new T.SphereGeometry(0.021, 20, 14), M.white); b.castShadow = true; b.position.set(ballOf(dr)[0], 0.042, ballOf(dr)[2]); S.add(b); const t = cyl(0.006, M.white); t.position.set(ballOf(dr)[0], 0, ballOf(dr)[2]); t.scale.y = 0.022; S.add(t); ball = b; }
   const props = buildProps(S, dr);
-  const cam = new T.PerspectiveCamera(30, 0.8, 0.1, 60);
+  const cam = new T.PerspectiveCamera(30, 0.8, 0.1, 400);
   const sc = { S, fig, ghost, club, gclub, stick, ball, props, cam, key, trail };
   SCN.set(dr.id, sc); return sc;
 }
@@ -980,7 +1108,7 @@ function Player(wrap, dr, opt) {
       const across = J.stickAcross || J.spineClub; sc.stick.visible = !!across; if (across) between(sc.stick, across[0], across[1]);
       if (sc.ball) { const hit = key.hit && (s.inHold || s.raw > 0.5); sc.ball.visible = !hit && !(dr.seq.slice(0, s.i).some(k => k.hit) && !key.reset); }
       updateProps(sc.props, J, key, dr, s);
-      R.render(sc.S, sc.cam); STATS.renders++;
+      faceTrees(sc); R.render(sc.S, sc.cam); STATS.renders++;
       const v = new T.Vector3(); proj = p => { const q = mx(p); v.set(q[0], q[1], q[2]).project(sc.cam); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H, v.z]; };
     } else {
       const yaw = st.cam.yaw * D2R, Rr = [Math.cos(yaw), 0, -Math.sin(yaw)], k = H * 0.42;
@@ -1018,7 +1146,7 @@ function poster(dr, w, h, warm) {   // warm: also draw the red ghost, so its sha
     if (warm) { poseAny(sc.ghost, J); ghostOpacity(sc.ghost, 0.3); poseClub(sc.gclub, J.club, J); sc.ghost.G.visible = !!J; sc.gclub.visible = !!J.club; }
     const across = J.stickAcross || J.spineClub; sc.stick.visible = !!across; if (across) between(sc.stick, across[0], across[1]);
     if (sc.ball) sc.ball.visible = true; updateProps(sc.props, J, {}, dr, s);
-    R.render(sc.S, sc.cam); STATS.shared++; if (warm) { sc.ghost.G.visible = false; sc.gclub.visible = false; } const x = c.getContext('2d'); x.drawImage(R.domElement, 0, 0, w, h);
+    faceTrees(sc); R.render(sc.S, sc.cam); STATS.shared++; if (warm) { sc.ghost.G.visible = false; sc.gclub.visible = false; } const x = c.getContext('2d'); x.drawImage(R.domElement, 0, 0, w, h);
   } else { const x = c.getContext('2d'), yaw = (VIEWS[dr.view] || VIEWS.face).yaw * D2R, Rr = [Math.cos(yaw), 0, -Math.sin(yaw)], kk = h * 0.42; flat(x, w, h, p => [w / 2 + (MIR ? -1 : 1) * dot(p, Rr) * kk, h * 0.9 - p[1] * kk, 0], J, dr); }
   const url = c.toDataURL('image/jpeg', 0.86); POSTERS.set(id, url); if (typeof CCGolfer !== 'undefined' && CCGolfer.ready()) POSTERS.set(id + ':real', true); return url;
 }
