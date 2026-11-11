@@ -126,3 +126,9 @@ test('blending into a let-go hand moves smoothly (no jumps)', () => {
   let prev = null;
   for (let t = 0; t < dr._dur; t += 1 / 120) { const J = D.jointsAt(dr, t); if (prev) assert.ok(dist(J.th, prev) < 0.03, 't ' + t.toFixed(3) + ' jump ' + dist(J.th, prev).toFixed(3)); prev = J.th; }
 });
+test('club flex and blur work out at every moment of every drill (100 a second), including when the club is put down', () => {
+  const { DrillStudio: D, DRILL_LIBRARY: L } = load(); D.setSwing(MODEL);
+  for (const dr of L) { D.prep(dr);
+    for (let t = 0; t < dr._dur; t += 0.01) { const J = D.jointsAt(dr, t);
+      assert.doesNotThrow(() => D._clubFx(dr, t, J), dr.id + ' at ' + t.toFixed(2)); } }
+});

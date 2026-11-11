@@ -1,5 +1,6 @@
 """Smoke test: open the app in a phone-sized headless browser and fail on any page error.
-Covers start-up as a visitor and as a signed-in golfer, every main screen, and every drill played from start to end.
+Covers start-up as a visitor and as a signed-in golfer, every main screen, and every drill played from start to end
+(evenly spaced moments plus just before, at and after every key, where poses and props change).
 The database is faked (empty answers), so nothing real is read or written.
 Run: python3 tools/ci/smoke.py [site folder]   (default: the repository root)"""
 import json, os, subprocess, sys, time, urllib.request
@@ -38,7 +39,7 @@ try:
                 ids = pg.evaluate("DRILL_LIBRARY.map(d=>d.id)")
                 for i in ids:
                     r = pg.evaluate(f"""(async()=>{{await openDrill('{i}');const P=DP.player;if(!P)return 'no player';P.pause&&P.pause();
-                      for(const v of ['face','dtl']){{P.setView(v);for(let k=0;k<={STEPS};k++){{const t=P.dur*k/{STEPS};try{{P.seek(t)}}catch(x){{closeDrill(true);return v+' t='+t.toFixed(2)+': '+x.message}}}}}}
+                      const ts=[];for(let k=0;k<={STEPS};k++)ts.push(P.dur*k/{STEPS});(DP.d._tl||[]).forEach(s=>[s.s,s.e].forEach(t=>{{if(t!=null)for(const o of [-0.05,-0.02,0,0.02,0.05])ts.push(Math.min(P.dur,Math.max(0,t+o)))}}));for(const v of ['face','dtl']){{P.setView(v);for(const t of ts){{try{{P.seek(t)}}catch(x){{closeDrill(true);return v+' t='+t.toFixed(2)+': '+x.message}}}}}}
                       closeDrill(true);return null}})()""")
                     if r: errs.append(f'drill {i} {r}')
                 print(f'{len(ids)} drills played')
