@@ -1022,7 +1022,7 @@ const Store={mode:null,db:null,uid:null,ns:'',mem:{idx:[],det:{}},
  lset(k,v){localStorage.setItem(this.k(k),JSON.stringify(v))},
  async save(id,sum,det){await this.init();
   if(this.mode==='db'){await this.col().doc('d'+id).set(Object.assign({kind:'detail'},det));await this.col().doc('s'+id).set(Object.assign({kind:'analysis'},sum));return}
-  if(this.mode==='local'){try{try{await KV.set('d_'+id,det)}catch(_){this.lset('cc_d_'+id,det)}const idx=this.lget('cc_index',[]);idx.unshift(Object.assign({id},sum));this.lset('cc_index',idx);return}catch(e){this.mode='memory'}}
+  if(this.mode==='local'){try{try{await KV.set('d_'+id,det)}catch(_){this.lset('cc_d_'+id,det)}const idx=this.lget('cc_index',[]);idx.unshift(Object.assign({id},sum));this.lset('cc_index',idx);Backup.analysis(id,sum,det);return}catch(e){this.mode='memory'}}
   this.mem.det[id]=det;this.mem.idx.unshift(Object.assign({id},sum))},
  async list(){await this.init();
   if(this.mode==='db'){const q=await this.col().where('kind','==','analysis').orderBy('createdAt','desc').limit(200).get();return q.docs.map(d=>Object.assign({id:d.id.slice(1)},d.data()))}
@@ -1032,11 +1032,12 @@ const Store={mode:null,db:null,uid:null,ns:'',mem:{idx:[],det:{}},
   if(this.mode==='local'){let d=null;try{d=await KV.get('d_'+id)}catch(_){}return d||this.lget('cc_d_'+id,null)}return this.mem.det[id]||null},
  async update(id,sumP,detP){await this.init();
   if(this.mode==='db'){await this.col().doc('d'+id).update(detP);await this.col().doc('s'+id).update(sumP);return}
-  if(this.mode==='local'){const d=await this.detail(id);if(d){try{await KV.set('d_'+id,Object.assign(d,detP))}catch(_){this.lset('cc_d_'+id,Object.assign(d,detP))}}this.lset('cc_index',this.lget('cc_index',[]).map(e=>e.id===id?Object.assign(e,sumP):e));return}
+  if(this.mode==='local'){const d=await this.detail(id);if(d){try{await KV.set('d_'+id,Object.assign(d,detP))}catch(_){this.lset('cc_d_'+id,Object.assign(d,detP))}}this.lset('cc_index',this.lget('cc_index',[]).map(e=>e.id===id?Object.assign(e,sumP):e));
+   const e=this.lget('cc_index',[]).find(x=>x.id===id);if(d&&e)Backup.analysis(id,e,d);return}
   if(this.mem.det[id])Object.assign(this.mem.det[id],detP);this.mem.idx=this.mem.idx.map(e=>e.id===id?Object.assign(e,sumP):e)},
  async remove(id){await this.init();
   if(this.mode==='db'){await this.col().doc('s'+id).delete();await this.col().doc('d'+id).delete();return}
-  if(this.mode==='local'){try{await KV.del('d_'+id).catch(()=>{});localStorage.removeItem(Store.k('cc_d_'+id));this.lset('cc_index',this.lget('cc_index',[]).filter(e=>e.id!==id))}catch(_){}return}
+  if(this.mode==='local'){try{await KV.del('d_'+id).catch(()=>{});localStorage.removeItem(Store.k('cc_d_'+id));this.lset('cc_index',this.lget('cc_index',[]).filter(e=>e.id!==id))}catch(_){}Backup.gone('analysis',id);return}
   this.mem.idx=this.mem.idx.filter(e=>e.id!==id);delete this.mem.det[id]}
 };
 // swing-to-swing consistency: this swing plus the last swings filmed from the same angle (last 60 days, up to 8)
@@ -1112,7 +1113,7 @@ async function loadHistory(){
  cancelAnimationFrame(HR.raf);if(HR.stop)HR.stop();cancelAnimationFrame(CMP.raf);CMP.play=false;FaultClips.stopAll($('histDetail'));$('histDetail').hidden=true;$('histListCard').hidden=false;
  $('histList').innerHTML='<p class="mut">Loading…</p>';$('histTrend').innerHTML='';if(typeof renderYear==='function')renderYear().catch(()=>{});
  let rows=[];try{rows=await Store.list()}catch(e){console.error(e);$('histList').innerHTML='<p class="mut">Previous analyses could not be loaded right now. Try again in a moment.</p>';return}
- $('histNote').textContent=Store.mode==='db'?'Every completed analysis is saved to your account and opens on any device.':Store.mode==='local'?'Every completed analysis is saved in this browser.':'This browser cannot save analyses, so they last until you close Caddy Coach.';
+ $('histNote').textContent=Store.mode==='db'?'Every completed analysis is saved to your account and opens on any device.':Store.mode==='local'?(Backup.on()?'Every completed analysis is saved on this phone and backed up to your account (videos stay on this phone).':'Every completed analysis is saved in this browser. Create a profile to back them up to your account.'):'This browser cannot save analyses, so they last until you close Caddy Coach.';
  storageNote();
  $('histListCard').querySelector('.sc-head').hidden=false;
  if(!rows.length){$('histList').innerHTML='<div class="empty"><h3>No swings yet</h3><p class="mut" style="margin:0">Analyse your first swing and it will be saved here with its score, the clip and the one thing to work on.</p><button type="button" class="pri" data-go="1">Analyse a swing</button></div>';$('histListCard').querySelector('.sc-head').hidden=true;return}
@@ -1264,11 +1265,11 @@ const RStore={
   if(Store.mode==='local')return Store.lget('cc_rounds',[]);return Store.mem.rounds||[]},
  async save(r){await Store.init();r.kind='round';
   if(Store.mode==='db'){await Store.col().doc('r'+r.id).set(r);return}
-  if(Store.mode==='local'){try{const a=Store.lget('cc_rounds',[]).filter(x=>x.id!==r.id);a.unshift(r);Store.lset('cc_rounds',a);return}catch(_){Store.mode='memory'}}
+  if(Store.mode==='local'){try{const a=Store.lget('cc_rounds',[]).filter(x=>x.id!==r.id);a.unshift(r);Store.lset('cc_rounds',a);Backup.put('round',r.id,r);return}catch(_){Store.mode='memory'}}
   Store.mem.rounds=[r].concat((Store.mem.rounds||[]).filter(x=>x.id!==r.id))},
  async remove(id){await Store.init();
   if(Store.mode==='db'){await Store.col().doc('r'+id).delete();return}
-  if(Store.mode==='local'){Store.lset('cc_rounds',Store.lget('cc_rounds',[]).filter(x=>x.id!==id));return}
+  if(Store.mode==='local'){Store.lset('cc_rounds',Store.lget('cc_rounds',[]).filter(x=>x.id!==id));Backup.gone('round',id);return}
   Store.mem.rounds=(Store.mem.rounds||[]).filter(x=>x.id!==id)},
  async getLive(){await Store.init();
   if(Store.mode==='db'){try{const d=await Store.col().doc('rlive').get();return d.exists?d.data():null}catch(_){return null}}
@@ -1282,8 +1283,62 @@ const RStore={
   if(Store.mode==='local')return Store.lget('cc_course_'+key,null);return(Store.mem.courses||{})[key]||null},
  async saveCourse(c){await Store.init();c.kind='course';c.updatedAt=Date.now();
   if(Store.mode==='db'){await Store.col().doc('c'+c.key).set(c);return}
-  if(Store.mode==='local'){try{Store.lset('cc_course_'+c.key,c);return}catch(_){Store.mode='memory'}}
+  if(Store.mode==='local'){try{Store.lset('cc_course_'+c.key,c);Backup.put('course',c.key,c);return}catch(_){Store.mode='memory'}}
   (Store.mem.courses=Store.mem.courses||{})[c.key]=c}};
+
+// ---------- backup: a private copy of rounds, swing results and course yardages in the golfer's account ----------
+// The phone stays the working copy (the app works offline on the course); every change is also queued for the
+// golfer's own rows in Supabase (table user_backup, readable only by them). Signing in on a new phone, or after the
+// browser was cleared, brings everything back. Swing films stay on the phone; their scores and pictures are backed up.
+const Backup={busy:false,
+ on(){return !this.stop&&!HOSTED_IN_CLAUDE&&typeof Auth!=='undefined'&&!!(Auth.s&&Auth.s.user&&Auth.s.user.id)&&Store.mode==='local'&&typeof SB!=='undefined'&&SB.on()},
+ uid(){return Auth.s.user.id},
+ qk(){return 'cc_bk_q_'+this.uid()},
+ enqueue(kind,id,data){if(!this.on())return;const q=lsGet(this.qk(),[]).filter(x=>!(x.kind===kind&&x.item_id===id));
+  q.push({kind,item_id:String(id),data:data==null?null:data,deleted:data==null});lsSet(this.qk(),q);this.flushSoon()},
+ put(kind,id,data){this.enqueue(kind,id,data)},
+ gone(kind,id){this.enqueue(kind,id,null)},
+ // the film strips stay on this phone: the copy keeps the scores, measurements and key-frame pictures
+ analysis(id,sum,det){const d=Object.assign({},det);delete d.clip;this.enqueue('analysis',id,{sum:Object.assign({},sum,{hasClip:false}),det:d})},
+ flushSoon(){clearTimeout(this._t);this._t=setTimeout(()=>this.flush(),1500)},
+ async req(path,opt){await Auth.fresh();const r=await fetch(`${SB.url}/rest/v1/${path}`,Object.assign({},opt,{headers:Object.assign(SB.h(),{'Content-Type':'application/json'},(opt||{}).headers||{})}));
+  if(!r.ok)throw Object.assign(new Error('backup '+r.status),{status:r.status});return r},
+ async flush(){if(!this.on()||this.flushing||navigator.onLine===false)return;this.flushing=true;
+  const same=(a,b)=>a.kind===b.kind&&a.item_id===b.item_id&&a.deleted===b.deleted&&JSON.stringify(a.data)===JSON.stringify(b.data);
+  try{for(;;){const q=lsGet(this.qk(),[]);if(!q.length)break;
+    const batch=q.slice(0,10);   // a few at a time: swing results can be a couple of hundred KB each
+    await this.req('user_backup?on_conflict=owner,kind,item_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(batch)});
+    // drop what was sent, unless it changed again while uploading
+    lsSet(this.qk(),lsGet(this.qk(),[]).filter(x=>!batch.some(b=>same(b,x))))}}
+  catch(e){console.warn('backup upload',e)}finally{this.flushing=false}},
+ // bring down anything changed since this phone last looked, and on the first sign-in here send up what the phone has
+ async sync(){if(!this.on()||this.busy)return;this.busy=true;let got=0;
+  try{const ck='cc_bk_at_'+this.uid(),first=!lsGet(ck,null);let since=lsGet(ck,null)||'1970-01-01T00:00:00Z';const seen={round:new Set(),analysis:new Set(),course:new Set()};
+   for(;;){const r=await this.req(`user_backup?select=kind,item_id,data,deleted,updated_at&updated_at=gt.${encodeURIComponent(since)}&order=updated_at.asc&limit=200`);const rows=await r.json();
+    for(const x of rows){seen[x.kind]&&seen[x.kind].add(x.item_id);if(await this.apply(x))got++;since=x.updated_at}
+    lsSet(ck,since);if(rows.length<200)break}
+   if(first){   // this phone's own items the account doesn't have yet
+    for(const r of Store.lget('cc_rounds',[]))if(!seen.round.has(String(r.id)))this.enqueue('round',r.id,r);
+    for(const e of Store.lget('cc_index',[]))if(!seen.analysis.has(String(e.id))){const d=await Store.detail(e.id);if(d)this.analysis(e.id,e,d)}
+    for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i),pre=Store.k('cc_course_');if(k&&k.startsWith(pre)){const c=lsGet(k,null);if(c&&c.key&&!seen.course.has(c.key))this.enqueue('course',c.key,c)}}}
+   await this.flush();
+   if(got){if(typeof RT!=='undefined'){RT.rounds=null;rtLoadRounds()}if(typeof loadHistory==='function'&&$('histNote'))loadHistory().catch(()=>{});
+    toast(first?`Your rounds and swings are back on this phone (${got} item${got>1?'s':''}).`:'Updated from your other devices.')}}
+  catch(e){console.warn('backup sync',e)}finally{this.busy=false}},
+ // write one backed-up row into this phone's own storage (without queueing it to go back up)
+ async apply(x){
+  if(x.kind==='round'){const a=Store.lget('cc_rounds',[]),i=a.findIndex(r=>String(r.id)===x.item_id);
+   if(x.deleted){if(i<0)return false;a.splice(i,1)}else{if(i>=0&&JSON.stringify(a[i])===JSON.stringify(x.data))return false;if(i>=0)a[i]=x.data;else{a.push(x.data);a.sort((p,q)=>String(q.date||q.createdAt||'').localeCompare(String(p.date||p.createdAt||'')))}}
+   Store.lset('cc_rounds',a);return true}
+  if(x.kind==='analysis'){const idx=Store.lget('cc_index',[]),i=idx.findIndex(e=>String(e.id)===x.item_id);
+   if(x.deleted){if(i<0)return false;idx.splice(i,1);Store.lset('cc_index',idx);try{await KV.del('d_'+x.item_id)}catch(_){}return true}
+   if(i>=0)return false;   // already on this phone (with its film, if it has one)
+   try{await KV.set('d_'+x.item_id,x.data.det)}catch(_){Store.lset('cc_d_'+x.item_id,x.data.det)}
+   idx.push(Object.assign({id:x.item_id},x.data.sum));idx.sort((p,q)=>String(q.createdAt||'').localeCompare(String(p.createdAt||'')));Store.lset('cc_index',idx);return true}
+  if(x.kind==='course'){if(x.deleted||!x.data)return false;const cur=Store.lget('cc_course_'+x.item_id,null);if(cur&&(cur.updatedAt||0)>=(x.data.updatedAt||0))return false;Store.lset('cc_course_'+x.item_id,x.data);return true}
+  return false}};
+addEventListener('online',()=>{Backup.flush()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')Backup.sync()});
 
 const slug=s=>String(s||'').toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'-').replace(/-+/g,'-').slice(0,90)||'course';
 const miles=(a,b,c,d)=>{const R=3958.8,t=x=>x*Math.PI/180,dl=t(c-a),dn=t(d-b),h=Math.sin(dl/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(h))};
@@ -2142,7 +2197,7 @@ function gpsDrawPool(){const L=window.L;if(!GPS.map)return;if(GPS.poolL){GPS.map
   const m=L.marker([g.lat,g.lon],{icon:L.divIcon({className:'gpsPool',html:`<svg viewBox="0 0 24 34" width="22" height="31"><path d="M5 2v30" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><path d="M6 3l15 5.5L6 14z" fill="#fff"/></svg>${d!=null&&d<700?`<span>${d}</span>`:''}`,iconSize:[22,31],iconAnchor:[5,30]}),keyboard:false}).addTo(GPS.poolL);
   m.on('click',ev=>{L.DomEvent.stopPropagation(ev);gpsSaveGreen({lat:g.lat,lon:g.lon});gpsNote(`Hole ${h.n} green saved.`)})})}
 
-if(!HOSTED_IN_CLAUDE){const f=$('rtFoot');if(f)f.innerHTML='Course data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Rounds and the cards you edit are saved on this phone.'}
+if(!HOSTED_IN_CLAUDE){const f=$('rtFoot');if(f)f.innerHTML='Course data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>. Rounds and the cards you edit are saved on this phone, and backed up to your account when you are signed in.'}
 
 // ---------- learning greens from your round (standalone): where you spend a minute before entering your score is the green ----------
 const TRK={watch:null,fixes:[],start:{},hole:null};
