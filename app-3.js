@@ -68,6 +68,15 @@ function pwLive(id,user){const el=$(id);if(!el)return;const c=pwCheck(el.value,u
  c.rules.forEach(r=>{const li=box.querySelector(`[data-rule="${r.k}"]`);if(li)li.classList.toggle('ok',r.ok)})}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-pw-eye]');if(!b)return;const i=$(b.dataset.pwEye);if(!i)return;const show=i.type==='password';i.type=show?'text':'password';b.textContent=show?'Hide':'Show';b.setAttribute('aria-label',show?'Hide password':'Show password')});
 document.addEventListener('input',e=>{const id=e.target.id;if(id==='pfNewPw'||id==='pfPw1'){PROF.f[id]=e.target.value;pwLive(id,PROF.mode==='signup'?unorm($('pfUser')&&$('pfUser').value):PROF.mode==='resetpw'?PROF.resetU:(PROF.pend||PROF.me||{}).username)}});
+// breached passwords: the same check Supabase's paid plan does, done here for free. Only the first 5 characters of the
+// password's SHA-1 fingerprint leave the phone (Have I Been Pwned's k-anonymity lookup), so the password itself never
+// does. If the lookup can't be reached, the password is allowed rather than blocking sign-up.
+async function pwLeaked(pw){try{if(!pw||!crypto.subtle)return 0;
+ const h=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-1',new TextEncoder().encode(pw)))).map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();
+ const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),4000);
+ const r=await fetch('https://api.pwnedpasswords.com/range/'+h.slice(0,5),{headers:{'Add-Padding':'true'},signal:ac.signal});clearTimeout(tm);if(!r.ok)return 0;
+ const line=(await r.text()).split('\n').find(l=>l.startsWith(h.slice(5)+':'));return line?parseInt(line.split(':')[1],10)||0:0}catch(_){return 0}}
+const PW_LEAKED='This password has turned up in data breaches on other websites, so it\'s easy to guess. Choose a different one.';
 function pwProblems(pw,pw2,user,idA,idB){const e={},c=pwCheck(pw,user);
  if(!pw)e[idA]='Choose a password.';else if(!c.ok)e[idA]='That password isn\'t strong enough yet. Every rule below needs a tick.';
  if(idB&&!e[idA]&&pw!==pw2)e[idB]='The two passwords don\'t match.';return e}
@@ -1072,6 +1081,7 @@ async function profSubmit(kind){profCollect();PROF.err={};
    await deleteMyEverything();lsSet('cc_deleted',1);location.reload()}
   catch(err){console.error(err);PROF.busy=false;PROF.err._form='Your account couldn\'t be deleted just now. Nothing has been removed. Check your signal and try again.';profRender()}return}
  const ed=kind==='edit';const e=profValidate(ed);if(!ed&&!HOSTED_IN_CLAUDE&&!emailOk(PROF.f.pfEmail))e.pfEmail=PROF.f.pfEmail?'That doesn\'t look like an email address. Check it, like name@example.com.':'Enter your email address.';if(!ed)Object.assign(e,pwProblems(PROF.f.pfPw1,PROF.f.pfPw2,unorm(PROF.f.pfUser),'pfPw1','pfPw2'));
+ if(!ed&&!Object.keys(e).length&&!HOSTED_IN_CLAUDE&&await pwLeaked(PROF.f.pfPw1))e.pfPw1=PW_LEAKED;
  if(Object.keys(e).length){PROF.err=e;profRender();const k=Object.keys(e)[0];const el=$(k)||$('pfCq');if(el)el.focus();return}
  const f=PROF.f;PROF.busy=true;profRender();
  const p={username:ed?PROF.me.username:unorm(f.pfUser),first:f.pfFirst.trim(),last:f.pfLast.trim(),photo:PROF.photo||null,course:PROF.course,updatedAt:Date.now()};
@@ -1177,7 +1187,7 @@ async function profForgot(){const who=String(PROF.f.pfWho||'').trim().toLowerCas
  catch(err){PROF.err._form=err.status===429?'Too many reset emails have been sent. Try again in an hour.':err.code==='email_unavailable'?'Password reset emails aren\'t working yet. Ask the person who runs Caddy Coach to set up email sending in Supabase.':!err.status?'Couldn\'t reach the server. Check your signal and try again.':'That didn\'t work just now. Try again.'}
  PROF.busy=false;profRender()}
 // arriving from a reset email: choose a new password, then straight into the app
-async function profResetPw(){const f=PROF.f,u=PROF.resetU||'';const e=pwProblems(f.pfNewPw,f.pfNewPw2,u,'pfNewPw','pfNewPw2');if(Object.keys(e).length){PROF.err=e;return profRender()}
+async function profResetPw(){const f=PROF.f,u=PROF.resetU||'';const e=pwProblems(f.pfNewPw,f.pfNewPw2,u,'pfNewPw','pfNewPw2');if(!Object.keys(e).length&&await pwLeaked(f.pfNewPw))e.pfNewPw=PW_LEAKED;if(Object.keys(e).length){PROF.err=e;return profRender()}
  PROF.busy=true;profRender();
  try{await Auth.setPassword(f.pfNewPw)}catch(err){PROF.busy=false;PROF.err._form=err.status===401||err.status===403?'That reset link has expired. Go to Log in, then Forgotten your password, to get a new one.':/weak|password/i.test(err.message)?'The server says this password isn\'t allowed. Choose a different one.':'Your new password couldn\'t be saved. Try again.';return profRender()}
  let p=null;try{p=await PDir.byAuth(Auth.s.user.id)}catch(_){}
@@ -1201,6 +1211,7 @@ function pwServerWhy(err,stage){const m=String((err&&(err.message||''))+' '+(err
  return null}
 async function profSetPw(kind){const f=PROF.f,base=kind==='chpw'?PROF.me:(PROF.pend||PROF.me),u=base&&base.username;if(!u)return profShow('login');
  const e=pwProblems(f.pfNewPw,f.pfNewPw2,u,'pfNewPw','pfNewPw2');if(kind==='chpw'&&!f.pfCurPw)e.pfCurPw='Enter your current password.';
+ if(!e.pfNewPw&&!e.pfNewPw2&&!HOSTED_IN_CLAUDE&&await pwLeaked(f.pfNewPw))e.pfNewPw=PW_LEAKED;
  if(kind==='setpw'&&!HOSTED_IN_CLAUDE&&!emailOk(f.pfEmail))e.pfEmail=f.pfEmail?'That doesn\'t look like an email address. Check it, like name@example.com.':'Enter your email address.';
  if(Object.keys(e).length){PROF.err=e;profRender();const el=$(Object.keys(e)[0]);if(el)el.focus();return}
  PROF.busy=true;profRender();const fail=t=>{PROF.busy=false;PROF.err._form=t;profRender()};
