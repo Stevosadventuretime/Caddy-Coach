@@ -57,7 +57,7 @@ document.querySelectorAll('#tabbar [data-grp]').forEach(b=>b.onclick=()=>{const 
 function buzz(ms){try{const ua=navigator.userActivation;if(navigator.vibrate&&(!ua||ua.isActive)&&!matchMedia('(prefers-reduced-motion:reduce)').matches)navigator.vibrate(ms)}catch(_){}}
 // the page slides in without making the browser re-measure the whole page first
 const RMOTION=matchMedia('(prefers-reduced-motion:reduce)');
-function tab(n){if((n===6||n===4)&&typeof PLUS!=='undefined'&&PLUS.on&&!plusActive()){plusGate(n===6?'trace':'grip');return}[0,1,2,3,4,5,6,7,8,9].forEach(k=>{$('p'+k).hidden=k!==n});document.querySelectorAll('#panel [data-hole]').forEach(b=>{if(+b.dataset.hole===n)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+function tab(n){if(typeof guestGate==='function'&&guestGate('p'+n))return;if((n===6||n===4)&&typeof PLUS!=='undefined'&&PLUS.on&&!plusActive()){plusGate(n===6?'trace':'grip');return}[0,1,2,3,4,5,6,7,8,9].forEach(k=>{$('p'+k).hidden=k!==n});document.querySelectorAll('#panel [data-hole]').forEach(b=>{if(+b.dataset.hole===n)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
  {const el=$('p'+n);if(el.animate){if(!RMOTION.matches)el.animate([{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'none'}],{duration:260,easing:'cubic-bezier(.2,.7,.2,1)'})}else{el.classList.remove('pgEnter');void el.offsetWidth;el.classList.add('pgEnter')}}buzz(6);renderHero(n);closeMenu(true);if(n===0)setTimeout(renderHome,0);if(n===2)loadHistory();if(n===3)renderDrills();if(n===5)renderSetup();if(n===6)initTracer();if(n===8)initRounds();if(n===9)initBag();window.scrollTo(0,0)}
 const panel=$('panel'),scrim=$('scrim'),menuBtn=$('menuBtn');let menuOpen=false;
 function openMenu(){if(menuOpen)return;menuOpen=true;scrim.hidden=false;panel.setAttribute('aria-hidden','false');menuBtn.setAttribute('aria-expanded','true');document.body.style.overflow='hidden';
@@ -635,7 +635,7 @@ setTimeout(()=>{const sv=lsGet('cc_view',null);if(sv==='face-on'||sv==='down-the
 ['hand','view'].forEach(id=>$(id).onchange=()=>{if(RES&&RES.R&&!busy)finishAnalysis(job,true)});
 async function analyze(my){
  if(busy)return;
- if(!$('view').value){say('Pick the camera angle first: "Facing you" if the phone was in front of you, "Down the line" if it was behind you, looking at the target.',true);$('view').focus();return}if(typeof plusGate==='function'&&!(await plusGate('swing')))return;busy=true;$('go').disabled=true;stopPlay();
+ if(!$('view').value){say('Pick the camera angle first: "Facing you" if the phone was in front of you, "Down the line" if it was behind you, looking at the target.',true);$('view').focus();return}if(typeof guestGate==='function'&&await guestSwingUsed()&&guestGate('swing2'))return;if(typeof plusGate==='function'&&!(await plusGate('swing')))return;busy=true;$('go').disabled=true;stopPlay();
  try{
   step(1);say('Keeping only your trimmed clip…');prog(.01);
   const clip=await captureClip(my,TR.a,TR.b);if(!clip||my!==job)return;

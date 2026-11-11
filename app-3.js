@@ -143,7 +143,10 @@ function profCourseHTML(){const c=PROF.course,L=PROF.cl;
   ${PROF.f.cq&&L?`<button type="button" class="link" data-pf="course-own">My course isn't listed: use “${esc(PROF.f.cq)}”</button>`:''}`}
 function profRender(){const b=$('pfBody'),m=PROF.mode,f=PROF.f,me=PROF.me;if(v2Render(b,m))return;
  if(m==='boot'){b.innerHTML='<div class="pfCard"><p class="mut" role="status">Loading…</p></div>';return}
- if(m==='welcome'){b.innerHTML=`<div class="pfCard pfWelcome"><span class="pfEmb" aria-hidden="true"></span><h1>Caddy Coach</h1><p>Swing analysis, GPS yardages, scoring and drills for your game. A free profile keeps your rounds, swings and club yardages safe under your username.</p>
+ if(m==='gate'){b.innerHTML=`<div class="pfCard pfWelcome"><span class="pfEmb" aria-hidden="true"></span><h2>Create your free profile</h2><p>To ${esc(PROF.gateWhy||'use everything')}, create a free Caddy Coach profile. It takes a minute, and it keeps your rounds and swings safe.</p>
+  <p class="mut">Until then you can watch every drill and analyse one swing.</p>
+  <button type="button" class="pri pfBig" data-pf="to-signup">Create your profile</button><button type="button" class="pfBig" data-pf="to-login">I already have a profile</button><button type="button" class="link pfLook" data-pf="gate-close">Not now</button></div>`;return}
+ if(m==='welcome'){b.innerHTML=`<div class="pfCard pfWelcome"><span class="pfEmb" aria-hidden="true"></span><h1>Caddy Coach</h1><p>Swing analysis, GPS yardages, scoring and drills for your game. A free profile keeps your rounds, swings and club yardages safe under your username.</p><p class="mut">Not ready? Look around first: watch the drills and analyse one swing.</p>
   <button type="button" class="pri pfBig" data-pf="to-signup">Create your profile</button><button type="button" class="pfBig" data-pf="to-login">I already have a profile</button><button type="button" class="link pfLook" data-pf="guest">Look around first</button></div>`;return}
  if(m==='login'){b.innerHTML=`<form class="pfCard" data-pf-form="login" novalidate><h2>Log in</h2>${pErr('_form')}
   ${pIn('pfU','Username','autocomplete="username" autocapitalize="none" spellcheck="false" required',f.pfU)}
@@ -1236,12 +1239,19 @@ async function profSetPw(kind){const f=PROF.f,base=kind==='chpw'?PROF.me:(PROF.p
 // a visitor looking round without a profile sees a small "Sign up" button where the profile picture goes
 function profTopbar(){const b=$('pfBtn');if(!b)return;const me=PROF.me;b.hidden=false;b.classList.toggle('pfGuest',!me);
  if(me){b.innerHTML=profAv(me,34);b.setAttribute('aria-label',`Your profile, ${me.first} ${me.last}`)}else{b.textContent='Sign up';b.setAttribute('aria-label','Create a profile or log in')}}
+// a visitor can try the drills and analyse one swing; everything else asks for a free profile first
+const GUEST_OPEN=new Set(['p0','p1','p3']);
+const GUEST_WHY={p8:'score rounds with GPS yardages at any UK course',p6:'trace your shots',p2:'keep your swing history',p5:'check your setup with the camera',p4:'check your grip live',p7:'read the full practice guide',p9:'set up your bag and club yardages',swing2:'analyse more swings'};
+const isGuest=()=>!HOSTED_IN_CLAUDE&&typeof PROF!=='undefined'&&!PROF.me;
+function guestGate(what){if(!isGuest()||GUEST_OPEN.has(what))return false;PROF.gateWhy=GUEST_WHY[what]||'use everything in Caddy Coach';PROF.err={};PROF.f={};profShow('gate');return true}
+async function guestSwingUsed(){if(!isGuest())return false;try{return (await Store.list()).length>=1}catch(_){return false}}
 // a visitor's first save stays on this phone; remind them once that a free profile keeps it
 function guestNudge(what){if(PROF.me||HOSTED_IN_CLAUDE||lsGet('cc_guest_nudged',0))return;lsSet('cc_guest_nudged',1);
  setTimeout(()=>toast(`Your ${what} is saved on this phone. Create a free profile (top right) to keep it safe.`),400)}
 document.addEventListener('click',e=>{const t=e.target.closest('[data-pf],[data-pf-pick]');if(!t)return;
  if(t.dataset.pfPick!=null){PROF.course=PROF.cl[+t.dataset.pfPick];PROF.err.course='';profCollect();return profRender()}
  const a=t.dataset.pf;profCollect();
+ if(a==='gate-close'){profHide();return}
  if(a==='guest'){lsSet('cc_guest',1);PROF.err={};profHide();profTopbar();return}
  if(a==='to-signup'){PROF.err={};PROF.f={};PROF.photo=null;PROF.course=null;PROF.cl=null;PROF.clMsg='';return profShow('signup')}
  if(a==='to-login'){PROF.err={};PROF.f={pfU:PROF.f.pfUser||''};return profShow('login')}
