@@ -196,6 +196,35 @@ function setBone(fig, name, head, tail, side, restSide, stretch) {
   fig.bones[i].matrix.copy(_m);
   return _m;
 }
+// eyes: the head turns only as far as a neck allows, so the eyes make up the rest of the look (a golfer's eyes stay
+// on the ball while his head turns away from it at the top), and they come away with the head after impact. The top
+// lids follow the eyes down, as real lids do when someone looks at the ground, and blink every few seconds.
+const EYE = { yaw: 32 * Math.PI / 180, up: 22 * Math.PI / 180, down: 34 * Math.PI / 180 };
+const BLINK = { on: true, next: 0, start: -1, force: null };   // force: a fixed amount (0 = eyes open) for stills
+function blinkAmount() {
+  if (BLINK.force != null) return BLINK.force;
+  if (!BLINK.on || typeof performance === 'undefined') return 0;
+  const now = performance.now();
+  if (now > BLINK.next && BLINK.start < 0) { BLINK.start = now; }
+  if (BLINK.start >= 0) { const u = (now - BLINK.start) / 160; if (u >= 1) { BLINK.start = -1; BLINK.next = now + 2500 + Math.random() * 3500; return 0; } return Math.sin(Math.PI * u); }
+  return 0;
+}
+function eyes(fig, R, hM, look) {
+  const Ri = new T.Matrix4().extractRotation(R).transpose(), g = look.clone().transformDirection(Ri);
+  let yaw = Math.atan2(g.x, g.z), pit = Math.asin(Math.max(-1, Math.min(1, g.y)));
+  if (EYE.test) [yaw, pit] = EYE.test;   // a fixed aim for checks
+  yaw = Math.max(-EYE.yaw, Math.min(EYE.yaw, yaw)); pit = Math.max(-EYE.down, Math.min(EYE.up, pit));
+  const hd = fig.meta.bones[fig.meta.bi.head].H, bl = blinkAmount();
+  const Re = new T.Matrix4().makeRotationFromEuler(new T.Euler(-pit, yaw, 0, 'YXZ'));
+  for (const S of ['L', 'R']) {
+    const E = fig.meta.bones[fig.meta.bi['eye' + S]].H, at = hM.clone().multiply(new T.Matrix4().makeTranslation(E.x - hd.x, E.y - hd.y, E.z - hd.z));
+    setBoneM(fig, 'eye' + S, at.clone().multiply(Re));
+    const top = Math.max(0, -pit) * 0.55 + bl * (0.62 - Math.max(0, -pit) * 0.55), bot = -Math.max(0, -pit) * 0.12 - bl * 0.12;
+    setBoneM(fig, 'lidT' + S, at.clone().multiply(new T.Matrix4().makeRotationX(top)));
+    setBoneM(fig, 'lidB' + S, at.clone().multiply(new T.Matrix4().makeRotationX(bot)));
+  }
+}
+
 function setBoneM(fig, name, m) { fig.bones[fig.meta.bi[name]].matrix.copy(m); }
 const PART_BONES = { hips: ['hips', 'spine'], chest: ['chest', 'clavL', 'clavR'], head: ['head'], neck: ['neck'], leadarm: ['uarmL', 'farmL', 'ftwL'], trailarm: ['uarmR', 'farmR', 'ftwR'],
   leadhand: ['handL', 'F:L'], trailhand: ['handR', 'F:R'], leadleg: ['thighL', 'shinL'], trailleg: ['thighR', 'shinR'], leadfoot: ['footL'], trailfoot: ['footR'] };
@@ -237,7 +266,7 @@ function poseGolfer(fig, J, o) {
   // and it tilts partly with the spine instead of staying dead level.
   const cR = new T.Matrix4().extractRotation(chM), cs = X.clone().transformDirection(cR), cu = Yv.clone().transformDirection(cR), cf = Z.clone().transformDirection(cR);
   const f0 = A(J.face).normalize(), knee = (v, a, m) => { const u = Math.abs(v); return u <= a ? v : Math.sign(v) * (a + (m - a) * Math.tanh((u - a) / (m - a))); };
-  const yaw = knee(Math.atan2(f0.dot(cs), f0.dot(cf)), 70 * D2R, 95 * D2R), pit = Math.max(-58 * D2R, Math.min(35 * D2R, Math.asin(Math.max(-1, Math.min(1, f0.dot(cu))))));
+  const yaw = knee(Math.atan2(f0.dot(cs), f0.dot(cf)), 70 * D2R, 95 * D2R), pit = 0.72 * Math.max(-58 * D2R, Math.min(35 * D2R, Math.asin(Math.max(-1, Math.min(1, f0.dot(cu))))));   // the eyes look the last ~quarter of the way down (eyes())
   const fz = cs.clone().multiplyScalar(Math.sin(yaw) * Math.cos(pit)).addScaledVector(cf, Math.cos(yaw) * Math.cos(pit)).addScaledVector(cu, Math.sin(pit)).normalize();
   const hup = Yv.clone().multiplyScalar(0.6).addScaledVector(cu, 0.4).normalize();
   const fx = new T.Vector3().crossVectors(hup, fz).normalize(), fy = new T.Vector3().crossVectors(fz, fx).normalize();
@@ -251,6 +280,7 @@ function poseGolfer(fig, J, o) {
   // the head bone's own matrix is world*restInverse: world(p) = R (p - restHead) + skull
   const hM = R.clone(); hM.setPosition(skull);
   setBoneM(fig, 'head', hM);
+  if (fig.meta.bi.eyeL != null) eyes(fig, R, hM, f0);
   setBone(fig, 'neck', neckP, skull, fx.clone().add(Lt).normalize(), X);
   // arms and legs
   for (const [S, sh, el, hand, kn, an, toe, hip, hl, lead] of [['L', J.ls, J.le, J.lh, J.lk, J.la, J.lt, J.lhip, J.lhl, true], ['R', J.ts, J.te, J.th, J.tk, J.ta, J.tt, J.thip, J.thl, false]]) {
@@ -410,5 +440,5 @@ function gripLine(fig, S) {
   const dir = cs[0].clone().sub(cs[1]).normalize(), mid = cs[0].clone().add(cs[1]).multiplyScalar(0.5);
   return (m['gl' + S] = { dir, mid, r: rs });
 }
-root.CCGolfer = { load, make, ready: () => !!DATA && DONE, restPose, GRIP, CURL, _fingers: fingers, _handRest: handRest, _gripLine: gripLine };
+root.CCGolfer = { load, make, ready: () => !!DATA && DONE, restPose, GRIP, CURL, _fingers: fingers, _handRest: handRest, _gripLine: gripLine, BLINK, EYE };
 })(typeof window !== 'undefined' ? window : this);

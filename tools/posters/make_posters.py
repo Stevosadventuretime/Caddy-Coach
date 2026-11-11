@@ -15,6 +15,7 @@ HARNESS = '''<!doctype html><meta charset="utf-8"><body>
 window.go = async () => {
   await DrillStudio.loadSwing('', 30000); await CCGolfer.load('');
   if (!DrillStudio.webgl() || !CCGolfer.ready()) throw new Error('3D not available');
+  if (CCGolfer.BLINK) CCGolfer.BLINK.force = 0;   // posters never catch him mid-blink
   const out = {};
   for (const L of [false, true]) { DrillStudio.setMirror(L); for (const d of DRILL_LIBRARY) out[d.id + (L ? '-L' : '')] = DrillStudio.poster(d, %d, %d); }
   return out;

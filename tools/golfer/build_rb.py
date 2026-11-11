@@ -30,6 +30,9 @@ add('hips', H['Pelvis'], H['Spine']); add('spine', H['Spine'], H['Spine2']); add
 add('neck', H['Neck'], H['Head'])
 top = max((ME.matrix_world @ v.co).z for v in ME.data.vertices)
 add('head', H['Head'], H['Head'] + np.array([0, top - H['Head'][1], 0]))
+# eyes and eyelids: each eye and lid turns about the centre of its eyeball, so golfer.js can aim the eyes and blink
+for S in 'LR':
+    E = H[S + 'Eye']; add('eye' + S, E, E + np.array([0, 0, 0.02])); add('lidT' + S, E, E + np.array([0, 0, 0.02])); add('lidB' + S, E, E + np.array([0, 0, 0.02]))
 ANKLE_Y = 0.0735          # the drill rig's ankle height: the foot bone sits here so the soles land on the ground
 for S, s in (('L', 'L'), ('R', 'R')):
     add('clav' + S, H[s + ' Clavicle'], H[s + ' UpperArm']); add('uarm' + S, H[s + ' UpperArm'], H[s + ' Forearm'])
@@ -64,7 +67,9 @@ def target(rb):
         if p.startswith('Finger'):
             d = p[6:]; f = int(d[0]) + 1; j = 1 if len(d) == 1 else int(d[1]) + 1
             return 'f%d%d%s' % (f, j, S)
-    return 'head'   # head, eyes, jaw and the face bones
+    eyes = {'LEye': 'eyeL', 'REye': 'eyeR', 'LEyeBlinkTop': 'lidTL', 'LEyeBlinkBottom': 'lidBL', 'REyeBlinkTop': 'lidTR', 'REyeBlinkBottom': 'lidBR'}
+    if r in eyes: return eyes[r]
+    return 'head'   # head, jaw and the other face bones
 dg = bpy.context.evaluated_depsgraph_get()
 me = ME.data; nvo = len(me.vertices)
 Wv = np.zeros((nvo, len(bones)), np.float32)
@@ -129,7 +134,7 @@ parts = {'hips': 1, 'chest': 2, 'head': 3, 'leadarm': 4, 'trailarm': 5, 'leadleg
 def part(bn):
     if bn in ('hips', 'spine'): return 1
     if bn in ('chest', 'clavL', 'clavR'): return 2
-    if bn == 'head': return 3
+    if bn == 'head' or bn[:3] in ('eye', 'lid'): return 3
     if bn == 'neck': return 10
     S = bn[-1]
     if bn[:-1] in ('uarm', 'farm', 'ftw'): return 4 if S == 'L' else 5
