@@ -13,7 +13,12 @@ const endOf = (D, dr, i) => { D.prep(dr); return dr._tl[i].e; };
 
 test('no motion: identical to the rig', () => {
   const { DrillStudio: D, DRILL_LIBRARY: L } = load();
-  for (const dr of L) { D.prep(dr); for (let k = 0; k < 50; k++) { const t = dr._dur * k / 50; assert.deepStrictEqual(JSON.parse(JSON.stringify(D.jointsAt(dr, t))), JSON.parse(JSON.stringify(D.rig(D.sampleAt(dr, t).p)))); } }
+  for (const dr of L) { D.prep(dr); for (let k = 0; k < 50; k++) { const t = dr._dur * k / 50; assert.deepStrictEqual(JSON.parse(JSON.stringify(D._raw(dr, t))), JSON.parse(JSON.stringify(D.rig(D.sampleAt(dr, t).p)))); } }
+});
+test('what is shown is the raw pose stood tall, with the hands kept out of the body', () => {
+  const { DrillStudio: D, DRILL_LIBRARY: L } = load(); D.setSwing(MODEL);
+  for (const dr of L.slice(0, 8)) { D.prep(dr); for (let k = 0; k < 20; k++) { const t = dr._dur * k / 20, J = D.jointsAt(dr, t), R = D._standTall(D._raw(dr, t));
+    for (const j of ['pel', 'chest', 'head', 'ls', 'ts', 'lk', 'tk']) assert.ok(dist(J[j], R[j]) < 1e-9, dr.id + ' ' + j); } }
 });
 test('plain key lands on the motion phase pose', () => {
   const { DrillStudio: D } = load(); D.setSwing(MODEL);
@@ -26,14 +31,14 @@ const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 test('drills with no plain swing keys stay exactly on the rig', () => {
   const { DrillStudio: D, DRILL_LIBRARY: L } = load(); D.setSwing(MODEL); let n = 0;
   for (const dr of L.filter(d => !d.seq.some(isPlain))) { n++; D.prep(dr);
-    for (let k = 0; k < 60; k++) { const t = dr._dur * k / 60; assert.deepStrictEqual(JSON.parse(JSON.stringify(D.jointsAt(dr, t))), JSON.parse(JSON.stringify(D.rig(D.sampleAt(dr, t).p))), dr.id + ' ' + t); }
+    for (let k = 0; k < 60; k++) { const t = dr._dur * k / 60; assert.deepStrictEqual(JSON.parse(JSON.stringify(D._raw(dr, t))), JSON.parse(JSON.stringify(D.rig(D.sampleAt(dr, t).p))), dr.id + ' ' + t); }
     assert.deepStrictEqual(D.ballOf(dr), dr._ball, dr.id + ' ball'); }
   assert.ok(n >= 10, 'rig-only drills ' + n);
 });
 test('override key = captured pose + the override', () => {
   const { DrillStudio: D } = load(); D.setSwing(MODEL);
   const dr = drill([{ k: 'top', d: 0.5 }, { k: 'impact', o: { hip: -10, side: 4 }, d: 0.6 }]);
-  const J = D.jointsAt(dr, endOf(D, dr, 1)), want = sub(D.rig(D.pose('impact', { hip: -10, side: 4 })).pel, D.rig(D.pose('impact')).pel);
+  const J = D._raw(dr, endOf(D, dr, 1)), want = sub(D.rig(D.pose('impact', { hip: -10, side: 4 })).pel, D.rig(D.pose('impact')).pel);
   assert.ok(dist(sub(J.pel, MODEL.frames[MODEL.phases.impact].pel), want) < 0.002);
 });
 test('club keeps its length and arms their reach, in every drill that uses the capture', () => {
@@ -41,7 +46,9 @@ test('club keeps its length and arms their reach, in every drill that uses the c
   for (const dr of L.filter(d => d.seq.some(isPlain))) { D.prep(dr);
     for (let k = 0; k <= 200; k++) { const t = dr._dur * k / 200, J = D.jointsAt(dr, t);
       if (J.club && J.arms === 'club') { const cl = dist(J.club[0], J.club[1]); assert.ok(Math.abs(cl - 0.95) < 0.06, dr.id + ' club ' + cl.toFixed(3) + ' at ' + t.toFixed(2)); }
-      for (const s of ['l', 't']) { const r = dist(J[s + 's'], J[s + 'h']); assert.ok(r > 0.12 && r < 0.66, dr.id + ' ' + s + ' arm ' + r.toFixed(3) + ' at ' + t.toFixed(2)); } } }
+      // shoulder to grip: the arm (~0.56 m) plus the ~0.1 m from the wrist to the shaft through the fingers, a little more
+      // with the arms fully extended at impact (checked by eye: glove drill at 6.0 s, 0.75 m, looks right)
+      for (const s of ['l', 't']) { const r = dist(J[s + 's'], J[s + 'h']); assert.ok(r > 0.15 && r < 0.76, dr.id + ' ' + s + ' arm ' + r.toFixed(3) + ' at ' + t.toFixed(2)); } } }
 });
 test('feet stay planted through a plain swing drill', () => {
   const { DrillStudio: D, DRILL_LIBRARY: L } = load(); D.setSwing(MODEL);
@@ -52,7 +59,7 @@ test('feet stay planted through a plain swing drill', () => {
 test('the ghost is the golfer plus the fault', () => {
   const { DrillStudio: D } = load(); D.setSwing(MODEL);
   const dr = drill([{ k: 'address', d: 0.5 }, { k: 'impact', d: 0.6, ghost: { k: 'impact', o: { hip: 10, hz: 0.06 } } }]);
-  const J = D.jointsAt(dr, endOf(D, dr, 1)), G = D.ghostAt(dr, 1);
+  const J = D._raw(dr, endOf(D, dr, 1)), G = D._ghostRaw(dr, 1);
   const want = sub(D.rig(D.pose('impact', { hip: 10, hz: 0.06 })).pel, D.rig(D.pose('impact')).pel);
   assert.ok(dist(sub(G.pel, J.pel), want) < 0.002);
 });
@@ -89,7 +96,7 @@ test('mirror: joints are unchanged (the scene does the mirroring, as for the rig
 test('bad model is ignored', () => {
   const { DrillStudio: D } = load(); D.setSwing({ v: 1, frames: [] });
   const dr = drill([{ k: 'address', d: 0.5 }, { k: 'top', d: 0.8 }]); D.prep(dr);
-  assert.deepStrictEqual(JSON.parse(JSON.stringify(D.jointsAt(dr, 1.0))), JSON.parse(JSON.stringify(D.rig(D.sampleAt(dr, 1.0).p))));
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(D._raw(dr, 1.0))), JSON.parse(JSON.stringify(D.rig(D.sampleAt(dr, 1.0).p))));
 });
 test('"not this" key holds the previous motion pose', () => {
   const { DrillStudio: D } = load(); D.setSwing(MODEL);

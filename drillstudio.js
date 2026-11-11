@@ -266,7 +266,15 @@ function standTall(J) {
 function keyJoints(dr, i) { return standTall(keyJoints0(dr, i)); }
 function keyJoints0(dr, i) { return usesCapture(dr) ? poseOf(dr, keyInfo(dr, i)) : rig(dr.seq[i].P); }
 function startJ(dr) { prep(dr); return keyJoints(dr, 0); }
-function jointsAt(dr, t) { return clubClear(spineClubOn(standTall(jointsAt0(dr, t)))); }
+function jointsAt(dr, t) { return clubClear(spineClubOn(keepReach(standTall(jointsAt0(dr, t))))); }
+// blending between two very different arm poses (a finish with the club up, back to arms hanging for the reset) moved
+// the hands in a straight line, which took the trail hand through its own shoulder; keep each hand at least 20 cm out
+function keepReach(J) {
+  if (!J || !J.ls) return J;
+  for (const s of ['l', 't']) { const sh = J[s + 's'], h = J[s + 'h']; if (!sh || !h) continue; const v = sub(h, sh), r = len(v);
+    if (r > 1e-6 && r < 0.2) { const k = 0.2 / r, nh = add(sh, mul(v, k)), d = sub(nh, h); J[s + 'h'] = nh; if (J[s + 'w']) J[s + 'w'] = add(J[s + 'w'], d); } }
+  return J;
+}
 // the club never passes through the golfer's head or into the ground. Coming into a finish (and blending from a finish
 // back to address) the shaft could cut through the back of his head; it now turns about the lead hand just far enough
 // to go round it. At the bottom of the swing the head could sink up to 10 cm into the mat; the club now slides a
@@ -929,7 +937,8 @@ function speedTrail() {
 function clubFx(dr, t, J) {
   if (REDUCED || !J || !J.club) return null;
   const at = tt => { const j = jointsAt(dr, clamp(tt, 0, dr._dur - 1e-3)); return j && j.club ? j.club : null; };
-  const h = 1 / 40, cm = at(t - h), cp = at(t + h);   // a wide step: the keyed motion is too coarse for a sharper acceleration if (!cm || !cp) return null;
+  const h = 1 / 40, cm = at(t - h), cp = at(t + h);   // a wide step: the keyed motion is too coarse for a sharper acceleration
+  if (!cm || !cp) return null;   // the club is put down or picked up within this step
   const b = J.club[1], d = norm(sub(b, J.club[0]));
   const v = mul(sub(cp[1], cm[1]), 1 / (2 * h)), acc = mul(add(sub(cp[1], mul(b, 2)), cm[1]), 1 / (h * h)), sp = len(v);
   const ap = sub(acc, mul(d, dot(acc, d)));
@@ -1197,6 +1206,6 @@ function poster(dr, w, h, warm) {   // warm: also draw the red ghost, so its sha
   const url = c.toDataURL('image/jpeg', 0.86); POSTERS.set(id, url); if (typeof CCGolfer !== 'undefined' && CCGolfer.ready()) POSTERS.set(id + ':real', true); return url;
 }
 function stats() { return { scenes: SCN.size, renders: STATS.renders, scale: QUAL.s, programs: R && R.info.programs ? R.info.programs.length : 0 }; }
-const api = { prepTextures, stats, slowFrames, QUAL, Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, _clubFx: clubFx, ballOf, propPoint };
+const api = { _raw: (dr, t) => jointsAt0(dr, t), _ghostRaw: (dr, i) => ghostAt0(dr, i), _standTall: J => standTall(J), prepTextures, stats, slowFrames, QUAL, Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, _clubFx: clubFx, ballOf, propPoint };
 root.DrillStudio = api;
 })(this);

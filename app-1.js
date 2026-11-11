@@ -15,7 +15,12 @@ function errSend(e,how){try{if(!errOn()||ERR.sent>=10)return;const msg=String(e&
   breadcrumbs:{values:ERR.crumbs.slice()}};
  const body=JSON.stringify({event_id:id,sent_at:new Date().toISOString()})+'\n'+JSON.stringify({type:'event'})+'\n'+JSON.stringify(ev);
  fetch(`${u.protocol}//${u.host}/api/${proj}/envelope/?sentry_key=${pk}&sentry_version=7&sentry_client=caddy-coach/1`,{method:'POST',body,keepalive:true,headers:{'Content-Type':'text/plain;charset=UTF-8'}}).catch(()=>{})}catch(_){}}
-addEventListener('error',ev=>{if(ev.error||ev.message)errSend(ev.error||{message:ev.message,stack:`at ? (${ev.filename}:${ev.lineno}:${ev.colno})`},'onerror')});
+// Not sent, because nothing in them can be acted on: "Script error." with no details (the browser hides them when the
+// failing script isn't the app's own, e.g. Safari's translate feature or a content blocker), and errors whose stack never
+// touches this site (scripts injected by bots, scanners or browser extensions).
+const errOurs=e=>{const fr=errFrames(e&&e.stack);return !fr.length||fr.some(f=>f.filename.startsWith('/')||f.filename.includes(location.host))};
+addEventListener('error',ev=>{if(!ev.error&&/^Script error\.?$/.test(ev.message||'')&&!ev.filename)return;
+ const e=ev.error||(ev.message?{message:ev.message,stack:`at ? (${ev.filename}:${ev.lineno}:${ev.colno})`}:null);if(e&&errOurs(e))errSend(e,'onerror')});
 addEventListener('unhandledrejection',ev=>{const r=ev.reason;if(r&&/AbortError|NotAllowedError/.test(r.name||''))return;errSend(r instanceof Error?r:{name:'UnhandledRejection',message:String(r&&r.message||r)},'onunhandledrejection')});
 document.addEventListener('click',e=>{const b=e.target.closest('button,a,[role=radio]');if(b)errCrumb('tap: '+(b.dataset&&Object.keys(b.dataset)[0]?Object.keys(b.dataset)[0]+'='+Object.values(b.dataset)[0]:(b.textContent||'').trim().slice(0,30)))},true);
 window.ccReportError=errSend;
@@ -283,7 +288,7 @@ document.addEventListener('click',async e=>{
  const b=e.target.closest('[data-setup]');if(!b)return;b.disabled=true;
  try{await loadSetup();SetupCoach.SetupUI.open({getPose,makeSampler,esc,hand:$('hand').value||'right',club:SUCLUB,view:b.dataset.setup,onClub:v=>{SUCLUB=v},onClose:()=>{renderSetup();b.focus()}})}catch(_){alert('The setup check could not load. Check your connection and try again.')}finally{b.disabled=false}});
 let LIVEP=null,GRIPP=null,HANDM=null;
-function addScript(src){return new Promise((res,rej)=>{const e=document.createElement('script');e.src=src;e.onload=()=>res(true);e.onerror=()=>rej(new Error(src));document.head.appendChild(e)})}
+function addScript(src){return new Promise((res,rej)=>{const e=document.createElement('script');if(/^https?:/.test(src))e.crossOrigin='anonymous';e.src=src;e.onload=()=>res(true);e.onerror=()=>rej(new Error(src));document.head.appendChild(e)})}
 function loadGrip(){if(GRIPP)return GRIPP;GRIPP=loadLive().then(()=>addScript('hand.js')).then(()=>addScript('grip.js')).catch(e=>{GRIPP=null;throw e});return GRIPP}
 async function getGripModels(){const pose=await getPose();if(!HANDM){if(!window.HAND_MODEL)await addScript('hand_model.js');const b=atob(HAND_MODEL),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);HANDM=new HandModel.Hand(u.buffer)}return{pose,hand:HANDM}}
 document.addEventListener('click',async e=>{const b=e.target.closest('#gripLive');if(!b)return;b.disabled=true;

@@ -1,0 +1,30 @@
+# Runs before every update: on each pull request, and on main after a merge.
+name: Tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Every script loads
+        run: for f in *.js; do node --check "$f" || exit 1; done
+      - name: Drill motion and player tests
+        run: node --test tools/golfer/motion/test_drill_motion.js tools/golfer/motion/test_perf.js
+      - name: Motion capture tools
+        run: |
+          pip install numpy scipy pytest
+          cd tools/golfer/motion && python -m pytest -q
+      - name: App smoke test (headless phone, every screen and drill)
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+          python tools/ci/smoke.py
