@@ -32,27 +32,31 @@ function loadRB(base) {
   return fetch(base + 'golfer-rb.wasm').then(r => { if (!r.ok) throw new Error('golfer ' + r.status); return r.arrayBuffer(); }).then(buf => {
     const D = parse(buf), tx = D.meta.tex || {};
     const col = t => { t.encoding = T.sRGBEncoding; t.anisotropy = 4; };
-    return Promise.all([texL(base + tx.body, col), texL(base + tx.bodyN), texL(base + tx.head, col), texL(base + tx.headN), texL(base + tx.hair, col), texL(base + 'golfer-pores.jpg', t => { t.wrapS = t.wrapT = T.RepeatWrapping; })])
+    return Promise.all([texL(base + tx.body, col), texL(base + tx.bodyN), texL(base + tx.head, col), texL(base + tx.headN), null, texL(base + 'golfer-pores.jpg', t => { t.wrapS = t.wrapT = T.RepeatWrapping; })])
       .then(([body, bodyN, head, headN, hair, pores]) => { if (!body || !head) throw new Error('golfer textures');
         return { D, TX: { body, bodyN, head, headN, hair, pores } }; });
+  });
+}
+// The classic head's cap, hair and eyes are only drawn when the classic head is (?golfer=classic, or the realistic head
+// failed to load), so they are fetched only then: that keeps ~150 KB out of every visitor's offline download.
+const CLASSIC_HEAD = { eye: 'golfer-eye.jpg', cap: 'golfer-cap.jpg', capN: 'golfer-cap-n.jpg', hair: 'golfer-hair.png' };
+function loadClassicHead(base) {
+  return Promise.all(Object.entries(CLASSIC_HEAD).map(([k, f]) => texL(base + f).then(t => [k, t]))).then(list => {
+    for (const [k, t] of list) { if (!t) continue; TEX[k] = t;
+      if (k === 'eye' || k === 'hair') { t.encoding = T.sRGBEncoding; t.anisotropy = 4; }
+      if (k === 'cap') { t.encoding = T.sRGBEncoding; t.flipY = false; t.anisotropy = 4; } if (k === 'capN') t.flipY = false; }
   });
 }
 function loadClassic(base) {
   return Promise.all([
     fetch(base + 'golfer-mesh.wasm').then(r => { if (!r.ok) throw new Error('golfer ' + r.status); return r.arrayBuffer(); }),
     new Promise((ok, no) => new T.TextureLoader().load(base + 'golfer-skin.jpg', ok, undefined, no)),
-    new Promise(ok => new T.TextureLoader().load(base + 'golfer-eye.jpg', ok, undefined, () => ok(null))),
     new Promise(ok => new T.TextureLoader().load(base + 'golfer-shoe.jpg', ok, undefined, () => ok(null))),
     new Promise(ok => new T.TextureLoader().load(base + 'golfer-shoe-n.jpg', ok, undefined, () => ok(null))),
-    new Promise(ok => new T.TextureLoader().load(base + 'golfer-cap.jpg', ok, undefined, () => ok(null))),
-    new Promise(ok => new T.TextureLoader().load(base + 'golfer-cap-n.jpg', ok, undefined, () => ok(null))),
-    new Promise(ok => new T.TextureLoader().load(base + 'golfer-hair.png', ok, undefined, () => ok(null))),
     ...['pique', 'twill', 'pores'].map(n => new Promise(ok => new T.TextureLoader().load(base + 'golfer-' + n + '.jpg', t => { t.wrapS = t.wrapT = T.RepeatWrapping; t.anisotropy = 4; ok(t); }, undefined, () => ok(null)))),
-  ]).then(([buf, skin, eye, shoe, shoeN, cap, capN, hair, pique, twill, pores]) => { skin.encoding = T.sRGBEncoding; skin.flipY = true; skin.anisotropy = 4; if (eye) eye.encoding = T.sRGBEncoding;
+  ]).then(([buf, skin, shoe, shoeN, pique, twill, pores]) => { skin.encoding = T.sRGBEncoding; skin.flipY = true; skin.anisotropy = 4;
     if (shoe) { shoe.encoding = T.sRGBEncoding; shoe.flipY = false; shoe.anisotropy = 4; } if (shoeN) shoeN.flipY = false;
-    if (cap) { cap.encoding = T.sRGBEncoding; cap.flipY = false; cap.anisotropy = 4; } if (capN) capN.flipY = false;
-    if (hair) { hair.encoding = T.sRGBEncoding; hair.anisotropy = 4; }
-    TEX = { skin, eye, shoe, shoeN, cap, capN, hair, pique, twill, pores }; DATA = parse(buf); return DATA; });
+    TEX = { skin, eye: null, shoe, shoeN, cap: null, capN: null, hair: null, pique, twill, pores }; DATA = parse(buf); return DATA; });
 }
 // The drill golfer is the classic figure's body and clothes (polo, trousers, belt, shoes, glove) with the Rocketbox
 // head and neck: a real face and hair on the familiar outfit. The cap is left off: refitted to the new head it hid the
@@ -66,7 +70,7 @@ function load(base) {
   // golfer-*.wasm files are not WebAssembly: they're the golfer's binary mesh, named .wasm so every host serves them as binary
   let classic = false; try { classic = /[?&]golfer=classic\b/.test(root.location.search); } catch (e) {}
   LOADING = Promise.all([loadClassic(base), classic ? null : loadRB(base).catch(e => { console.warn('realistic head unavailable, using the classic figure', e); return null; })])
-    .then(([d, rb]) => { RB = rb; DONE = true; return d; })
+    .then(([d, rb]) => (rb ? Promise.resolve() : loadClassicHead(base)).then(() => { RB = rb; DONE = true; return d; }))
     .catch(e => { LOADING = null; throw e; });
   return LOADING;
 }
