@@ -57,7 +57,7 @@ document.querySelectorAll('#tabbar [data-grp]').forEach(b=>b.onclick=()=>{const 
 function buzz(ms){try{const ua=navigator.userActivation;if(navigator.vibrate&&(!ua||ua.isActive)&&!matchMedia('(prefers-reduced-motion:reduce)').matches)navigator.vibrate(ms)}catch(_){}}
 // the page slides in without making the browser re-measure the whole page first
 const RMOTION=matchMedia('(prefers-reduced-motion:reduce)');
-function tab(n){if((n===6||n===4)&&typeof PLUS!=='undefined'&&PLUS.on&&!plusActive()){plusGate(n===6?'trace':'grip');return}[0,1,2,3,4,5,6,7,8,9].forEach(k=>{$('p'+k).hidden=k!==n});document.querySelectorAll('#panel [data-hole]').forEach(b=>{if(+b.dataset.hole===n)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+function tab(n){if(typeof guestGate==='function'&&guestGate('p'+n))return;if((n===6||n===4)&&typeof PLUS!=='undefined'&&PLUS.on&&!plusActive()){plusGate(n===6?'trace':'grip');return}[0,1,2,3,4,5,6,7,8,9].forEach(k=>{$('p'+k).hidden=k!==n});document.querySelectorAll('#panel [data-hole]').forEach(b=>{if(+b.dataset.hole===n)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
  {const el=$('p'+n);if(el.animate){if(!RMOTION.matches)el.animate([{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'none'}],{duration:260,easing:'cubic-bezier(.2,.7,.2,1)'})}else{el.classList.remove('pgEnter');void el.offsetWidth;el.classList.add('pgEnter')}}buzz(6);renderHero(n);closeMenu(true);if(n===0)setTimeout(renderHome,0);if(n===2)loadHistory();if(n===3)renderDrills();if(n===5)renderSetup();if(n===6)initTracer();if(n===8)initRounds();if(n===9)initBag();window.scrollTo(0,0)}
 const panel=$('panel'),scrim=$('scrim'),menuBtn=$('menuBtn');let menuOpen=false;
 function openMenu(){if(menuOpen)return;menuOpen=true;scrim.hidden=false;panel.setAttribute('aria-hidden','false');menuBtn.setAttribute('aria-expanded','true');document.body.style.overflow='hidden';
@@ -152,8 +152,8 @@ const whereLabel=w=>w==='both'?'Range or home':w==='range'?'Range':'Home';
 let DF={where:'all',area:'mine'};
 let D3P=null;
 function load3D(){if(D3P)return D3P;D3P=addScript('three.min.js').then(()=>addScript('drillstudio.js')).then(()=>true).catch(()=>addScript('drillstudio.js').then(()=>true).catch(()=>false)).then(ok=>ok&&window.DrillStudio&&DrillStudio.loadSwing?Promise.all([DrillStudio.loadSwing('',8000),DrillStudio.prepTextures&&DrillStudio.prepTextures(8000)]).then(()=>ok):ok).then(ok=>{if(window.DrillStudio&&DrillStudio.setMirror)DrillStudio.setMirror(Hand.get()==='left');if(ok&&window.THREE)addScript('golfer.js').then(()=>window.CCGolfer&&CCGolfer.load('').then(()=>{document.dispatchEvent(new Event('cc-golfer'))})).catch(e=>console.warn('Realistic golfer unavailable',e));return ok});return D3P}
-function drillCard(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))].slice(0,3);
- return `<button type="button" class="dcard" id="drill-${d.id}" data-open="${d.id}"><span class="dposter"><img alt="" data-poster="${d.id}" hidden><span class="dplay" aria-hidden="true"></span></span>
+function drillCard(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))].slice(0,3),lk=typeof guestDrillLocked==='function'&&guestDrillLocked(d.id);
+ return `<button type="button" class="dcard${lk?' dLocked':''}" id="drill-${d.id}" data-open="${d.id}"${lk?' aria-label="'+esc(d.name)+': create a free profile to watch"':''}><span class="dposter"><img alt="" data-poster="${d.id}" hidden><span class="${lk?'dlock':'dplay'}" aria-hidden="true"></span></span>
  <span class="dbody"><span class="dname">${esc(d.name)}</span><span class="dby">${esc(d.by)}</span>
  <span class="dfix">${fx.map(f=>`<span>${esc(f)}</span>`).join('')}</span>
  <span class="dmeta">${whereLabel(d.where)} · ${esc(d.time)}</span></span></button>`}
@@ -220,7 +220,7 @@ function dpHTML(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))];
   <button type="button" class="liveBtn" data-live="${d.id}"><span class="dot" aria-hidden="true"></span>Practise with live feedback<small>Your camera watches and a voice keeps you in the zone</small></button>
  </div>`}
 async function openDrill(id){
- const d=DRILLS.find(x=>x.id===id);if(!d)return;closeDrill(true);
+ const d=DRILLS.find(x=>x.id===id);if(!d)return;if(typeof guestDrillLocked==='function'&&guestDrillLocked(id)){guestGate('drill');return}closeDrill(true);
  const el=document.createElement('div');el.className='dpSheet';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-labelledby','dpTitle');el.innerHTML=dpHTML(d);
  document.body.appendChild(el);document.body.classList.add('dpOpen');DP.el=el;DP.d=d;DP.ret=document.activeElement;
  requestAnimationFrame(()=>el.classList.add('in'));el.querySelector('[data-dp-close]').focus();
@@ -635,7 +635,7 @@ setTimeout(()=>{const sv=lsGet('cc_view',null);if(sv==='face-on'||sv==='down-the
 ['hand','view'].forEach(id=>$(id).onchange=()=>{if(RES&&RES.R&&!busy)finishAnalysis(job,true)});
 async function analyze(my){
  if(busy)return;
- if(!$('view').value){say('Pick the camera angle first: "Facing you" if the phone was in front of you, "Down the line" if it was behind you, looking at the target.',true);$('view').focus();return}if(typeof plusGate==='function'&&!(await plusGate('swing')))return;busy=true;$('go').disabled=true;stopPlay();
+ if(!$('view').value){say('Pick the camera angle first: "Facing you" if the phone was in front of you, "Down the line" if it was behind you, looking at the target.',true);$('view').focus();return}if(typeof guestGate==='function'&&await guestSwingUsed()&&guestGate('swing2'))return;if(typeof plusGate==='function'&&!(await plusGate('swing')))return;busy=true;$('go').disabled=true;stopPlay();
  try{
   step(1);say('Keeping only your trimmed clip…');prog(.01);
   const clip=await captureClip(my,TR.a,TR.b);if(!clip||my!==job)return;
