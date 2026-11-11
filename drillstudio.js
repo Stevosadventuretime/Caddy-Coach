@@ -264,7 +264,15 @@ function standTall(J) {
 function keyJoints(dr, i) { return standTall(keyJoints0(dr, i)); }
 function keyJoints0(dr, i) { return usesCapture(dr) ? poseOf(dr, keyInfo(dr, i)) : rig(dr.seq[i].P); }
 function startJ(dr) { prep(dr); return keyJoints(dr, 0); }
-function jointsAt(dr, t) { return standTall(jointsAt0(dr, t)); }
+function jointsAt(dr, t) { return keepReach(standTall(jointsAt0(dr, t))); }
+// blending between two very different arm poses (a finish with the club up, back to arms hanging for the reset) moved
+// the hands in a straight line, which took the trail hand through its own shoulder; keep each hand at least 20 cm out
+function keepReach(J) {
+  if (!J || !J.ls) return J;
+  for (const s of ['l', 't']) { const sh = J[s + 's'], h = J[s + 'h']; if (!sh || !h) continue; const v = sub(h, sh), r = len(v);
+    if (r > 1e-6 && r < 0.2) { const k = 0.2 / r, nh = add(sh, mul(v, k)), d = sub(nh, h); J[s + 'h'] = nh; if (J[s + 'w']) J[s + 'w'] = add(J[s + 'w'], d); } }
+  return J;
+}
 function jointsAt0(dr, t) {
   prep(dr); const s = sampleAt(dr, t);
   if (!usesCapture(dr)) return rig(s.p);
@@ -962,6 +970,6 @@ function poster(dr, w, h, warm) {   // warm: also draw the red ghost, so its sha
   const url = c.toDataURL('image/jpeg', 0.86); POSTERS.set(id, url); if (typeof CCGolfer !== 'undefined' && CCGolfer.ready()) POSTERS.set(id + ':real', true); return url;
 }
 function stats() { return { scenes: SCN.size, renders: STATS.renders, scale: QUAL.s, programs: R && R.info.programs ? R.info.programs.length : 0 }; }
-const api = { prepTextures, stats, slowFrames, QUAL, Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, ballOf, propPoint };
+const api = { _raw: (dr, t) => jointsAt0(dr, t), _ghostRaw: (dr, i) => ghostAt0(dr, i), _standTall: J => standTall(J), prepTextures, stats, slowFrames, QUAL, Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, ballOf, propPoint };
 root.DrillStudio = api;
 })(this);
