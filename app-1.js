@@ -152,8 +152,8 @@ const whereLabel=w=>w==='both'?'Range or home':w==='range'?'Range':'Home';
 let DF={where:'all',area:'mine'};
 let D3P=null;
 function load3D(){if(D3P)return D3P;D3P=addScript('three.min.js').then(()=>addScript('drillstudio.js')).then(()=>true).catch(()=>addScript('drillstudio.js').then(()=>true).catch(()=>false)).then(ok=>ok&&window.DrillStudio&&DrillStudio.loadSwing?Promise.all([DrillStudio.loadSwing('',8000),DrillStudio.prepTextures&&DrillStudio.prepTextures(8000)]).then(()=>ok):ok).then(ok=>{if(window.DrillStudio&&DrillStudio.setMirror)DrillStudio.setMirror(Hand.get()==='left');if(ok&&window.THREE)addScript('golfer.js').then(()=>window.CCGolfer&&CCGolfer.load('').then(()=>{document.dispatchEvent(new Event('cc-golfer'))})).catch(e=>console.warn('Realistic golfer unavailable',e));return ok});return D3P}
-function drillCard(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))].slice(0,3);
- return `<button type="button" class="dcard" id="drill-${d.id}" data-open="${d.id}"><span class="dposter"><img alt="" data-poster="${d.id}" hidden><span class="dplay" aria-hidden="true"></span></span>
+function drillCard(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))].slice(0,3),lk=typeof guestDrillLocked==='function'&&guestDrillLocked(d.id);
+ return `<button type="button" class="dcard${lk?' dLocked':''}" id="drill-${d.id}" data-open="${d.id}"${lk?' aria-label="'+esc(d.name)+': create a free profile to watch"':''}><span class="dposter"><img alt="" data-poster="${d.id}" hidden><span class="${lk?'dlock':'dplay'}" aria-hidden="true"></span></span>
  <span class="dbody"><span class="dname">${esc(d.name)}</span><span class="dby">${esc(d.by)}</span>
  <span class="dfix">${fx.map(f=>`<span>${esc(f)}</span>`).join('')}</span>
  <span class="dmeta">${whereLabel(d.where)} · ${esc(d.time)}</span></span></button>`}
@@ -220,7 +220,7 @@ function dpHTML(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))];
   <button type="button" class="liveBtn" data-live="${d.id}"><span class="dot" aria-hidden="true"></span>Practise with live feedback<small>Your camera watches and a voice keeps you in the zone</small></button>
  </div>`}
 async function openDrill(id){
- const d=DRILLS.find(x=>x.id===id);if(!d)return;closeDrill(true);
+ const d=DRILLS.find(x=>x.id===id);if(!d)return;if(typeof guestDrillLocked==='function'&&guestDrillLocked(id)){guestGate('drill');return}closeDrill(true);
  const el=document.createElement('div');el.className='dpSheet';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-labelledby','dpTitle');el.innerHTML=dpHTML(d);
  document.body.appendChild(el);document.body.classList.add('dpOpen');DP.el=el;DP.d=d;DP.ret=document.activeElement;
  requestAnimationFrame(()=>el.classList.add('in'));el.querySelector('[data-dp-close]').focus();
