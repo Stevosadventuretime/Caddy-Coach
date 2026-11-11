@@ -1253,9 +1253,20 @@ const guestDrillLocked=id=>isGuest()&&!GUEST_DRILLS.has(id);
 const isGuest=()=>!HOSTED_IN_CLAUDE&&typeof PROF!=='undefined'&&!PROF.me;
 function guestGate(what){if(!isGuest()||GUEST_OPEN.has(what))return false;PROF.gateWhy=GUEST_WHY[what]||'use everything in Caddy Coach';PROF.err={};PROF.f={};profShow('gate');return true}
 async function guestSwingUsed(){if(!isGuest())return false;try{return (await Store.list()).length>=1}catch(_){return false}}
-// a visitor's first save stays on this phone; remind them once that a free profile keeps it
-function guestNudge(what){if(PROF.me||HOSTED_IN_CLAUDE||lsGet('cc_guest_nudged',0))return;lsSet('cc_guest_nudged',1);
- setTimeout(()=>toast(`Your ${what} is saved on this phone. Create a free profile (top right) to keep it safe.`),400)}
+// a visitor's saves live only on this phone (and iPhone Safari can clear them after 7 days unused), so while a
+// visitor has something saved a banner under the top bar says so, with a way to keep it. Closing it hides it for 3 days.
+const isIOS=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const isHomeScreenApp=()=>!!navigator.standalone||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);
+async function guestKeepBar(){let el=$('gKeep');const off=()=>{if(el)el.remove()};
+ if(!isGuest()||Date.now()<lsGet('cc_keep_hide',0))return off();
+ let n=0;try{n=(await Store.list()).length}catch(_){}if(!n)return off();
+ if(!el){el=document.createElement('aside');el.id='gKeep';el.className='gKeep';el.setAttribute('aria-label','Your saved swing');
+  const h=document.querySelector('header.topbar');if(!h)return;h.after(el)}
+ const ios=isIOS()&&!isHomeScreenApp(),first=!lsGet('cc_legacy_owner',null);   // the first profile made on a phone takes over what's already saved there
+ el.innerHTML=`<div class="gKeepIn"><p><strong>Your swing is saved on this phone only.</strong> Create a free profile to keep your swings safe.${first?' This one comes with you when you sign up.':''}${ios?' On iPhone, Safari can clear it if you don\'t open Caddy Coach for 7 days. To stop that, tap Share, then Add to Home Screen.':''}</p>
+ <div class="gKeepAct"><button type="button" class="pri" data-pf="to-signup">Create free profile</button><button type="button" class="gKeepX" data-keep-hide aria-label="Hide this for 3 days">\u00d7</button></div></div>`}
+document.addEventListener('click',e=>{if(!e.target.closest('[data-keep-hide]'))return;lsSet('cc_keep_hide',Date.now()+3*864e5);const el=$('gKeep');if(el)el.remove()});
+function guestNudge(what){if(PROF.me||HOSTED_IN_CLAUDE)return;setTimeout(guestKeepBar,400)}
 document.addEventListener('click',e=>{const t=e.target.closest('[data-pf],[data-pf-pick]');if(!t)return;
  if(t.dataset.pfPick!=null){PROF.course=PROF.cl[+t.dataset.pfPick];PROF.err.course='';profCollect();return profRender()}
  const a=t.dataset.pf;profCollect();
@@ -1321,7 +1332,7 @@ async function profBoot(){profShow('boot');await Store.init();if(!HOSTED_IN_CLAU
    applyHand();HcpStore.load().then(hcpRefresh).catch(e=>console.error(e));BagStore.load().then(b=>{if(!BG.bag)BG.bag=b;if(lsGet('cc_hand_push_'+p.username,0)){try{localStorage.removeItem('cc_hand_push_'+p.username)}catch(_){}b.hand=Hand.get();return BagStore.save(b)}}).catch(()=>{});
    profFlush();PDir.get(p.username).then(q=>{if(q&&!q.partial&&q.updatedAt!==p.updatedAt&&!lsGet('cc_prof_out',[]).length){PROF.me=q;PDir.cache(q);profTopbar()}}).catch(()=>{});return}}
  if(lsGet('cc_deleted',0)){try{localStorage.removeItem('cc_deleted')}catch(_){}setTimeout(()=>toast('Your account and all its data have been deleted.'),300)}
- if(lsGet('cc_guest',0)){profHide();profTopbar();return}
+ if(lsGet('cc_guest',0)){profHide();profTopbar();guestKeepBar();return}
  profShow('welcome')}
 
 // ===================== live pins, club pin sheets, club pages, usage counts, Caddy Coach Plus, coaching =====================

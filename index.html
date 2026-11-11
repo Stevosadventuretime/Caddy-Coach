@@ -1408,6 +1408,14 @@ body.scrolled .topbar{border-bottom-color:var(--line)}
 .tabbar button[aria-current="page"] svg{background:var(--green-soft);color:var(--green)}
 .tabbar button:focus-visible svg{outline:2px solid var(--green);outline-offset:1px}
 .ccToast{bottom:calc(env(safe-area-inset-bottom,0px) + var(--tabh) + 14px)!important}
+.gKeep{background:var(--green-soft,#e3f1e8);border-bottom:1px solid var(--line2,#d0d8d1);color:var(--ink,#0f1813)}
+.gKeepIn{max-width:720px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center}
+.gKeepIn p{margin:0;flex:1;font:400 14px/1.45 var(--f-ui)}
+.gKeepAct{display:flex;gap:6px;align-items:center;flex:none}
+.gKeepAct .pri{min-height:40px;padding:8px 14px;border-radius:var(--r-m,12px);font:600 14px/1.2 var(--f-ui);white-space:nowrap}
+.gKeepX{min-width:40px;min-height:40px;border:0;background:transparent;color:var(--muted,#56625b);font-size:22px;line-height:1;border-radius:50%}
+.gKeepX:focus-visible,.gKeepAct .pri:focus-visible{outline:2px solid var(--green,#167a46);outline-offset:2px}
+@media (max-width:520px){.gKeepIn{flex-direction:column;align-items:stretch}.gKeepAct{justify-content:space-between}}
 
 /* type: one sans family, tight display tracking */
 h1,h2,h3{color:var(--ink)}
