@@ -88,6 +88,8 @@ function rig(p) {
     J.le = ik(J.ls, J.lh, ua, fa, norm(add(mul(F, 1), mul(s, -1)))); J.te = ik(J.ts, J.th, ua, fa, norm(add(mul(F, 1), mul(s, -1.2))));
     if (a === 'chestclub') { const c0 = add(add(C, mul(F, 0.14)), mul(s, 0.06)); J.stickAcross = [add(c0, mul(Lt, -0.5)), add(c0, mul(Lt, 0.5))]; }
   } else if (a === 'back') {
+    // head back over the spine, chin level, as the drill asks: the back of the head touches the club
+    J.face = norm(add(F, mul(s, -0.15)));
     const bk = mul(F, -0.13); J.spineClub = [add(add(J.head, bk), mul(s, 0.12)), add(add(pel, bk), mul(s, -0.14))];
     J.th = add(add(J.neck, bk), mul(Lt, -0.02)); J.lh = add(add(pel, mul(F, -0.15)), mul(s, 0.05));
     J.te = ik(J.ts, J.th, ua, fa, norm(add(mul(s, 1), mul(Lt, -1)))); J.le = ik(J.ls, J.lh, ua, fa, norm(add(mul(F, -1), mul(Lt, 1))));
@@ -264,7 +266,51 @@ function standTall(J) {
 function keyJoints(dr, i) { return standTall(keyJoints0(dr, i)); }
 function keyJoints0(dr, i) { return usesCapture(dr) ? poseOf(dr, keyInfo(dr, i)) : rig(dr.seq[i].P); }
 function startJ(dr) { prep(dr); return keyJoints(dr, 0); }
-function jointsAt(dr, t) { return standTall(jointsAt0(dr, t)); }
+function jointsAt(dr, t) { return clubClear(spineClubOn(standTall(jointsAt0(dr, t)))); }
+// the club never passes through the golfer's head or into the ground. Coming into a finish (and blending from a finish
+// back to address) the shaft could cut through the back of his head; it now turns about the lead hand just far enough
+// to go round it. At the bottom of the swing the head could sink up to 10 cm into the mat; the club now slides a
+// little up through the hands instead (a few cm, not visible).
+const HEAD_R = 0.17, SOLE_Y = 0.014;
+function clubClear(J) {
+  if (!J || !J.club || !J.lh || !J.head) return J;
+  const a = J.lh; let u = norm(sub(J.club[1], J.club[0]));
+  // the head as a capsule from the rig's head point up through the crown (the mesh's skull sits up to ~10 cm above and
+  // ahead of that point as the head turns), sampled at a few points
+  const up = J.neck ? norm(sub(J.head, J.neck)) : [0, 1, 0], cs = [0, 0.05, 0.1, 0.15].map(k => add(J.head, mul(up, k)));
+  const along = Math.max(...cs.map(c => dot(sub(c, a), u)));
+  const dist = v => Math.min(...cs.map(c => { const ca = sub(c, a), t = Math.max(0, dot(ca, v)); return len(sub(ca, mul(v, t))); }));
+  const ca = sub(cs[2], a);
+  let R = null;
+  if (along > 0 && dist(u) < HEAD_R) {
+    let ax = cross(u, ca); if (len(ax) < 1e-6) ax = cross(u, [0, 1, 0]); ax = norm(ax);
+    let ang = 0; while (ang < 70 && dist(rotAxis(u, ax, -(ang + 2) * D2R)) < HEAD_R) ang += 2;
+    ang += 2; R = v => rotAxis(v, ax, -ang * D2R);
+  }
+  const L0 = len(sub(J.club[1], a)), Lb = len(sub(J.club[0], a));
+  if (R) { u = norm(R(u)); for (const k of ['th', 'tw', 'lw']) if (J[k]) J[k] = add(a, R(sub(J[k], a))); if (J.sd) J.sd = u; }
+  J.club = [sub(a, mul(u, Lb)), add(a, mul(u, L0))];
+  // into the ground: slide the club up through the hands
+  if (J.club[1][1] < SOLE_Y && u[1] < -0.2) { const sl = Math.min(0.12, (SOLE_Y - J.club[1][1]) / -u[1]); J.club = [sub(J.club[0], mul(u, sl)), sub(J.club[1], mul(u, sl))]; }
+  J.clubhead = J.club[1]; if (J.th) J.hands = mul(add(J.lh, J.th), 0.5);
+  return J;
+}
+// the club down the spine lies ON the golfer's back (it used to run through him)
+function spineClubOn(J) {
+  if (!J || !J.spineClub || !J.pel || !J.s || !J.F) return J;
+  const F = norm(J.F), s0 = norm(J.s), s = norm(sub(s0, mul(F, dot(s0, F))));   // along the back, square to facing
+  // laid against the two points that stick out most, the seat and the back of the head (measured on the figure: the seat
+  // 13 cm behind the spine line at belt height, the back of the head up to 1 cm in front of it at 78 cm up), 1.5 cm clear
+  const back = h => 0.148 + (0.002 - 0.148) * (h - 0.02) / 0.76, at = h => add(J.pel, add(mul(s, h), mul(F, -back(h))));
+  J.spineClub = [at(0.95), at(-0.16)];
+  // and the hands on it: the trail hand behind the neck, the lead hand in the small of the back
+  const on = (h, out) => add(at(h), mul(F, -out)), Lt = norm(J.Lt || [1, 0, 0]);
+  // (eased in by how close the hands already are, so blending into or out of this pose stays smooth)
+  const pull = (h, to) => { const w = clamp(1 - (len(sub(to, h)) - 0.06) / 0.25, 0, 1); return add(h, mul(sub(to, h), w)); };
+  J.th = pull(J.th, add(on(0.66, 0.035), mul(Lt, -0.03))); J.lh = pull(J.lh, add(on(0.02, 0.035), mul(Lt, 0.03)));
+  J.te = ik(J.ts, J.th, 0.3, 0.29, norm(add(mul(s, 1), mul(Lt, -1)))); J.le = ik(J.ls, J.lh, 0.3, 0.29, norm(add(mul(s, -1), mul(Lt, 1))));
+  return J;
+}
 function jointsAt0(dr, t) {
   prep(dr); const s = sampleAt(dr, t);
   if (!usesCapture(dr)) return rig(s.p);
