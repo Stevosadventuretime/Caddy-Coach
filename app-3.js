@@ -1100,8 +1100,8 @@ const APP_OWNER_EMAIL='caddycoachapp@gmail.com';   // who golfers contact about 
 function privacyHTML(){const back=PROF.me?'to-me':(PROF.privBack||'to-signup');
  return `<div class="pfCard pfPriv"><button type="button" class="link pfBack" data-pf="${back}">Back</button><h2>Privacy and your data</h2>
   <p>Caddy Coach is a coaching app for golfers. Here's what it keeps, where, and why.</p>
-  <h3>Kept only on your phone</h3><ul><li>Your swing videos, swing analyses and the body-tracking from them. Tracking runs on your phone; videos aren't uploaded.</li><li>Your rounds, scorecards, hole notes, practice plan and the players you add to a round.</li></ul>
-  <h3>Kept online with your profile</h3><ul><li>Your name, username, photo, local course and which hand you play.</li><li>Your email address, kept with your login and used only to send you a password reset link when you ask for one. Other golfers can't see it.</li><li>Your club yardages and your handicap record, so they're there on any phone you log in on. Only you can read these.</li><li>Rounds you choose to post to your club leaderboard, with your first name and initial.</li><li>Feedback you send, with your phone model, so problems can be fixed.</li><li>Pin positions you mark on a green (with your username, for that day).</li><li>If you link to a coach: the swings you choose to send them (scores and key-position pictures, never your video) and their notes.</li></ul>
+  <h3>Kept only on your phone</h3><ul><li>Your swing videos and the body-tracking from them. Tracking runs on your phone; videos aren't uploaded.</li><li>Your practice plan. If you look around without a profile, everything you save stays on your phone.</li></ul>
+  <h3>Kept online with your profile</h3><ul><li>Your name, username, photo, local course and which hand you play.</li><li>Your email address, kept with your login and used only to send you a password reset link when you ask for one. Other golfers can't see it.</li><li>Your club yardages and your handicap record, so they're there on any phone you log in on. Only you can read these.</li><li>A private backup of your rounds (scorecards, hole notes and the players you add), your swing analyses (scores, measurements and key-position pictures, never the video) and course yardages you map, so a new phone or a cleared browser doesn't lose them. Only you can read it, and deleting your account deletes it.</li><li>Rounds you choose to post to your club leaderboard, with your first name and initial.</li><li>Feedback you send, with your phone model, so problems can be fixed.</li><li>Pin positions you mark on a green (with your username, for that day).</li><li>If you link to a coach: the swings you choose to send them (scores and key-position pictures, never your video) and their notes.</li></ul>
   <h3>Shared with every Caddy Coach golfer, without your name</h3><ul><li>Green and tee positions you map, and scorecards, course ratings and slopes you correct.</li></ul>
   <h3>Counted anonymously</h3><ul><li>Which days you open the app and how many rounds, swings and practice sessions you do, stored under a one-way code instead of your name, so we can see how Caddy Coach is used.</li></ul>
   <h3>Error reports</h3><ul><li>If something goes wrong in the app, a report of the error (the screen, your phone and browser type and the app version, but not your name, username, email, location or videos) is sent to Sentry so it can be fixed.</li></ul>
@@ -1139,7 +1139,8 @@ async function importMyData(file){
  if(Array.isArray(j.playingPartners)&&j.playingPartners.length){const cur=RT.pals||[],names=new Set(cur.map(x=>x.name));RT.pals=cur.concat(j.playingPartners.filter(x=>x&&x.name&&!names.has(x.name)));palKeep()}
  if(Array.isArray(j.leaderboardPosts)){const m=lsGet('cc_lbp',{});j.leaderboardPosts.forEach(k=>{m[k]=m[k]||1});lsSet('cc_lbp',m)}
  return {nr,ns}}
-async function deleteMyEverything(){const u=PROF.me.username;
+async function deleteMyEverything(){const u=PROF.me.username;Backup.stop=true;   // the account (and its backup) is going: nothing more to send
+
  // online first: if that fails, nothing on the phone is touched
  if(HOSTED_IN_CLAUDE){const db=await PDir.db();if(db)await db.doc('profiles/'+u).delete()}else await sbRpc('delete_my_account');
  try{for(const s of await Store.list())await deleteRound(s.id).catch(()=>{})}catch(_){}
@@ -1542,6 +1543,6 @@ function v2MeLinks(){const L=[];if(v2Authed())L.push('<button type="button" clas
 document.addEventListener('click',e=>{const b=e.target.closest('[data-pf="to-coaching"],[data-pf="to-plus"],[data-pf="to-stats"]');if(!b)return;e.stopImmediatePropagation();PROF.err={};PROF.f={};
  const a=b.dataset.pf;if(a==='to-coaching')return coachOpenMine();if(a==='to-stats')return ownerOpen();if(a==='to-plus'){PROF.plusWhy=null;PROF.plusFromMe=true;if(PLUS.portal&&plusActive()){window.open(PLUS.portal,'_blank','noopener');return}return profShow('plus')}},true);
 // once logged in: today's usage, Plus status, coaching links, owner check
-function v2AfterLogin(){track('open');entLoad();coachLoad().then(()=>{if(PROF.mode==='me')profRender()});ownerCheck().then(()=>{if(PROF.mode==='me')profRender()})}
+function v2AfterLogin(){track('open');setTimeout(()=>Backup.sync(),800);entLoad();coachLoad().then(()=>{if(PROF.mode==='me')profRender()});ownerCheck().then(()=>{if(PROF.mode==='me')profRender()})}
 
 profBoot();
