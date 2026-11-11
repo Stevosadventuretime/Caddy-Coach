@@ -86,7 +86,9 @@ function pwProblems(pw,pw2,user,idA,idB){const e={},c=pwCheck(pw,user);
 const Auth={
  s:null,
  load(){this.s=lsGet('cc_auth',null);return this.s},
- save(s){this.s=s;if(s)lsSet('cc_auth',s);else try{localStorage.removeItem('cc_auth')}catch(_){}},
+ save(s){const was=!!this.s;this.s=s;if(s)lsSet('cc_auth',s);else try{localStorage.removeItem('cc_auth')}catch(_){}
+  // course maps added while signed out were kept on the phone: send them now
+  if(s&&!was&&typeof sbFlush==='function')setTimeout(sbFlush,800)},
  email:u=>`${u}@users.caddycoach.app`,
  userOf(){const u=this.s&&this.s.user;if(!u)return null;if(u.username)return u.username;return u.email&&/@users\.caddycoach\.app$/i.test(u.email)?u.email.split('@')[0]:null},
  tok(){return this.s&&this.s.access_token||null},

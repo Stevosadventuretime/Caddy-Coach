@@ -351,7 +351,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-cm]');if(!
 
 // ---------- Shared course map (standalone app): greens and scorecards that golfers add reach everyone ----------
 // Stored in Caddy Coach's own Supabase database. Entries are only ever added, never edited; for each hole the app
-// uses the spot most golfers agree on, so one wrong entry is outvoted.
+// uses the spot most golfers agree on, so one wrong entry is outvoted. Only signed-in golfers can add to it and each
+// account gets one vote (older entries, from before accounts were required, vote once per phone).
 const SB={url:'https://dhrzscyirgvjwnvgdpqt.supabase.co',key:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRocnpzY3lpcmd2andudmdkcHF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyODU4NDgsImV4cCI6MjEwNjg2MTg0OH0.uArg7__kFS0titgrRnmlc_wzYF-CI6q44CLpdaZWsiA',
  on:()=>!HOSTED_IN_CLAUDE,h(){const t=typeof Auth!=='undefined'&&Auth.tok();return{apikey:this.key,Authorization:'Bearer '+(t||this.key)}},
  device(){let d=lsGet('cc_device',null);if(!d){d=(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)).replace(/-/g,'').slice(0,24);lsSet('cc_device',d)}return d}};
@@ -364,11 +365,14 @@ async function sbPost(table,rows,again){
   // bad data is dropped; a setup problem (missing table, no permission) keeps it queued until it's fixed
   if(r.status===400||r.status===409||r.status===422){console.warn('Shared map turned this down',r.status,why);return true}SB.ok=false;SB.why=r.status+' '+why.slice(0,120);return false}catch(_){return false}}
 // anything that couldn't be sent (no signal on the course) waits on the phone and goes when there's a connection
-async function sbSend(table,rows){if(!SB.on()||!rows.length)return;if(!await sbPost(table,rows)){const q=lsGet('cc_sb_out',[]);q.push({table,rows});lsSet('cc_sb_out',q.slice(-300))}}
+// shared course data needs a signed-in golfer; until then it waits on the phone (feedback can be sent signed out)
+const sbNeedsLogin=(table,rows)=>(table==='hole_maps'||table==='course_cards')&&!rows.every(r=>/^fb~/.test(r.course_key||''));
+const sbSignedIn=()=>typeof Auth!=='undefined'&&!!Auth.s;
+async function sbSend(table,rows){if(!SB.on()||!rows.length)return;if((sbNeedsLogin(table,rows)&&!sbSignedIn())||!await sbPost(table,rows)){const q=lsGet('cc_sb_out',[]);q.push({table,rows});lsSet('cc_sb_out',q.slice(-300))}}
 let sbFlushing=false;
-async function sbFlush(){if(!SB.on()||sbFlushing)return;sbFlushing=true;try{const q=lsGet('cc_sb_out',[]);if(!q.length)return;const left=[];for(const j of q){if(!await sbPost(j.table,j.rows))left.push(j)}lsSet('cc_sb_out',left)}finally{sbFlushing=false}}
+async function sbFlush(){if(!SB.on()||sbFlushing)return;sbFlushing=true;try{const q=lsGet('cc_sb_out',[]);if(!q.length)return;const left=[];for(const j of q){if((sbNeedsLogin(j.table,j.rows)&&!sbSignedIn())||!await sbPost(j.table,j.rows))left.push(j)}lsSet('cc_sb_out',left)}finally{sbFlushing=false}}
 async function sbGet(table,qs){if(typeof Auth!=='undefined'&&Auth.s)await Auth.fresh();const r=await fetch(`${SB.url}/rest/v1/${table}?${qs}`,{headers:SB.h()});if(!r.ok){SB.ok=false;SB.why=r.status+' '+(await r.text().catch(()=>'')).slice(0,120);throw new Error('HTTP '+r.status)}SB.ok=true;return r.json()}
-const sbNetText=()=>SB.ok===true?'Shared course map: connected. Holes you map reach every Caddy Coach golfer.':SB.ok===false?`Shared course map isn't reachable right now${SB.why?` (${SB.why})`:''}. Your mapping is saved on this phone and sent when it connects.`:'Checking the shared course map…';
+const sbNetText=()=>!sbSignedIn()?'Sign in to share the holes you map with other Caddy Coach golfers. Until then they\'re saved on this phone, and they\'re sent when you sign in.':SB.ok===true?'Shared course map: connected. Holes you map reach every Caddy Coach golfer.':SB.ok===false?`Shared course map isn't reachable right now${SB.why?` (${SB.why})`:''}. Your mapping is saved on this phone and sent when it connects.`:'Checking the shared course map…';
 // a quick check for the mapping screen: is the shared course map reachable?
 async function sbCheck(){try{await sbGet('hole_maps','select=id&limit=1');await sbGet('course_cards','select=id&limit=1');return true}catch(_){return false}}
 // share one hole's green (and tee, front and back when known)
@@ -381,16 +385,19 @@ function sbShareOsmCard(c,card){if(!SB.on()||!card)return;const k='cc_sbosm_'+sb
  lsSet(k,1);sbSend('course_cards',[{course_key:sbKey(c),name:String(c.name||'').slice(0,120),card:o,device:SB.device()}])}
 function sbShareCard(c){if(!SB.on()||!c||!c.tees)return;const tees=c.tees.map(t=>({name:String(t.name||'Tees').slice(0,30),colour:t.colour||'',rating:t.rating||null,slope:t.slope||null,holes:t.holes.map(h=>({n:h.n,par:h.par,yards:h.yards??null,si:h.si??null}))}));
  sbSend('course_cards',[{course_key:sbKey(c),name:String(c.name||'').slice(0,120),card:{holes:(c.tees[0]&&c.tees[0].holes.length)||18,tees},device:SB.device()}])}
-// what golfers agree on for each hole: every phone gets one vote (its latest), the biggest group within 12 m wins
+// one vote each: the account that added a row, or for older rows the phone
+const sbVoter=r=>r.owner||r.device;
+const sbMine=r=>r.owner?r.owner===(sbSignedIn()&&Auth.s.user&&Auth.s.user.id):r.device===SB.device();
+// what golfers agree on for each hole: every golfer gets one vote (their latest), the biggest group within 12 m wins
 const SB_W={mapped:3,confirmed:2,tapped:2,learned:1.5,found:1};
 function sbConsensus(rows){const by={},out={};rows.forEach(r=>{(by[r.hole]=by[r.hole]||[]).push(r)});
- for(const[n,all]of Object.entries(by)){const seen=new Set(),rs=all.slice().sort((a,b)=>a.created_at<b.created_at?1:-1).filter(r=>!seen.has(r.device)&&seen.add(r.device));
+ for(const[n,all]of Object.entries(by)){const seen=new Set(),rs=all.slice().sort((a,b)=>a.created_at<b.created_at?1:-1).filter(r=>!seen.has(sbVoter(r))&&seen.add(sbVoter(r)));
   const P=r=>({lat:r.green_lat,lon:r.green_lon}),w=r=>SB_W[r.source]||1;let best=null,bs=-1;
   for(const r of rs){const s=rs.filter(q=>mBetween(P(r),P(q))<12).reduce((a,q)=>a+w(q),0);if(s>bs){bs=s;best=r}}
   const cl=rs.filter(q=>mBetween(P(best),P(q))<12),avg=(L,a,b)=>{const k=L.filter(q=>q[a]!=null&&q[b]!=null);if(!k.length)return null;const sw=k.reduce((s,q)=>s+w(q),0);return{lat:sbN(k.reduce((s,q)=>s+q[a]*w(q),0)/sw),lon:sbN(k.reduce((s,q)=>s+q[b]*w(q),0)/sw)}};
   const g=Object.assign(avg(cl,'green_lat','green_lon'),{shared:true,votes:cl.length});const tee=avg(cl,'tee_lat','tee_lon');if(tee)g.tee=tee;
   const fr=avg(cl,'front_lat','front_lon'),bk=avg(cl,'back_lat','back_lon');if(fr&&bk){g.front=fr;g.back=bk}
-  const fw=avg(cl,'fair_lat','fair_lon');if(fw)g.fair=fw;const me=SB.device();if(cl.some(q=>q.device===me))g.mine=true;out[n]=g}
+  const fw=avg(cl,'fair_lat','fair_lon');if(fw)g.fair=fw;if(cl.some(sbMine))g.mine=true;out[n]=g}
  return out}
 async function sbRows(table,key,fresh){const ck=`cc_sb_${table}_${key}`,c=lsGet(ck,null);if(c&&Date.now()-c.t<(fresh||6e5))return c.rows;
  try{const rows=await sbGet(table,`course_key=eq.${encodeURIComponent(key)}&select=*&order=created_at.desc&limit=3000`);lsSet(ck,{t:Date.now(),rows});return rows}catch(e){if(c)return c.rows;throw e}}
@@ -406,10 +413,10 @@ async function sbApply(c,fresh){if(!SB.on()||!c)return 0;let rows;try{rows=sbHer
  const con=sbConsensus(rows);c.greens=c.greens||{};let n=0;
  for(const[h,g]of Object.entries(con)){const mine=c.greens[h];if(mine&&!mine.shared)continue;c.greens[h]=g;n++}
  if(n){if(GPS.pick)Object.keys(GPS.pick).forEach(k=>{if(k.startsWith(c.key+':'))delete GPS.pick[k]});await RStore.saveCourse(c).catch(()=>{})}return n}
-// the scorecard golfers agree on: the version entered by the most phones (newest wins a tie)
+// the scorecard golfers agree on: the version entered by the most golfers (newest wins a tie)
 async function sbCard(c){if(!SB.on()||!c)return null;let rows;try{rows=await sbRows('course_cards',sbKey(c),36e5)}catch(_){return null}
  const groups=new Map();rows.forEach(r=>{if(r.card&&r.card.src==='osm')return;const t=r.card&&r.card.tees;if(!Array.isArray(t)||!t.length||!t.every(x=>Array.isArray(x.holes)&&x.holes.length>=9&&x.holes.every(h=>h.par>=3&&h.par<=6)))return;
-  const sig=JSON.stringify(t.map(x=>[x.name,x.holes.map(h=>[h.par,h.yards,h.si])]));const g=groups.get(sig)||{card:r.card,devs:new Set(),t:r.created_at};g.devs.add(r.device);if(r.created_at>g.t)g.t=r.created_at;groups.set(sig,g)});
+  const sig=JSON.stringify(t.map(x=>[x.name,x.holes.map(h=>[h.par,h.yards,h.si])]));const g=groups.get(sig)||{card:r.card,devs:new Set(),t:r.created_at};g.devs.add(sbVoter(r));if(r.created_at>g.t)g.t=r.created_at;groups.set(sig,g)});
  const best=[...groups.values()].sort((a,b)=>b.devs.size-a.devs.size||(a.t<b.t?1:-1))[0];return best?{tees:best.card.tees,golfers:best.devs.size}:null}
 async function sbCards(c){if(!SB.on()||!c)return null;const rows=await sbRows('course_cards',sbKey(c),36e5);
  const om=rows.filter(r=>r.card&&r.card.src==='osm'&&r.card.v===1).sort((a,b)=>a.created_at<b.created_at?1:-1)[0];
@@ -419,8 +426,8 @@ function applySharedCard(course,s){course.tees=s.tees.map(t=>({name:t.name,colou
 // course rating, slope and stroke index for each tee, from every golfer who has entered them (most common value wins)
 async function sbRatings(c){if(!SB.on()||!c)return null;let rows;try{rows=await sbRows('course_cards',sbKey(c),36e5)}catch(_){return null}
  const by={};rows.forEach(r=>{const t=r.card&&r.card.tees;if(!Array.isArray(t))return;t.forEach(x=>{if(!x||!x.name)return;const k=String(x.name).toLowerCase(),o=by[k]=by[k]||{rs:new Map(),si:new Map()};
-  if(+x.rating>=50&&+x.rating<=85&&+x.slope>=55&&+x.slope<=155){const sig=x.rating+'/'+x.slope,g=o.rs.get(sig)||{cr:+x.rating,sl:+x.slope,d:new Set()};g.d.add(r.device);o.rs.set(sig,g)}
-  if(Array.isArray(x.holes)&&x.holes.length&&x.holes.every(h=>h.si>=1&&h.si<=18)){const sig=x.holes.map(h=>h.si).join(','),g=o.si.get(sig)||{si:x.holes.map(h=>h.si),d:new Set()};g.d.add(r.device);o.si.set(sig,g)}})});
+  if(+x.rating>=50&&+x.rating<=85&&+x.slope>=55&&+x.slope<=155){const sig=x.rating+'/'+x.slope,g=o.rs.get(sig)||{cr:+x.rating,sl:+x.slope,d:new Set()};g.d.add(sbVoter(r));o.rs.set(sig,g)}
+  if(Array.isArray(x.holes)&&x.holes.length&&x.holes.every(h=>h.si>=1&&h.si<=18)){const sig=x.holes.map(h=>h.si).join(','),g=o.si.get(sig)||{si:x.holes.map(h=>h.si),d:new Set()};g.d.add(sbVoter(r));o.si.set(sig,g)}})});
  const out={};for(const[k,o]of Object.entries(by)){const top=m=>[...m.values()].sort((a,b)=>b.d.size-a.d.size)[0];const r=top(o.rs),si=top(o.si);out[k]={rate:r?{cr:r.cr,sl:r.sl,n:r.d.size}:null,si:si?{si:si.si,n:si.d.size}:null}}return out}
 const RATE_TRIED=new Set();
 async function rtAutoRate(c){if(!c||RATE_TRIED.has(c.key))return;RATE_TRIED.add(c.key);const R=await sbRatings(c);if(!R)return;let ch=0;
