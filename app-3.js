@@ -15,10 +15,13 @@ const PDir={
  toRow(p){return{username:p.username,first_name:p.first,last_name:p.last,course_key:p.course&&p.course.key||null,course_name:p.course&&p.course.name||null,
   course_lat:p.course&&p.course.lat!=null?+p.course.lat:null,course_lon:p.course&&p.course.lon!=null?+p.course.lon:null,photo:p.photo||null}},
  fromRow(r){return r&&{username:r.username,first:r.first_name,last:r.last_name,photo:r.photo||null,authId:r.auth_id||null,course:r.course_name?{key:r.course_key,name:r.course_name,lat:r.course_lat,lon:r.course_lon}:null}},
- // returns the profile, null if nobody has that username, or throws if the list can't be reached
+ // returns the profile, null if nobody has that username, or throws if the list can't be reached.
+ // Only your own profile (or, for the app owner, anyone's) comes back in full; for anyone else the server only says
+ // that the username exists and whether it has a login, so names, photos and home courses stay private.
  async get(u){
   if(HOSTED_IN_CLAUDE){const db=await this.db();if(!db)throw new Error('offline');const d=await db.doc('profiles/'+u).get();return d.exists?d.data():null}
-  const a=await sbGet('profiles',`username=eq.${encodeURIComponent(u)}&select=*`);return a[0]?this.fromRow(a[0]):null},
+  const a=Auth.s?await sbGet('profiles',`username=eq.${encodeURIComponent(u)}&select=*`):[];if(a[0])return this.fromRow(a[0]);
+  const b=await sbRpc('cc_profile_exists',{u});const x=Array.isArray(b)&&b[0];return x?{username:x.username,authId:x.has_login?'?':null,partial:true}:null},
  async create(p){
   if(HOSTED_IN_CLAUDE){const db=await this.db();if(!db)throw new Error('offline');const ref=db.doc('profiles/'+p.username),d=await ref.get();if(d.exists)return'taken';await ref.set(p);return'ok'}
   const r=await fetch(`${SB.url}/rest/v1/profiles`,{method:'POST',headers:Object.assign(SB.h(),{'Content-Type':'application/json',Prefer:'return=minimal'}),body:JSON.stringify(Object.assign(this.toRow(p),p.authId?{auth_id:p.authId}:{}))});
@@ -35,7 +38,7 @@ const PDir={
   if(!r.ok)throw new Error('HTTP '+r.status)}};
 // profiles made while the shared list couldn't be reached are sent when it can
 async function profFlush(){if(HOSTED_IN_CLAUDE)return;const q=lsGet('cc_prof_out',[]);if(!q.length)return;const left=[];
- for(const j of q){try{if(j.op==='create'){const r=await PDir.create(j.p);if(r==='taken'){const o=await PDir.get(j.p.username).catch(()=>null);if(!o||o.first!==j.p.first||o.last!==j.p.last)left.push(Object.assign(j,{clash:1}))}}else await PDir.update(j.p)}catch(_){left.push(j)}}
+ for(const j of q){try{if(j.op==='create'){const r=await PDir.create(j.p);if(r==='taken'){const o=await PDir.get(j.p.username).catch(()=>null);if(o&&o.partial&&!Auth.s)left.push(j);else if(!o||o.partial||o.first!==j.p.first||o.last!==j.p.last)left.push(Object.assign(j,{clash:1}))}}else await PDir.update(j.p)}catch(_){left.push(j)}}
  lsSet('cc_prof_out',left)}
 // ---- who is logged in on this phone ----
 const Sess={
@@ -1182,7 +1185,8 @@ async function profLogin(){const u=unorm(PROF.f.pfU||(PROF.pend&&PROF.pend.usern
     p=Object.assign({},p,{authId:ss.user.id});PDir.cache(p);lsSet('cc_cloud_repush_'+u,1);PROF.busy=false;return profEnter(p)}}
   PROF.err.pfPw='That password isn\'t right.';return done()}
  if(HOSTED_IN_CLAUDE){if(!await pwMatches(pw,p.pw)){PROF.err.pfPw='That password isn\'t right.';return done()}}
- else{try{const ss=await Auth.signIn(u,pw);if(ss.user.id!==p.authId){await Auth.signOut();PROF.err._form='That account doesn\'t match this profile.';return done()}}
+ else{try{const ss=await Auth.signIn(u,pw);if(p.partial){const full=await PDir.get(u).catch(()=>null);if(full&&!full.partial)p=full}
+  if(ss.user.id!==p.authId){await Auth.signOut();PROF.err._form='That account doesn\'t match this profile.';return done()}}
   catch(err){PROF.err[err.status===400||err.status===401?'pfPw':'_form']=err.status===400||err.status===401?'That password isn\'t right.':err.status===429?'Too many tries. Wait a minute and try again.':'Couldn\'t log in just now. Check your signal and try again.';return done()}}
  PROF.busy=false;PDir.cache(p);await profEnter(p)}
 // choosing a password: the first time after the 1234 days, or changing it later
@@ -1302,7 +1306,7 @@ async function profFromResetLink(){const h=new URLSearchParams(location.hash.sli
   Auth.keep({access_token:h.get('access_token'),refresh_token:h.get('refresh_token'),expires_in:+h.get('expires_in')||3600,user});PROF.resetU=(user.user_metadata||{}).username||'';PROF.f={};PROF.err={};profShow('resetpw')}
  catch(_){PROF.f={};PROF.err={_form:'That reset link has expired. Ask for a new one below.'};PROF.note='';profShow('forgot')}return true}
 async function profBoot(){profShow('boot');await Store.init();if(!HOSTED_IN_CLAUDE&&await profFromResetLink())return;const s=await Sess.get();
- if(s){let p=PDir.cached(s.u),fresh=null;try{fresh=await PDir.get(s.u)}catch(_){}if(fresh){p=Object.assign({},p||{},fresh);PDir.cache(p)}
+ if(s){let p=PDir.cached(s.u),fresh=null;try{fresh=await PDir.get(s.u)}catch(_){}if(fresh&&!fresh.partial){p=Object.assign({},p||{},fresh);PDir.cache(p)}
   if(p){
    // the next time a 1234-era profile opens the app, it chooses its own password; any other profile needs its login
    const legacy=fresh?(HOSTED_IN_CLAUDE?!fresh.pw:!fresh.authId):false;
@@ -1315,7 +1319,7 @@ async function profBoot(){profShow('boot');await Store.init();if(!HOSTED_IN_CLAU
    PROF.me=p;PDir.cache(p);profHide();profTopbar();v2AfterLogin();
    if(lsGet('cc_welcome',null)===p.username){try{localStorage.removeItem('cc_welcome')}catch(_){}toast(`Welcome to Caddy Coach, ${p.first}.`)}
    applyHand();HcpStore.load().then(hcpRefresh).catch(e=>console.error(e));BagStore.load().then(b=>{if(!BG.bag)BG.bag=b;if(lsGet('cc_hand_push_'+p.username,0)){try{localStorage.removeItem('cc_hand_push_'+p.username)}catch(_){}b.hand=Hand.get();return BagStore.save(b)}}).catch(()=>{});
-   profFlush();PDir.get(p.username).then(q=>{if(q&&q.updatedAt!==p.updatedAt&&!lsGet('cc_prof_out',[]).length){PROF.me=q;PDir.cache(q);profTopbar()}}).catch(()=>{});return}}
+   profFlush();PDir.get(p.username).then(q=>{if(q&&!q.partial&&q.updatedAt!==p.updatedAt&&!lsGet('cc_prof_out',[]).length){PROF.me=q;PDir.cache(q);profTopbar()}}).catch(()=>{});return}}
  if(lsGet('cc_deleted',0)){try{localStorage.removeItem('cc_deleted')}catch(_){}setTimeout(()=>toast('Your account and all its data have been deleted.'),300)}
  if(lsGet('cc_guest',0)){profHide();profTopbar();return}
  profShow('welcome')}
