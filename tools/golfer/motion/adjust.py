@@ -101,25 +101,41 @@ def ball_for(J, ph):
     return np.array([A[0], BALL_Y, A[2] + np.sqrt(max(CLEN ** 2 - (A[1] - BALL_Y) ** 2, 0))])
 
 def reach(J, ph, B, out_fps=60):
-    """let the club reach the ball at impact: a little more bend from the hips (not a squat) to bring the hands down,
-    then a small slide of the body (not the feet) for what's left; both blended in and out around impact"""
+    """let the club reach the ball at impact. The capture's hands arrive high and ahead of the ball, about 8 cm too far
+    from it. A good player delivers the club with the arms, head still: so the lead arm swings down about its shoulder
+    until the grip is a club's length from the ball. Only what the arm cannot reach is made up by the body: a little
+    more bend from the hips, then a small slide (not the feet). All of it is blended in and out around impact.
+    (This used to be done with the body alone, which dipped the head 10-17 cm through the ball.)"""
     J = {k: v.copy() for k, v in J.items()}; n = len(J['pel']); fr = np.arange(n); i = ph['impact']
     ball = ball_for(J, ph); X = np.array([1.0, 0, 0])
     w = _ss(1 - np.abs(fr - i) / (0.15 * out_fps))
+    # 1) the arm: turn shoulder->grip toward the ball until |grip - ball| = club length (triangle shoulder, grip, ball)
+    sh = J['ls'][i]; g = J['lh'][i] - sh; b = ball - sh; Dg, Db = np.linalg.norm(g), np.linalg.norm(b)
+    a0 = np.degrees(np.arccos(np.clip(g @ b / (Dg * Db), -1, 1)))
+    c = (Dg * Dg + Db * Db - CLEN * CLEN) / (2 * Dg * Db)
+    a1 = np.degrees(np.arccos(np.clip(c, -1, 1))) if c < 1 else 0.0          # c >= 1: out of reach even in line
+    ax = np.cross(g, b)
+    if np.linalg.norm(ax) > 1e-9 and a0 > a1:
+        for j in np.where(w > 0)[0]:
+            R = _rot(ax, (a0 - a1) * w[j]); p = J['ls'][j]
+            for k in ('le', 'lw', 'lh'): J[k][j] = p + R @ (J[k][j] - p)
+    # 2) the body, for whatever is left
     def bent(th):
         p = J['pel'][i]; R = _rot(X, th); return p + R @ (J['lh'][i] - p)
-    lo, hi = -15.0, 25.0                                   # extra bend (deg) so the hands are at club length from the ball
-    for _ in range(30):
-        mid = (lo + hi) / 2
-        if np.linalg.norm(ball - bent(mid)) > CLEN: lo = mid
-        else: hi = mid
-    th = min((lo + hi) / 2, 9.0)                           # no more than a little extra bend; the body slides for the rest
-    for j in np.where(w > 0)[0]:
-        p = J['pel'][j]; R = _rot(X, th * w[j])
-        for k in UPPER: J[k][j] = p + R @ (J[k][j] - p)
+    if np.linalg.norm(ball - J['lh'][i]) > CLEN + 0.003:
+        lo, hi = 0.0, 25.0
+        for _ in range(30):
+            mid = (lo + hi) / 2
+            if np.linalg.norm(ball - bent(mid)) > CLEN: lo = mid
+            else: hi = mid
+        th = min((lo + hi) / 2, 9.0)                       # no more than a little extra bend; the body slides for the rest
+        for j in np.where(w > 0)[0]:
+            p = J['pel'][j]; R = _rot(X, th * w[j])
+            for k in UPPER: J[k][j] = p + R @ (J[k][j] - p)
     v = ball - J['lh'][i]; need = v - _unit(v) * CLEN; need[1] = max(need[1], -0.018)   # sink at most 1.8 cm (no squat)
-    for k in UPPER + ['pel', 'lhip', 'thip']: J[k] = J[k] + w[:, None] * need
-    _legs(J, B)
+    if np.linalg.norm(need) > 0.003:
+        for k in UPPER + ['pel', 'lhip', 'thip']: J[k] = J[k] + w[:, None] * need
+        _legs(J, B)
     return J
 
 def _shaft(J, ph):
@@ -134,7 +150,12 @@ def _shaft(J, ph):
     d = dp if (J['lh'][h] + dp[h] * CLEN)[1] > (J['lh'][h] + dm[h] * CLEN)[1] else dm
     return _unit(gaussian_filter1d(d, 1.5, axis=0))
 
+HAND_RHO, HAND_ALONG = 0.096, -0.014   # wrist's distance from the shaft's line, and its offset along the shaft (metres)
 LEAD_ANGLE = dict(address=166, takeaway=170, half=170, top=162, down=166, impact=172)   # lead elbow (deg) good players keep
+
+def _side(g, sh, el, d):
+    """which side of the shaft a wrist sits: toward its own elbow and shoulder, square to the shaft (as golfer.js does)"""
+    v = (el - g) + (sh - g); return _unit(v - d * (v * d).sum(1, keepdims=True))
 
 def grip(J, ph, B):
     """both hands on the grip, 7 cm apart along the shaft (touching). The grip is placed from the lead arm: the lead hand stays
@@ -157,8 +178,9 @@ def grip(J, ph, B):
     # smooth the arm's length, not the hand's position (smoothing positions cuts the corner of the fast downswing arc)
     target = gaussian_filter1d(np.minimum(target, L), 1.0)
     lw = J['ls'] + _unit(v) * target[:, None]
-    J['lw'] = lw; J['lh'] = lw + off['l']
-    J['th'] = J['lh'] + d * 0.07; J['tw'] = J['th'] - off['t']   # hands touching: the trail hand's pinky over the lead hand
+    # the grip point on the shaft (lh) is set in club(), a hand's width out from this wrist; until then it sits on it
+    J['lw'] = lw; J['lh'] = lw.copy()
+    J['th'] = J['lh'] + d * 0.07; J['tw'] = J['th'].copy()
     # trail shoulder reaches for the trail hand when it's out of reach
     tv = J['tw'] - J['ts']; td = np.linalg.norm(tv, axis=1); over = np.maximum(0, td - L)
     J['ts'] = J['ts'] + _unit(tv) * gaussian_filter1d(over, 1.0)[:, None]
@@ -168,37 +190,60 @@ def grip(J, ph, B):
     return J
 
 def club(J, ph, out_fps=60):
+    """the shaft, the grip point and the ball. A hand is not a point: the shaft lies in the curled fingers, HAND_RHO
+    from the wrist (measured on the golfer's mesh, golfer.js gripLine), on the far side from the elbow and shoulder. So
+    the lead wrist (lw) stays where the straight arm puts it and the shaft's grip point (lh) sits a hand further out.
+    (Before, the wrist itself was on the shaft, so the drawn hand, which needs that room, pulled the arm into a bend.)"""
     J = {k: v.copy() for k, v in J.items()}; n = len(J['lh']); fr = np.arange(n)
-    d = _shaft(J, ph)
-    ball = ball_for(J, ph)
-    # the wrists set the clubhead on the ball at address and impact (blended in and out)
-    for k, win in ((ph['address'], 0.25), (ph['impact'], 0.08)):
-        need = _unit(ball - J['lh'][k]); ax = np.cross(d[k], need); s_ = np.linalg.norm(ax)
-        if s_ < 1e-9: continue
-        full = np.degrees(np.arctan2(s_, d[k] @ need)); ax = ax / s_
-        w = _ss(1 - np.abs(fr - k) / (win * out_fps))
-        for j in np.where(w > 0)[0]: d[j] = _rot(ax, full * w[j]) @ d[j]
-    # the shaft never goes through his head or neck: in the follow-through it used to pass 2-11 cm from the centre of the
-    # head (through it). Each frame it swings about the hands, away from the head, until it clears; then it's smoothed
-    # so it eases round rather than jumping.
-    d0 = d.copy()
-    for j in range(n):
-        for _ in range(60):
-            worst = None
-            for k, r in (('head', 0.17), ('neck', 0.12)):
-                p = J[k][j]; a = J['lh'][j]; t = np.clip((p - a) @ d[j], 0, CLEN); q = a + d[j] * t; gap = np.linalg.norm(p - q)
-                if gap < r and (worst is None or r - gap > worst[0]): worst = (r - gap, p, q, a, t)
-            if worst is None: break
-            _, p, q, a, t = worst; away = _unit(q - p) if np.linalg.norm(q - p) > 1e-6 else _unit(np.cross(d[j], UP))
-            ax = np.cross(d[j], away); 
-            if np.linalg.norm(ax) < 1e-9: break
-            d[j] = _rot(_unit(ax), 2.0) @ d[j]
-    d = _unit(d0 + gaussian_filter1d(d - d0, 2.0, axis=0))
+    d_raw = _shaft(J, ph); lw = J['lw']
+    for _it in range(5):
+        d = d_raw.copy(); ball = ball_for(J, ph)
+        # the wrists set the clubhead on the ball at address and impact (blended in and out)
+        for k, win in ((ph['address'], 0.25), (ph['impact'], 0.08)):
+            need = _unit(ball - J['lh'][k]); ax = np.cross(d[k], need); s_ = np.linalg.norm(ax)
+            if s_ < 1e-9: continue
+            full = np.degrees(np.arctan2(s_, d[k] @ need)); ax = ax / s_
+            w = _ss(1 - np.abs(fr - k) / (win * out_fps))
+            for j in np.where(w > 0)[0]: d[j] = _rot(ax, full * w[j]) @ d[j]
+        # the shaft never goes through his head or neck: in the follow-through it used to pass 2-11 cm from the centre of
+        # the head (through it). Each frame it swings about the hands, away from the head, until it clears; then it's
+        # smoothed so it eases round rather than jumping.
+        d0 = d.copy()
+        for j in range(n):
+            for _ in range(60):
+                worst = None
+                for k, r in (('head', 0.17), ('neck', 0.12)):
+                    p = J[k][j]; a = J['lh'][j]; t = np.clip((p - a) @ d[j], 0, CLEN); q = a + d[j] * t; gap = np.linalg.norm(p - q)
+                    if gap < r and (worst is None or r - gap > worst[0]): worst = (r - gap, p, q, a, t)
+                if worst is None: break
+                _, p, q, a, t = worst; away = _unit(q - p) if np.linalg.norm(q - p) > 1e-6 else _unit(np.cross(d[j], UP))
+                ax = np.cross(d[j], away)
+                if np.linalg.norm(ax) < 1e-9: break
+                d[j] = _rot(_unit(ax), 2.0) @ d[j]
+        d = _unit(d0 + gaussian_filter1d(d - d0, 2.0, axis=0))
+        g = J['lh']
+        for _ in range(3): g = lw - _side(g, J['ls'], J['le'], d) * HAND_RHO - d * HAND_ALONG
+        J['lh'] = g
+        # the last centimetre or two at impact: the wrist eases along the line to the ball so the head meets it exactly
+        i = ph['impact']; v = ball - g[i]; e = np.linalg.norm(v) - CLEN
+        if abs(e) > 0.002 and _it < 4:
+            from retarget import _ik
+            wi = _ss(1 - np.abs(fr - i) / (0.08 * out_fps))[:, None]; lw = lw + wi * _unit(v) * e; J['lw'] = lw
+            ual, fal = np.linalg.norm(J['le'][0] - J['ls'][0]), np.linalg.norm(J['lw'][0] - J['le'][0])
+            J['le'], _ = _ik(J['ls'], lw, ual, fal, _unit(J['le'] - (J['ls'] + lw) / 2))
     J['sd'] = d; J['club'] = np.stack([J['lh'] - d * 0.06, J['lh'] + d * CLEN], 1)
     # keep the trail hand on the shaft after the wrist correction (the trail arm follows it)
     from retarget import _ik
     ua = np.linalg.norm(J['te'][0] - J['ts'][0]); fa = np.linalg.norm(J['tw'][0] - J['te'][0])
-    hand = J['th'] - J['tw']; J['th'] = J['lh'] + d * 0.07; J['tw'] = J['th'] - hand
+    J['th'] = J['lh'] + d * 0.07; J['tw'] = J['th'] + _side(J['th'], J['ts'], J['te'], d) * HAND_RHO + d * HAND_ALONG
+    # the trail arm: the shaft fixes the hand, so through impact the elbow snapped straight in two frames and bent
+    # back 45 deg after (a pump). Ease that angle over time and let the trail shoulder give the few cm it takes.
+    r = np.linalg.norm(J['tw'] - J['ts'], axis=1)
+    th = np.degrees(np.arccos(np.clip((ua * ua + fa * fa - np.minimum(r, ua + fa) ** 2) / (2 * ua * fa), -1, 1)))
+    th = gaussian_filter1d(np.minimum(th, 172.0), 2.0, mode='nearest')
+    want = np.sqrt(ua * ua + fa * fa - 2 * ua * fa * np.cos(np.radians(th)))
+    want = np.clip(want, r - 0.03, r + 0.03)                                  # a shoulder gives a few cm, no more
+    J['ts'] = J['tw'] + _unit(J['ts'] - J['tw']) * want[:, None]
     J['te'], _ = _ik(J['ts'], J['tw'], ua, fa, _unit(J['te'] - (J['ts'] + J['tw']) / 2))
     J['clubhead'] = J['club'][:, 1]; J['hands'] = (J['lh'] + J['th']) / 2
     return J, ball
@@ -223,6 +268,31 @@ def posture(J, ph, B):
     _legs(J, B)
     return J
 
+NECK_YAW, NECK_PITCH = (55.0, 80.0), (-55.0, 30.0)
+HEAD_RATE = 9.0          # deg per 60 fps frame (540 deg/s, about a golfer's head coming up and round after impact)   # how far a head turns (soft limit, hard limit) and nods against the chest
+
+def _neck(face, s, Lt, F, sigma=1.5):
+    """keep the look inside what a neck allows against the chest, then smooth it in time. Without this the chest,
+    turning ~1000 deg/s through impact, drags a clamped head round in two frames (a 40 deg/frame whip)."""
+    def knee(v, a, m):
+        u = np.abs(v); return np.where(u <= a, v, np.sign(v) * (a + (m - a) * np.tanh((u - a) / (m - a))))
+    yaw = np.degrees(np.arctan2((face * Lt).sum(1), (face * F).sum(1)))
+    pit = np.degrees(np.arcsin(np.clip((face * s).sum(1), -1, 1)))
+    yaw = knee(yaw, *NECK_YAW); pit = np.clip(pit, *NECK_PITCH)
+    y, p = np.radians(yaw)[:, None], np.radians(pit)[:, None]
+    out = _unit(Lt * np.sin(y) * np.cos(p) + F * np.cos(y) * np.cos(p) + s * np.sin(p))
+    # a head turns at most ~HEAD_RATE deg a frame; a forward then a backward pass keeps to that and starts the turn a
+    # touch early instead of arriving late (which would let the turning chest drag it)
+    m = np.radians(HEAD_RATE)
+    def step(a, b):
+        c = np.clip(a @ b, -1, 1); t = np.arccos(c)
+        if t <= m: return b
+        k = np.sin(m) / np.sin(t); return _unit(a * (np.sin(t - m) / np.sin(t)) + b * k)
+    h = out.copy()
+    for i in range(1, len(h)): h[i] = step(h[i - 1], out[i])
+    for i in range(len(h) - 2, -1, -1): h[i] = step(h[i + 1], h[i])
+    return _unit(gaussian_filter1d(h, sigma, axis=0, mode='nearest'))
+
 def frames(J, ph, ball):
     J = {k: v.copy() for k, v in J.items()}
     s = _unit(J['neck'] - J['pel']); H = _unit(J['lhip'] - J['thip'])
@@ -231,14 +301,10 @@ def frames(J, ph, ball):
     J.update(s=s, H=H, Lt=Lt, F=F, Fh=Fh, chest=J['pel'] + s * 0.5, belt=np.stack([c0 - H * 0.55, c0 + H * 0.55], 1))
     J['seat'] = J['pel'] - Fh * 0.13 + [0, -0.05, 0]; J['bum'] = J['seat']
     look = _unit(ball - J['head']); bodyF = _unit(F * [1, 0.3, 1])
-    n = len(s); fr = np.arange(n); w = _ss((fr - ph['impact']) / max(ph['through'] + (ph['finish'] - ph['through']) // 2 - ph['impact'], 1))[:, None]
-    J['face'] = _unit(look * (1 - w) + bodyF * w)
+    n = len(s); fr = np.arange(n); # the head stays down through impact, then comes up and round with the body all the way to the finish. (It used to
+    # catch up by half-way to the finish, which in a drill's quick follow-through whipped it round in two frames.)
+    w = _ss((fr - ph['impact'] - 2) / max(ph['finish'] - ph['impact'] - 2, 1))[:, None]
+    J['face'] = _neck(_unit(look * (1 - w) + bodyF * w), s, Lt, F)
     for sd in 'lt': J[sd + 'kp'] = _unit(J[sd + 'k'] - (J[sd + 'hip'] + J[sd + 'a']) / 2)
-    # how far the hands (and the clubface) have rolled about the shaft, in degrees, measured from square to the swing
-    # plane: square at address and impact, toe up by halfway back, square to the plane at the top, toe up again
-    # halfway through. golfer.js turns the palms by this so both hands wrap the grip all the way round the swing.
-    keys = [k for k in ROLL if k in ph]
-    J['roll'] = np.interp(fr, [ph[k] for k in keys], [ROLL[k] for k in keys])
     return J
 
-ROLL = dict(address=0, takeaway=45, half=90, top=90, down=60, impact=0, through=-90, finish=-90)

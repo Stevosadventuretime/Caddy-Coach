@@ -11,12 +11,13 @@ def build():
     names, pos, ft = bvh.load(path); fps = 1 / ft
     ph = measure.phases(names, pos, fps); W = retarget.to_world(names, pos, ph); B = retarget.golfer_bones(MESH)
     J = retarget.to_golfer(W, names, B, ph, fps)
-    J, ph = adjust.retime(J, ph, fps); J = adjust.posture(J, ph, B); J = adjust.turns(J, ph, B); J = adjust.grip(J, ph, B); J = adjust.reach(J, ph, B); J, ball = adjust.club(J, ph); J = adjust.frames(J, ph, ball)
+    # club() runs twice: reach() needs the real grip point, and the final shaft is set after the body has moved
+    J, ph = adjust.retime(J, ph, fps); J = adjust.posture(J, ph, B); J = adjust.turns(J, ph, B); J = adjust.grip(J, ph, B); J, _ = adjust.club(J, ph); J = adjust.reach(J, ph, B); J, ball = adjust.club(J, ph); J = adjust.frames(J, ph, ball)
     return path, J, ph, ball
 
 def to_json(path, J, ph, ball):
     n = len(J['pel']); keys = sorted(J)
-    def r(v, k): return np.round(v, 1 if k == 'roll' else 4 if k in VEC else 3).tolist()
+    def r(v, k): return np.round(v, 4 if k in VEC else 3).tolist()
     frames = [{k: r(J[k][f], k) for k in keys} for f in range(n)]
     return {'v': 1, 'fps': 60, 'phases': ph, 'ball': np.round(ball, 3).tolist(), 'frames': frames,
             'credit': 'CMU mocap ' + os.path.basename(path)[:-4] + ' (mocap.cs.cmu.edu), tour-adjusted'}
