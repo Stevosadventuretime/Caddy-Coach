@@ -686,13 +686,13 @@ function scene(dr) {
   const fig = real ? CCGolfer.make(false) : figure(false), ghost = real ? CCGolfer.make(true) : figure(true); fig.real = real; ghost.real = real; S.add(fig.G); S.add(ghost.G); ghost.G.visible = false;
   const M = propMats();
   const club = new T.Group(); const hd = new T.Mesh(ironHead(), M.chrome || (M.chrome = std(0xe2e5e8, { roughness: 0.18, metalness: 1 }))); hd.castShadow = true;
-  const gr = cyl(0.0125, M.grip || (M.grip = std(0x1c1d20, { roughness: 0.75 })), 18); club.add(cyl(0.0058, M.steel, 12), gr, hd); S.add(club);
+  const gr = cyl(0.0125, M.grip || (M.grip = std(0x1c1d20, { roughness: 0.75 })), 18); club.add(shaftMesh(M.steel), gr, hd); S.add(club); const trail = speedTrail(); S.add(trail);
   const gclub = new T.Group(); const gm = ghost.real ? ghost.mats[0] : ghost.P.chest.material; gclub.add(cyl(0.007, gm), cyl(0.014, gm), new T.Mesh(ell(0.048, 0.016, 0.022, 12), gm)); gclub.children.forEach(c => { c.castShadow = false; }); S.add(gclub);
   const stick = cyl(0.01, M.stick); S.add(stick); stick.visible = false;      // a stick across the chest, or a club down the spine
   let ball = null; if (dr.ball) { const b = new T.Mesh(new T.SphereGeometry(0.021, 20, 14), M.white); b.castShadow = true; b.position.set(ballOf(dr)[0], 0.042, ballOf(dr)[2]); S.add(b); const t = cyl(0.006, M.white); t.position.set(ballOf(dr)[0], 0, ballOf(dr)[2]); t.scale.y = 0.022; S.add(t); ball = b; }
   const props = buildProps(S, dr);
   const cam = new T.PerspectiveCamera(30, 0.8, 0.1, 60);
-  const sc = { S, fig, ghost, club, gclub, stick, ball, props, cam, key };
+  const sc = { S, fig, ghost, club, gclub, stick, ball, props, cam, key, trail };
   SCN.set(dr.id, sc); return sc;
 }
 // swap the simple figure for the realistic golfer as soon as he has loaded
@@ -701,10 +701,13 @@ function upgrade(sc) {
   sc.S.remove(sc.fig.G); sc.S.remove(sc.ghost.G); sc.S.add(f.G); sc.S.add(g.G); g.G.visible = false; sc.fig = f; sc.ghost = g;
   const gm = g.mats[0]; sc.gclub.children.forEach(c => { c.material = gm; });
 }
-function poseClub(cg, club, J) {
+function poseClub(cg, club, J, flex) {
   if (!club) { cg.visible = false; return; } cg.visible = true;
-  const [a, b] = club, d = norm(sub(b, a)), L = len(sub(b, a));
-  between(cg.children[0], a, b); between(cg.children[1], a, add(a, mul(d, 0.27)));
+  const [a, b0] = club, d0 = norm(sub(b0, a)), L = len(sub(b0, a));
+  between(cg.children[0], a, b0); between(cg.children[1], a, add(a, mul(d0, 0.27)));
+  // a bending shaft: the tip moves by flex and the head follows the tip's slope (the grip end stays stiff)
+  const fl = flex && cg.children[0].userData.base ? flex : null; bendShaft(cg.children[0], fl, L);
+  const b = fl ? add(b0, fl) : b0, d = fl ? norm(add(d0, mul(fl, 1.5 / (L * (1 - SHAFT_GRIP / L))))) : d0;
   const h = cg.children[2];
   if (h.geometry === IRON) {
     // hosel at the end of the shaft; the blade runs out toward the toe, square to the swing, sole down the shaft line
@@ -716,6 +719,63 @@ function poseClub(cg, club, J) {
     h.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(v3(ux), v3(uy), v3(uz))); h.position.copy(v3(add(b, mul(d, -0.012))));
   } else { const side = norm(cross(d, [0, 1, 0])), toe = len(side) > 0.1 ? norm(add(mul(d, 0.35), side)) : d; h.position.copy(v3(add(b, mul(toe, 0.035)))); h.quaternion.setFromUnitVectors(new T.Vector3(1, 0, 0), v3(toe)); }
   void L;
+}
+
+// ---------- the club in motion: a shaft that bends, and a blur of the clubhead when it moves fast ----------
+// A real shaft bends in a set order (MacKenzie, St Francis Xavier University): toe-up and lagging as the downswing
+// starts, then bowed forward and toe-down at impact as the head's weight, sitting off the shaft's line, is flung
+// outward. Measured drivers bend 5-8 cm at the tip; irons less. Here the tip lags against the club's own acceleration across the
+// shaft, and bows forward and toe-down with speed squared.
+const SHAFT_GRIP = 0.27, FLEX_LAG = 1.8e-4, FLEX_SPEED = 2.0e-5, FLEX_MAX = 0.045;   // an iron bends less than a driver: ~3-4 cm
+function shaftMesh(mat) {
+  const g = new T.CylinderGeometry(0.0058, 0.0058, 1, 12, 16); g.translate(0, 0.5, 0);
+  const m = new T.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true; m.userData.base = Float32Array.from(g.attributes.position.array); return m;
+}
+function bendShaft(m, flex, L) {
+  const pa = m.geometry.attributes.position, base = m.userData.base; if (!base) return;
+  if (!flex) { if (m.userData.bent) { pa.array.set(base); pa.needsUpdate = true; m.userData.bent = false; } return; }
+  const q = m.quaternion.clone().invert(), dl = new T.Vector3(flex[0], flex[1], flex[2]).applyQuaternion(q), g0 = SHAFT_GRIP / L;
+  for (let i = 0; i < pa.count; i++) {
+    const y = base[i * 3 + 1], u = Math.max(0, (y - g0) / (1 - g0)), f = u * u * (3 - u) / 2;   // a cantilever loaded at its tip
+    pa.array[i * 3] = base[i * 3] + dl.x * f; pa.array[i * 3 + 1] = y; pa.array[i * 3 + 2] = base[i * 3 + 2] + dl.z * f;
+  }
+  pa.needsUpdate = true; m.geometry.computeBoundingSphere(); m.userData.bent = true;
+}
+const TRAIL_N = 9, TRAIL_SPAN = 1 / 60;   // about one video frame of the clubhead's path, like a camera's shutter
+function speedTrail() {
+  const g = new T.BufferGeometry(), pos = new Float32Array(TRAIL_N * 2 * 3), al = new Float32Array(TRAIL_N * 2), idx = [];
+  for (let k = 0; k < TRAIL_N - 1; k++) { const a = 2 * k; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  g.setAttribute('position', new T.BufferAttribute(pos, 3)); g.setAttribute('al', new T.BufferAttribute(al, 1)); g.setIndex(idx);
+  const m = new T.Mesh(g, new T.ShaderMaterial({ transparent: true, depthWrite: false, side: T.DoubleSide, uniforms: { op: { value: 0 } },
+    vertexShader: 'attribute float al; varying float vA; void main(){ vA = al; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform float op; varying float vA; void main(){ gl_FragColor = vec4(0.86, 0.88, 0.9, op * vA); }' }));
+  m.frustumCulled = false; m.visible = false; m.renderOrder = 2; return m;
+}
+// the club's flex and its blur for time t, from the club's motion around t (null when it is still or motion is reduced)
+function clubFx(dr, t, J) {
+  if (REDUCED || !J || !J.club) return null;
+  const at = tt => { const j = jointsAt(dr, clamp(tt, 0, dr._dur - 1e-3)); return j && j.club ? j.club : null; };
+  const h = 1 / 40, cm = at(t - h), cp = at(t + h);   // a wide step: the keyed motion is too coarse for a sharper acceleration if (!cm || !cp) return null;
+  const b = J.club[1], d = norm(sub(b, J.club[0]));
+  const v = mul(sub(cp[1], cm[1]), 1 / (2 * h)), acc = mul(add(sub(cp[1], mul(b, 2)), cm[1]), 1 / (h * h)), sp = len(v);
+  const ap = sub(acc, mul(d, dot(acc, d)));
+  const up = mul(d, -1), sw = norm(cross(d, cross([0, 1, 0], d))); let face = norm(sub(sw, mul(d, dot(sw, d)))); if (!isFinite(face[0])) face = [0, 0, 1];
+  const toe = norm(cross(up, face)), vp = sub(v, mul(d, dot(v, d))), lead = len(vp) > 1e-6 ? norm(vp) : [0, 0, 0];
+  let flex = add(mul(ap, -FLEX_LAG), mul(add(mul(toe, 0.6), mul(lead, 0.8)), FLEX_SPEED * sp * sp));
+  const fm = len(flex); if (fm > FLEX_MAX) flex = mul(flex, FLEX_MAX / fm); if (!isFinite(flex[0]) || fm < 0.002) flex = null;
+  let trail = null;
+  if (sp > 12) {
+    trail = { op: clamp((sp - 12) / 22, 0, 1) * 0.6, pts: [] };
+    for (let k = 0; k < TRAIL_N; k++) { const c = k ? at(t - TRAIL_SPAN * k / (TRAIL_N - 1)) : J.club; if (!c) break; const dd = norm(sub(c[1], c[0])); trail.pts.push([c[1], sub(c[1], mul(dd, 0.3))]); }
+    if (trail.pts.length < TRAIL_N) trail = null;
+  }
+  return { flex, trail };
+}
+function poseTrail(m, tr) {
+  if (!m) return; if (!tr) { m.visible = false; return; }
+  const pa = m.geometry.attributes.position, al = m.geometry.attributes.al;
+  tr.pts.forEach((p, k) => { pa.array.set(p[0], k * 6); pa.array.set(p[1], k * 6 + 3); const w = 1 - k / (TRAIL_N - 1); al.array[2 * k] = w; al.array[2 * k + 1] = w * 0.35; });
+  pa.needsUpdate = true; al.needsUpdate = true; m.material.uniforms.op.value = tr.op; m.visible = true;
 }
 
 // an iron's head: a blade with a sole, built along +x (toe) with the face toward +z
@@ -911,7 +971,8 @@ function Player(wrap, dr, opt) {
       const P0 = mx(cp.pos), T0 = mx(cp.tg); sc.S.scale.x = MIR ? -1 : 1; sc.S.updateMatrixWorld();
       sc.cam.position.set(P0[0], P0[1], P0[2]); sc.cam.lookAt(T0[0], T0[1], T0[2]); sc.cam.updateMatrixWorld();
       if (!sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) upgrade(sc); poseAny(sc.fig, J); if (sc.fig.real && sc.fig.elbows) { J.le = sc.fig.elbows.L; J.te = sc.fig.elbows.R; } setTone(sc.fig, key.hl, st.t);
-      poseClub(sc.club, (dr.noclub || s.p.noclub) ? null : J.club, J);
+      const noClub = dr.noclub || s.p.noclub, fx = noClub ? null : clubFx(dr, st.t, J);
+      poseClub(sc.club, noClub ? null : J.club, J, fx && fx.flex); poseTrail(sc.trail, fx && fx.trail);
       // the red "not this" ghost
       const gw = key.G ? (s.inHold ? 1 : s.raw) : 0;
       sc.ghost.G.visible = gw > 0.05; sc.gclub.visible = false;
@@ -953,7 +1014,7 @@ function poster(dr, w, h, warm) {   // warm: also draw the red ghost, so its sha
     const sc = scene(dr); R.setPixelRatio(1); R.setSize(w, h, false); sc.cam.aspect = w / h; sc.cam.updateProjectionMatrix();
     const P0 = mx(cp.pos), T0 = mx(cp.tg); sc.S.scale.x = MIR ? -1 : 1; sc.S.updateMatrixWorld();
     sc.cam.position.set(P0[0], P0[1], P0[2]); sc.cam.lookAt(T0[0], T0[1], T0[2]); sc.cam.updateMatrixWorld();
-    if (!sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) upgrade(sc); poseAny(sc.fig, J); setTone(sc.fig, [], 0); poseClub(sc.club, (dr.noclub || s.p.noclub) ? null : J.club, J); sc.ghost.G.visible = false; sc.gclub.visible = false;
+    if (!sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) upgrade(sc); poseAny(sc.fig, J); setTone(sc.fig, [], 0); poseClub(sc.club, (dr.noclub || s.p.noclub) ? null : J.club, J); poseTrail(sc.trail, null); sc.ghost.G.visible = false; sc.gclub.visible = false;
     if (warm) { poseAny(sc.ghost, J); ghostOpacity(sc.ghost, 0.3); poseClub(sc.gclub, J.club, J); sc.ghost.G.visible = !!J; sc.gclub.visible = !!J.club; }
     const across = J.stickAcross || J.spineClub; sc.stick.visible = !!across; if (across) between(sc.stick, across[0], across[1]);
     if (sc.ball) sc.ball.visible = true; updateProps(sc.props, J, {}, dr, s);
@@ -962,6 +1023,6 @@ function poster(dr, w, h, warm) {   // warm: also draw the red ghost, so its sha
   const url = c.toDataURL('image/jpeg', 0.86); POSTERS.set(id, url); if (typeof CCGolfer !== 'undefined' && CCGolfer.ready()) POSTERS.set(id + ':real', true); return url;
 }
 function stats() { return { scenes: SCN.size, renders: STATS.renders, scale: QUAL.s, programs: R && R.info.programs ? R.info.programs.length : 0 }; }
-const api = { prepTextures, stats, slowFrames, QUAL, Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, ballOf, propPoint };
+const api = { prepTextures, stats, slowFrames, QUAL, Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, _clubFx: clubFx, ballOf, propPoint };
 root.DrillStudio = api;
 })(this);

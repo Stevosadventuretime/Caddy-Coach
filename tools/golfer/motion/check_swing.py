@@ -22,12 +22,25 @@ def measures(m):
     out['downswing_s'] = (ph['impact'] - ph['top']) / fps
     hd = [np.linalg.norm(np.subtract(F[i]['head'], a['head'])[[0, 2]]) for i in range(ph['address'], ph['impact'] + 1)]
     out['head_move_cm'] = 100 * max(hd)
+    # kinematic sequence (TPI; Cheetham et al.): hips, then chest, then lead arm, then club reach peak speed in turn,
+    # each faster than the last, the club last at or just before impact
+    t, i = ph['top'], ph['impact']; A = lambda k: np.array([fr[k] for fr in F])
+    def turn(v): a = np.unwrap(np.arctan2(v[:, 2], v[:, 0])); return np.abs(np.degrees(np.gradient(a)) * fps)
+    def swing(v):
+        u = v / np.linalg.norm(v, axis=1, keepdims=True); d = np.degrees(np.arccos(np.clip((u[1:] * u[:-1]).sum(1), -1, 1))) * fps; return np.r_[d[0], d]
+    seq = [turn(A('H')), turn(A('Lt')), swing(A('lw') - A('ls')), swing(A('clubhead') - A('lh'))]
+    pk = [t + int(np.argmax(s[t:i + 6])) for s in seq]; sp = [float(s[k]) for s, k in zip(seq, pk)]
+    out['sequence_order'] = float(all(pk[j] <= pk[j + 1] for j in range(3)) and all(sp[j] < sp[j + 1] for j in range(3)))
+    out['hip_peak_dps'], out['chest_peak_dps'], out['club_peak_dps'] = sp[0], sp[1], sp[3]
+    out['club_peak_before_impact_s'] = (i - pk[3]) / fps
     return out
 
 CHECKS = {   # name: (low, high)
     'lead_elbow_address': (155, 181), 'lead_elbow_top': (150, 181), 'lead_elbow_impact': (155, 181),
     'shoulder_turn_top': (85, 110), 'hip_turn_top': (38, 58), 'x_factor_top': (38, 62), 'hips_open_impact': (25, 50),
-    'tempo': (2.6, 3.4), 'downswing_s': (0.2, 0.36), 'head_move_cm': (0, 8)}
+    'tempo': (2.6, 3.4), 'downswing_s': (0.2, 0.36), 'head_move_cm': (0, 8),
+    'sequence_order': (1, 1), 'hip_peak_dps': (400, 900), 'chest_peak_dps': (550, 1200), 'club_peak_dps': (1500, 3000),
+    'club_peak_before_impact_s': (0, 0.05)}
 
 if __name__ == '__main__':
     m = json.load(open(sys.argv[1])); r = measures(m); bad = 0
