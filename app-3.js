@@ -134,8 +134,8 @@ function profCourseHTML(){const c=PROF.course,L=PROF.cl;
   ${PROF.f.cq&&L?`<button type="button" class="link" data-pf="course-own">My course isn't listed: use “${esc(PROF.f.cq)}”</button>`:''}`}
 function profRender(){const b=$('pfBody'),m=PROF.mode,f=PROF.f,me=PROF.me;if(v2Render(b,m))return;
  if(m==='boot'){b.innerHTML='<div class="pfCard"><p class="mut" role="status">Loading…</p></div>';return}
- if(m==='welcome'){b.innerHTML=`<div class="pfCard pfWelcome"><span class="pfEmb" aria-hidden="true"></span><h1>Caddy Coach</h1><p>Set up your profile to start. Your rounds, swings and club yardages are kept under your username.</p>
-  <button type="button" class="pri pfBig" data-pf="to-signup">Create your profile</button><button type="button" class="pfBig" data-pf="to-login">I already have a profile</button></div>`;return}
+ if(m==='welcome'){b.innerHTML=`<div class="pfCard pfWelcome"><span class="pfEmb" aria-hidden="true"></span><h1>Caddy Coach</h1><p>Swing analysis, GPS yardages, scoring and drills for your game. A free profile keeps your rounds, swings and club yardages safe under your username.</p>
+  <button type="button" class="pri pfBig" data-pf="to-signup">Create your profile</button><button type="button" class="pfBig" data-pf="to-login">I already have a profile</button><button type="button" class="link pfLook" data-pf="guest">Look around first</button></div>`;return}
  if(m==='login'){b.innerHTML=`<form class="pfCard" data-pf-form="login" novalidate><h2>Log in</h2>${pErr('_form')}
   ${pIn('pfU','Username','autocomplete="username" autocapitalize="none" spellcheck="false" required',f.pfU)}
   ${pIn('pfPw','Password','type="password" autocomplete="current-password" required',f.pfPw,'<p class="pfHint">Set up your profile while every password was 1234? Use 1234 one last time and you\'ll choose your own.</p>')}
@@ -1094,7 +1094,7 @@ async function profSubmit(kind){profCollect();PROF.err={};
   PDir.cache(p);Hand.setLocal(hand,p.username);lsSet('cc_hand_push_'+p.username,1);PROF.busy=false;await profEnter(p,true)}
  catch(err){console.error(err);PROF.busy=false;PROF.err._form='Something went wrong saving your profile. Try again.';profRender()}}
 // logging in: remember who it is, then start the app fresh under their profile
-async function profEnter(p,isNew){await Sess.set(p.username);if(isNew)lsSet('cc_welcome',p.username);location.reload()}
+async function profEnter(p,isNew){try{localStorage.removeItem('cc_guest')}catch(_){}await Sess.set(p.username);if(isNew)lsSet('cc_welcome',p.username);location.reload()}
 // ---- privacy: what's kept where, a copy of everything, and deleting your account ----
 const APP_OWNER_EMAIL='';   // put the address people can contact you on here before launch
 function privacyHTML(){const back=PROF.me?'to-me':(PROF.privBack||'to-signup');
@@ -1221,10 +1221,16 @@ async function profSetPw(kind){const f=PROF.f,base=kind==='chpw'?PROF.me:(PROF.p
   lsSet('cc_cloud_repush_'+u,1);return profEnter(p)}
  catch(err){console.error(err);fail(`Your password couldn't be saved (${String(err&&err.message||err).slice(0,120)}). Try again, and if it keeps happening use Send feedback.`)}}
 // avatar in the top bar
-function profTopbar(){const b=$('pfBtn');if(!b)return;const me=PROF.me;b.hidden=!me;if(me){b.innerHTML=profAv(me,34);b.setAttribute('aria-label',`Your profile, ${me.first} ${me.last}`)}}
+// a visitor looking round without a profile sees a small "Sign up" button where the profile picture goes
+function profTopbar(){const b=$('pfBtn');if(!b)return;const me=PROF.me;b.hidden=false;b.classList.toggle('pfGuest',!me);
+ if(me){b.innerHTML=profAv(me,34);b.setAttribute('aria-label',`Your profile, ${me.first} ${me.last}`)}else{b.textContent='Sign up';b.setAttribute('aria-label','Create a profile or log in')}}
+// a visitor's first save stays on this phone; remind them once that a free profile keeps it
+function guestNudge(what){if(PROF.me||HOSTED_IN_CLAUDE||lsGet('cc_guest_nudged',0))return;lsSet('cc_guest_nudged',1);
+ setTimeout(()=>toast(`Your ${what} is saved on this phone. Create a free profile (top right) to keep it safe.`),400)}
 document.addEventListener('click',e=>{const t=e.target.closest('[data-pf],[data-pf-pick]');if(!t)return;
  if(t.dataset.pfPick!=null){PROF.course=PROF.cl[+t.dataset.pfPick];PROF.err.course='';profCollect();return profRender()}
  const a=t.dataset.pf;profCollect();
+ if(a==='guest'){lsSet('cc_guest',1);PROF.err={};profHide();profTopbar();return}
  if(a==='to-signup'){PROF.err={};PROF.f={};PROF.photo=null;PROF.course=null;PROF.cl=null;PROF.clMsg='';return profShow('signup')}
  if(a==='to-login'){PROF.err={};PROF.f={pfU:PROF.f.pfUser||''};return profShow('login')}
  if(a==='to-edit'){const me=PROF.me;PROF.err={};PROF.f={pfFirst:me.first,pfLast:me.last,hand:Hand.get()};PROF.photo=me.photo||null;PROF.course=me.course||null;PROF.cl=null;PROF.clMsg='';PROF.note='';return profShow('edit')}
@@ -1261,7 +1267,7 @@ document.addEventListener('submit',e=>{const fm=e.target.closest('[data-pf-form]
 document.addEventListener('click',e=>{const b=e.target.closest('[data-pf-hand]');if(!b)return;profCollect();PROF.f.hand=b.dataset.pfHand;profRender()});
 document.addEventListener('keydown',e=>{if(e.target&&e.target.id==='pfCq'&&e.key==='Enter'){e.preventDefault();profCourseSearch()}if(e.key==='Escape'&&PROF.mode==='me'&&!$('prof').hidden)profHide()});
 let pfT=null;document.addEventListener('input',e=>{if(e.target.id==='pfUser'){PROF.f.pfUser=e.target.value;const un=unorm(e.target.value);profAvailText();clearTimeout(pfT);pfT=setTimeout(()=>profCheckName(un),350)}});
-document.addEventListener('click',e=>{if(e.target.closest('#pfBtn')&&PROF.me){PROF.note='';profShow('me')}});
+document.addEventListener('click',e=>{if(!e.target.closest('#pfBtn'))return;PROF.note='';if(PROF.me)profShow('me');else{PROF.err={};PROF.f={};profShow('welcome')}});
 // a password-reset link from the email lands here with a one-time login in the address
 async function profFromResetLink(){const h=new URLSearchParams(location.hash.slice(1));if(!h.get('access_token')&&!h.get('error_description'))return false;
  history.replaceState(null,'',location.pathname+location.search);
@@ -1285,6 +1291,7 @@ async function profBoot(){profShow('boot');await Store.init();if(!HOSTED_IN_CLAU
    applyHand();HcpStore.load().then(hcpRefresh).catch(e=>console.error(e));BagStore.load().then(b=>{if(!BG.bag)BG.bag=b;if(lsGet('cc_hand_push_'+p.username,0)){try{localStorage.removeItem('cc_hand_push_'+p.username)}catch(_){}b.hand=Hand.get();return BagStore.save(b)}}).catch(()=>{});
    profFlush();PDir.get(p.username).then(q=>{if(q&&q.updatedAt!==p.updatedAt&&!lsGet('cc_prof_out',[]).length){PROF.me=q;PDir.cache(q);profTopbar()}}).catch(()=>{});return}}
  if(lsGet('cc_deleted',0)){try{localStorage.removeItem('cc_deleted')}catch(_){}setTimeout(()=>toast('Your account and all its data have been deleted.'),300)}
+ if(lsGet('cc_guest',0)){profHide();profTopbar();return}
  profShow('welcome')}
 
 // ===================== live pins, club pin sheets, club pages, usage counts, Caddy Coach Plus, coaching =====================
