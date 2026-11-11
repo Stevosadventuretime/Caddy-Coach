@@ -1073,6 +1073,7 @@ async function saveAnalysis(){
   catch(e){console.error(e);clipNote=e&&e.code==='quota_or_state'?' The clip was not saved because clip storage is full; delete old videos in your swing history.':' The clip could not be saved here, so the round was saved without it.'}
  }
  try{await Store.save(id,sum,det)}catch(e){if(det.clip)ClipStore.remove(det.clip.ref).catch(()=>{});throw e}
+ if(typeof guestNudge==='function')guestNudge('swing analysis');
  return {ok:true,hasClip:!!det.clip,clipNote};
 }
 async function makeSheets(){
@@ -1527,6 +1528,7 @@ async function rtSaveCourse(){try{await RStore.saveCourse(RT.course)}catch(e){co
 function rtSetScore(v){const h=RT.live.holes[RT.live.i];if(h.score==null)trkLearn(h);h.score=Math.max(1,Math.min(20,v));RT.finArm=false;rtSaveLive();rtRender()}
 async function rtFinish(){trkStop();const r=RT.live;if(typeof track==='function')track('round');r.status='done';r.finishedAt=Date.now();if(r.grp){grpPush(r,true);setTimeout(grpPoll,2500)}const done=JSON.parse(JSON.stringify(r));delete done.i;
  try{await RStore.save(done)}catch(e){console.error(e);RT.msg={bad:1,t:'Your round couldn\'t be saved just now. Check your connection and try again.'};return rtRender()}
+ if(typeof guestNudge==='function')guestNudge('round');
  clearTimeout(_liveT);await RStore.setLive(null).catch(()=>{});RT.live=null;RT.liveSaved=null;RT.doneRound=done;RT.view='done';RT.finArm=false;RT.rounds=null;rtLoadRounds();rtRender();window.scrollTo(0,0)}
 document.addEventListener('click',async e=>{const p8=$('p8');if(!p8||!p8.contains(e.target))return;const t=e.target.closest('button');if(!t)return;const d=t.dataset,a0=d.rt;
  if(d.rtTab){RT.tab=d.rtTab;RT.detail=null;RT.delArm=false;if(RT.tab==='new'&&RT.view==='done'){RT.view='find';RT.doneRound=null}if(RT.tab==='mine'&&!RT.rounds)rtLoadRounds();if(RT.tab==='new'&&RT.view==='find')await rtLoadMyCourses();rtRender();return}
