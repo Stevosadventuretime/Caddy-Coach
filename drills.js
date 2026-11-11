@@ -14,7 +14,7 @@ const swing = (o, st, extra) => [
   { k: 'top', o, d: 0.9, hold: 0.15, step: st },
   { k: 'down', o, d: 0.22, step: st, trail: true, lin: true },
   { k: 'impact', o, d: 0.1, step: st, trail: true, lin: true, hit: true },
-  { k: 'finish', o: Object.assign({ head: 0.9 }, o), d: 0.4, hold: 0.9, step: st, ...(extra || {}) }];
+  { k: 'finish', o: Object.assign({ head: 0.9 }, o), d: 0.85, hold: 0.9, step: st, ...(extra || {}) }];
 const DRILLS = [
   // ===================== SETUP =====================
   { id: 'hinge', name: 'Club down the spine', by: 'Collin Morikawa used this on the range at the U.S. Open to stop crowding the ball.', where: 'home', kit: 'One club', time: '5 min', dose: '10 slow reps, holding each for 5 seconds',
@@ -148,7 +148,7 @@ const DRILLS = [
       { k: 'top', o: { hx: -0.14, hip: 22, turn: 70 }, d: 0.8, hold: 1.4, step: 2, lab: [L('thip', 'Bumped the umbrella', 'bad', 'l')], badge: B('Sway') },
       { k: 'top', d: 0.7, hold: 0.3, step: 3 },
       { k: 'down', d: 0.22, step: 3, trail: true, lin: true }, { k: 'impact', d: 0.1, step: 3, trail: true, hit: true, lin: true },
-      { k: 'finish', o: { head: 0.9 }, d: 0.4, hold: 0.8, step: 3 },
+      { k: 'finish', o: { head: 0.9 }, d: 0.85, hold: 0.8, step: 3 },
       { k: 'address', d: 1.1, hold: 0.3, step: 3, reset: true }] },
   { id: 'shadow', name: 'Shadow drill', by: 'Coach Mark Blackburn used this with Justin Rose to keep him centred.', where: 'range', kit: 'Sunshine and 3 balls', time: '10 min', dose: '10 backswings, then hit with the same feel',
     fixes: ['sway', 'reverse', 'headSide', 'headImpact'], live: 'partnerhead',
@@ -180,7 +180,7 @@ const DRILLS = [
       { k: 'address', o: { stance: 0.13, tfx: -0.14, side: 8 }, d: 0.6, hold: 1.0, step: 2, badge: G('Set behind the ball') },
       { k: 'top', o: { stance: 0.13, tfx: -0.14 }, d: 1.1, hold: 1.2, step: 3, hl: ['trailleg'], lab: [L('tk', 'Loaded into the trail side', 'good', 'l')] },
       { k: 'down', o: { stance: 0.13, tfx: -0.14 }, d: 0.22, step: 3, trail: true, lin: true }, { k: 'impact', o: { stance: 0.13, tfx: -0.14 }, d: 0.1, step: 3, trail: true, hit: true, lin: true },
-      { k: 'finish', o: { stance: 0.13, tfx: -0.14, head: 0.9 }, d: 0.4, hold: 0.8, step: 3 },
+      { k: 'finish', o: { stance: 0.13, tfx: -0.14, head: 0.9 }, d: 0.85, hold: 0.8, step: 3 },
       { k: 'address', o: { stance: 0.06, side: 0 }, d: 1.1, hold: 0.3, step: 3, reset: true }] },
   { id: 'crossarms', name: 'Trail shoulder behind your head', by: 'From Golf Channel coach Michael Breed (Golf Digest) for a fuller turn.', where: 'home', kit: 'An alignment stick or club', time: '5 min', dose: '10 turns, then 5 balls with the same thought',
     fixes: ['shTurn', 'hipTurn', 'handsTopFo', 'handsTopDtl'], live: 'crossarms',
@@ -208,7 +208,7 @@ const DRILLS = [
       { k: 'half', d: 0.9, hold: 0.6, step: 1, hl: ['hips'], arr: [ROT('pel', 200, 320, 'good', 0.27)], lab: [L('thip', 'Pocket goes behind you', 'good', 'l')] },
       { k: 'top', o: { kf: 14 }, d: 0.8, hold: 1.4, step: 2, hl: ['hips', 'shoulders'], lab: [L('tk', 'Trail knee straightens a little', 'good', 'l')], badge: G('Hips about 45°') },
       { k: 'down', d: 0.25, step: 3, trail: true, lin: true, arr: [ROT('pel', 330, 210, 'good', 0.27)] }, { k: 'impact', d: 0.1, step: 3, trail: true, hit: true, lin: true },
-      { k: 'finish', o: { head: 0.9 }, d: 0.4, hold: 0.8, step: 3 },
+      { k: 'finish', o: { head: 0.9 }, d: 0.85, hold: 0.8, step: 3 },
       { k: 'address', d: 1.1, hold: 0.3, step: 3, reset: true }] },
   // ===================== TOP OF THE SWING =====================
   { id: 'thumbtop', name: 'Thumb-grip top check', by: 'From coach Michael Howes (GolfWRX) for a collapsing lead arm.', where: 'home', kit: 'None', time: '3 min', dose: '10 slow backswings',
@@ -254,7 +254,7 @@ const DRILLS = [
       { k: 'top', d: 0.1, hold: 1.4, step: 1, say: 'Stop', hl: ['shoulders'], badge: G('Turn complete') },
       { k: 'down', o: { ws: 0.1, hip: -2 }, d: 0.45, hold: 0.5, step: 2, trail: true, hl: ['leadleg'], arr: [AR('pel', [1, 0, 0], 0.22)], lab: [L('lk', 'Weight to the lead foot first', 'good', 'r')] },
       { k: 'impact', d: 0.16, step: 3, trail: true, hit: true, lin: true },
-      { k: 'finish', o: { head: 0.9 }, d: 0.45, hold: 1.0, step: 3 },
+      { k: 'finish', o: { head: 0.9 }, d: 0.85, hold: 1.0, step: 3 },
       { k: 'address', d: 1.1, hold: 0.3, step: 3, reset: true }] },
   { id: 'tempo', name: 'Tour Tempo 3-to-1 count', by: 'From John Novosel\'s Tour Tempo research: tour players take three times as long going back as coming down.', where: 'both', kit: 'Optional: a metronome app', time: '5 min', dose: '20 swings',
     fixes: ['tempo', 'dsTime'], live: 'tempo',
@@ -269,7 +269,7 @@ const DRILLS = [
       { k: 'half', d: 0.27, step: 0, say: 'two', lin: true },
       { k: 'top', d: 0.27, step: 0, say: 'three', lin: true },
       { k: 'impact', d: 0.27, step: 1, say: 'one!', trail: true, hit: true, lin: true },
-      { k: 'finish', o: { head: 0.9 }, d: 0.45, hold: 1.4, step: 2, say: '3 : 1', badge: G('Tour rhythm') },
+      { k: 'finish', o: { head: 0.9 }, d: 0.85, hold: 1.4, step: 2, say: '3 : 1', badge: G('Tour rhythm') },
       { k: 'address', d: 1.1, hold: 0.4, step: 3, reset: true }] },
   { id: 'feettogether', name: 'Feet-together swings', by: 'Pete Cowen\'s favourite balance drill, used with Rory McIlroy. "Don\'t swing to stay in balance, swing in balance."', where: 'both', kit: '7-iron', time: '10 min', dose: 'Sets of 10 balls, then 10 with your normal stance',
     fixes: ['sway', 'slide', 'headSide', 'hold', 'finishFo', 'finishDtl', 'tempo'], live: 'feettogether',
@@ -283,7 +283,7 @@ const DRILLS = [
       { k: 'top', o: { stance: 0.06, turn: 80, theta: 132, hinge: 94, ws: -0.01 }, d: 1.0, hold: 0.15, step: 1, lab: [L('head', 'Head stays level', 'good', 'r')] },
       { k: 'down', o: { stance: 0.06, ws: 0.01 }, d: 0.24, step: 1, trail: true, lin: true },
       { k: 'impact', o: { stance: 0.06, ws: 0.02 }, d: 0.1, step: 1, trail: true, hit: true, lin: true },
-      { k: 'finish', o: { stance: 0.06, ws: 0.03, heel: 0.6, head: 0.9 }, d: 0.45, hold: 1.8, step: 2, say: 'Hold 3', badge: G('Balanced') },
+      { k: 'finish', o: { stance: 0.06, ws: 0.03, heel: 0.6, head: 0.9 }, d: 0.85, hold: 1.8, step: 2, say: 'Hold 3', badge: G('Balanced') },
       { k: 'address', o: { stance: 0.06 }, d: 1.1, hold: 0.3, step: 3, reset: true }] },
   // ===================== DOWNSWING: PATH (OVER THE TOP) =====================
   { id: 'stickover', name: 'Stick over the ball', by: 'From Randy Smith, Scottie Scheffler\'s coach since childhood.', where: 'range', kit: 'One alignment stick', time: '15 min', dose: '10–15 minutes, then hit without the stick',
@@ -316,7 +316,7 @@ const DRILLS = [
       { k: 'down', o: { plane: 14 }, d: 0.5, step: 1, trail: true },
       { k: 'impact', d: 0.2, step: 2, trail: true, hit: true, lin: true },
       { k: 'through', d: 0.3, hold: 1.4, step: 2, trail: true, badge: G('Missed it: inside path') },
-      { k: 'finish', o: { head: 0.9 }, d: 0.4, hold: 0.6, step: 3 },
+      { k: 'finish', o: { head: 0.9 }, d: 0.85, hold: 0.6, step: 3 },
       { k: 'address', d: 1.1, hold: 0.4, step: 3, reset: true }] },
   { id: 'twoball', name: 'Two-ball gate', by: "Justin Thomas's favourite ball-striking drill; he flips it to train the path he wants.", where: 'range', kit: '2 spare balls', time: '10 min', dose: '15 balls',
     fixes: ['ott'], live: 'gate',
@@ -465,7 +465,7 @@ const DRILLS = [
     seq: [
       { k: 'address', d: 0.5, hold: 0.8, step: 0 },
       { k: 'top', d: 0.95, hold: 0.15, step: 0 }, { k: 'down', d: 0.22, step: 0, trail: true, lin: true }, { k: 'impact', d: 0.1, step: 0, trail: true, hit: true, lin: true },
-      { k: 'finish', o: { head: 1 }, d: 0.45, hold: 1.0, step: 1, say: '3', hl: ['leadleg', 'trailfoot'], lab: [L('la', 'Weight on the lead foot', 'good', 'r'), L('ta', 'Trail foot on its toe', 'good', 'l')] },
+      { k: 'finish', o: { head: 1 }, d: 0.85, hold: 1.0, step: 1, say: '3', hl: ['leadleg', 'trailfoot'], lab: [L('la', 'Weight on the lead foot', 'good', 'r'), L('ta', 'Trail foot on its toe', 'good', 'l')] },
       { k: 'finish', o: { head: 1 }, d: 0.05, hold: 0.9, step: 1, say: '2', hl: ['leadleg', 'trailfoot'], lab: [L('chest', 'Chest to the target', 'good', 'r')] },
       { k: 'finish', o: { head: 1 }, d: 0.05, hold: 1.1, step: 2, say: '1', badge: G('Balance 9 / 10') },
       { k: 'finish', o: { head: 1, ws: 0.02, side: -14 }, d: 0.6, hold: 1.4, step: 3, lab: [L('ta', 'Falling back', 'bad', 'l')], badge: B('Out of balance') },

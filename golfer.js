@@ -5,6 +5,7 @@
 const T = root.THREE;
 let DATA = null, LOADING = null, TEX = null;
 const v3 = a => new T.Vector3(a[0], a[1], a[2]);
+const D2R = Math.PI / 180;
 
 function parse(buf) {
   const dv = new DataView(buf); if (String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3)) !== 'CCG1') throw new Error('bad golfer file');
@@ -230,7 +231,16 @@ function poseGolfer(fig, J, o) {
   setBone(fig, 'spine', pTop, spTail, mid, X);
   const chM = setBone(fig, 'chest', spTail, neckP, Lt, X).clone();
   // head: centre at J.head, face looking along J.face
-  const fz = A(J.face), fx = new T.Vector3().crossVectors(Yv, fz).normalize(), fy = new T.Vector3().crossVectors(fz, fx).normalize();
+  // head: looks along J.face, but only as far as a neck allows. Measured against the chest, the old head turned up to
+  // 104 degrees at the top of the swing and 93 the other way after impact (a neck manages about 70-80), then whipped
+  // back in two frames. Past ~50 degrees of turn the head now starts to go with the shoulders, as a golfer's does,
+  // and it tilts partly with the spine instead of staying dead level.
+  const cR = new T.Matrix4().extractRotation(chM), cs = X.clone().transformDirection(cR), cu = Yv.clone().transformDirection(cR), cf = Z.clone().transformDirection(cR);
+  const f0 = A(J.face).normalize(), knee = (v, a, m) => { const u = Math.abs(v); return u <= a ? v : Math.sign(v) * (a + (m - a) * Math.tanh((u - a) / (m - a))); };
+  const yaw = knee(Math.atan2(f0.dot(cs), f0.dot(cf)), 70 * D2R, 95 * D2R), pit = Math.max(-58 * D2R, Math.min(35 * D2R, Math.asin(Math.max(-1, Math.min(1, f0.dot(cu))))));
+  const fz = cs.clone().multiplyScalar(Math.sin(yaw) * Math.cos(pit)).addScaledVector(cf, Math.cos(yaw) * Math.cos(pit)).addScaledVector(cu, Math.sin(pit)).normalize();
+  const hup = Yv.clone().multiplyScalar(0.6).addScaledVector(cu, 0.4).normalize();
+  const fx = new T.Vector3().crossVectors(hup, fz).normalize(), fy = new T.Vector3().crossVectors(fz, fx).normalize();
   const hC = A(fig.meta.headC), hd = mb('head');
   const R = new T.Matrix4().makeBasis(fx, fy, fz);
   // the neck keeps its own length: the skull sits one neck-length from the base of the neck, along the neck as it
@@ -253,10 +263,16 @@ function poseGolfer(fig, J, o) {
     const shV = A(sh), wrist = hn.H.clone().applyMatrix4(Mh);
     // elbow: two-bone reach from shoulder to wrist with the mesh's own arm lengths, bending the way the rig's elbow points
     const rigEl = A(el), toW = wrist.clone().sub(shV), Lw = toW.length(), dW = toW.clone().normalize();
-    let pole = rigEl.clone().sub(shV).projectOnPlane(dW); if (pole.lengthSq() < 1e-8) pole = new T.Vector3(0, -1, -0.3); pole.normalize();
+    // which way the elbow points. With a nearly straight arm the rig's elbow sits only 3-4 cm off the shoulder-wrist
+    // line, so its direction is noise: the arm rolled half a turn in a frame as the elbow began to bend or straighten.
+    // A steady guess is mixed in (elbows point down the spine and back toward the body); it decides when the arm is
+    // near straight and fades out as the real bend grows.
+    const prior = A(J.s).multiplyScalar(-0.7).addScaledVector(F, -0.7);
+    let pole = rigEl.clone().sub(shV).projectOnPlane(dW).addScaledVector(prior.projectOnPlane(dW), 0.06);
+    if (pole.lengthSq() < 1e-8) pole = new T.Vector3(0, -1, -0.3); pole.normalize();
     // soft elbows: a real arm is never locked dead straight, so near full reach the arm keeps a slight bend and the
     // bones stretch a touch (at most ~3%) rather than snapping straight
-    const kS = Math.max(1, Lw / ((Lu + Lf) * 0.975)), Lu2 = Lu * kS, Lf2 = Lf * kS;
+    const kS = Math.max(1, Lw / ((Lu + Lf) * 0.988)), Lu2 = Lu * kS, Lf2 = Lf * kS;
     const reach = Math.min(Lw, (Lu2 + Lf2) * 0.999), along = (Lu2 * Lu2 - Lf2 * Lf2 + reach * reach) / (2 * reach), hgt = Math.sqrt(Math.max(0, Lu2 * Lu2 - along * along));
     const elV = shV.clone().addScaledVector(dW, along * Lw / reach).addScaledVector(pole, hgt);
     const du = elV.clone().sub(shV), df = wrist.clone().sub(elV);
@@ -265,7 +281,13 @@ function poseGolfer(fig, J, o) {
     const mid2 = elV.clone().lerp(wrist, fa.T.distanceTo(fa.H) / Lf);
     setBone(fig, 'farm' + S, elV, mid2, n, n0);
     const handSideW = hf.side0.clone().transformDirection(Mh);
-    const twist = n.clone().lerp(handSideW.projectOnPlane(df.clone().normalize()).normalize(), 0.5).normalize();
+    // the forearm's twist bone takes half the hand's turn against the elbow. Halving by averaging the two directions
+    // flipped it half a turn whenever that turn passed 180 degrees (it does for a frame or two as the club releases),
+    // which wrapped the forearm like a sweet paper. The half-angle now fades to nothing as the turn nears 180, so it
+    // stays continuous on both sides.
+    const fax = df.clone().normalize(), hs = handSideW.clone().projectOnPlane(fax).normalize(), n1 = n.clone().projectOnPlane(fax).normalize();
+    const aTw = Math.atan2(fax.dot(new T.Vector3().crossVectors(n1, hs)), n1.dot(hs)), wTw = Math.min(1, Math.max(0, (Math.PI - Math.abs(aTw)) / (Math.PI / 3)));
+    const twist = n1.clone().applyAxisAngle(fax, aTw * 0.5 * wTw);
     setBone(fig, 'ftw' + S, mid2, wrist, twist, n0.clone().lerp(hf.side0, 0.5).normalize());
     setBoneM(fig, 'hand' + S, Mh.clone().multiply(new T.Matrix4().makeTranslation(hn.H.x, hn.H.y, hn.H.z)));
     fingers(fig, S, Mh, hf.curl, hf.thumb);
@@ -308,7 +330,7 @@ function handRest(fig, S) {
   const len = kM.distanceTo(wr);
   return (m['hr' + S] = { wr, dir, across, palm, len, kM });
 }
-const GRIP = { a: 0.55, b: 0.0, c: { L: 0.9, R: 0.9 }, roll: { L: 0.3, R: -0.3 } };
+const GRIP = { ew: 1, sw: 1, up: 0.5 };   // how much the elbow, the shoulder and the chest each say about which side of the shaft the wrist sits
 function handFrame(J, S, lead, fig) {
   const hr = handRest(fig, S);
   const hp = A(lead ? J.lh : J.th), el = A(lead ? J.le : J.te), fore = hp.clone().sub(el).normalize();
@@ -316,31 +338,26 @@ function handFrame(J, S, lead, fig) {
   let Rw, pLocal, pWorld, curl, thumb;
   if (gripping) {
     const sd = A(J.sd).normalize();
-    // local: the shaft runs from the heel pad to the index finger, through the curled fingers
-    const sdL = hr.across.clone().add(hr.dir.clone().multiplyScalar(GRIP.c[S])).normalize();
-    pLocal = hr.wr.clone().addScaledVector(hr.dir, hr.len * GRIP.a).addScaledVector(hr.palm, GRIP.b);
-    const pnL = hr.palm.clone().projectOnPlane(sdL).normalize();
-    // world: palms face each other across the grip; the lead palm faces away from the target, turned a little toward the golfer
-    const towardBody = el.clone().sub(hp).projectOnPlane(sd).normalize();
-    let w = new T.Vector3(-1, 0, 0).projectOnPlane(sd); if (w.lengthSq() < 1e-6) w = towardBody.clone(); w.normalize();
-    // keep w turning with the swing: use the plane of the swing (shaft and forearm)
-    const across = new T.Vector3().crossVectors(sd, towardBody).normalize();
-    let pn = lead ? across.clone() : across.clone().negate();
-    if (pn.dot(w) * (lead ? 1 : -1) < 0 && Math.abs(pn.dot(w)) > 0.5) pn.negate();
-    if (J.arms === 'club' && !J.tdrop && typeof J.roll === 'number') {
-      // a full swing: the palms are worked out from the swing plane and how far the hands have rolled (J.roll, from the
-      // swing data: square at address and impact, toe up halfway back and halfway through). Working them out from the
-      // elbows flipped the lead palm away from the grip part-way back, so the lead hand came off the club.
-      // The plane holds the target line and slopes up from the ball to the shoulders (its normal is up and toward the
-      // golfer's front). Trail palm = where the clubface points; lead palm faces it from the other side of the grip.
-      const N = new T.Vector3(0, 0.28, 0.96).normalize();
-      const face = new T.Vector3().crossVectors(N, sd);
-      if (face.lengthSq() > 1e-6) { face.normalize().applyAxisAngle(sd, J.roll * Math.PI / 180); pn = lead ? face.negate() : face; }
-    }
-    pn.applyAxisAngle(sd, GRIP.roll[S] * (lead ? 1 : -1)).normalize();
-    pn.add(towardBody.clone().multiplyScalar(0.0)).normalize();
-    const L = new T.Matrix4().makeBasis(sdL, pnL, new T.Vector3().crossVectors(sdL, pnL));
-    const Wd = new T.Matrix4().makeBasis(sd, pn, new T.Vector3().crossVectors(sd, pn));
+    // local: the shaft lies in the tunnel the curled fingers make (gripLine), club head toward the index finger
+    const gl = gripLine(fig, S), sdL = gl.dir; pLocal = gl.mid.clone();
+    const uL = hr.wr.clone().sub(pLocal).projectOnPlane(sdL).normalize();
+    // world: the hand turns about the shaft until its wrist is on the side its own elbow is, so the forearm runs
+    // straight into the hand, the way a real grip works. (Setting the palms from the swing plane, or from a fixed side,
+    // bent the wrists 85-105 degrees and left the shaft outside the fingers.)
+    // "Its own elbow" alone is not steady: in the swing data the forearm ends on the shaft itself, so as the wrists hinge
+    // the forearm passes through the line of the shaft and the elbow's side flips, spinning the hand half a turn in two
+    // frames. The shoulder is further off the shaft's line, and the chest sits off both arms' lines, which steadies the moment after impact
+    // when the club passes the arms, so the side is taken from all three together.
+    const sh = A(lead ? J.ls : J.ts);
+    let e1 = el.clone().sub(hp).multiplyScalar(GRIP.ew).add(sh.sub(hp).multiplyScalar(GRIP.sw)).addScaledVector(A(J.chest || J.neck).sub(hp).normalize(), GRIP.up).projectOnPlane(sd);
+    if (e1.lengthSq() < 1e-6) e1 = new T.Vector3(0, 1, 0).projectOnPlane(sd);
+    e1.normalize();
+    // the swing data already says where each wrist sits off the shaft (lw / tw, placed with the same rule): turn the hand
+    // to that exact side, so the forearm meets the hand where the arm was solved and the shaft stays in the fingers
+    const wj = lead ? J.lw : J.tw;
+    if (wj) { const w1 = A(wj).sub(hp).projectOnPlane(sd), r = w1.length(); if (r > 0.05 && r < 0.16 && w1.dot(e1) > 0.5 * r) e1 = w1.normalize(); }
+    const L = new T.Matrix4().makeBasis(sdL, uL, new T.Vector3().crossVectors(sdL, uL));
+    const Wd = new T.Matrix4().makeBasis(sd, e1, new T.Vector3().crossVectors(sd, e1));
     Rw = Wd.multiply(L.transpose()); pWorld = hp; curl = 1; thumb = lead ? 0.25 : 0.6;
   } else {
     // relaxed hand, palm toward the body
@@ -357,20 +374,41 @@ function handFrame(J, S, lead, fig) {
 // fingers: each finger curls round its knuckle joints; the thumb less
 const _c = new T.Matrix4();
 const CURL = { f: [1.0, 1.25, 0.9], t: [0.25, 0.45, 0.5], sign: { L: -1, R: 1 }, ts: { L: 1, R: -1 } };
+function curlRot(fig, hr, S, f, j, curl, thumb) {   // the turn of finger f's joint j, in the hand's rest space
+  const b = fig.meta.bones[fig.meta.bi['f' + f + j + S]], bd = b.T.clone().sub(b.H).normalize();
+  const ax = f === 1 ? new T.Vector3().crossVectors(bd, hr.palm).normalize() : hr.across.clone();
+  const ang = (f === 1 ? CURL.t[j - 1] * thumb : CURL.f[j - 1] * curl * (1 + (f - 2) * 0.06)) * CURL.sign[S] * (f === 1 ? CURL.ts[S] : 1);
+  return new T.Matrix4().makeTranslation(b.H.x, b.H.y, b.H.z).multiply(new T.Matrix4().makeRotationAxis(ax, ang)).multiply(new T.Matrix4().makeTranslation(-b.H.x, -b.H.y, -b.H.z));
+}
 function fingers(fig, S, Mh, curl, thumb) {
   const hr = handRest(fig, S);
   for (let f = 1; f <= 5; f++) {
     let acc = Mh.clone();
     for (let j = 1; j <= 3; j++) {
       const b = fig.meta.bones[fig.meta.bi['f' + f + j + S]];
-      const bd = b.T.clone().sub(b.H).normalize();
-      const ax = f === 1 ? new T.Vector3().crossVectors(bd, hr.palm).normalize() : hr.across.clone();
-      const ang = (f === 1 ? CURL.t[j - 1] * thumb : CURL.f[j - 1] * curl * (1 + (f - 2) * 0.06)) * CURL.sign[S] * (f === 1 ? CURL.ts[S] : 1);
-      const rot = new T.Matrix4().makeTranslation(b.H.x, b.H.y, b.H.z).multiply(new T.Matrix4().makeRotationAxis(ax, ang)).multiply(new T.Matrix4().makeTranslation(-b.H.x, -b.H.y, -b.H.z));
-      acc = acc.multiply(rot);
+      acc = acc.multiply(curlRot(fig, hr, S, f, j, curl, thumb));
       fig.bones[fig.meta.bi['f' + f + j + S]].matrix.copy(acc.clone().multiply(new T.Matrix4().makeTranslation(b.H.x, b.H.y, b.H.z)));
     }
   }
 }
-root.CCGolfer = { load, make, ready: () => !!DATA && DONE, restPose, GRIP, CURL, _fingers: fingers, _handRest: handRest };
+// Where a shaft sits in a closed hand, in the hand's rest space: for the index and little fingers, the centre of the
+// circle through the knuckle and the two finger joints once the finger is curled. The shaft runs through both centres.
+function circum(a, b, c) {
+  const ab = b.clone().sub(a), ac = c.clone().sub(a), n = new T.Vector3().crossVectors(ab, ac), d = 2 * n.lengthSq();
+  if (d < 1e-12) return a.clone().add(c).multiplyScalar(0.5);
+  const t = new T.Vector3().crossVectors(n, ab).multiplyScalar(ac.lengthSq()).add(new T.Vector3().crossVectors(ac, n).multiplyScalar(ab.lengthSq())).multiplyScalar(1 / d);
+  return a.clone().add(t);
+}
+function gripLine(fig, S) {
+  const m = fig.meta; if (m['gl' + S]) return m['gl' + S];
+  const hr = handRest(fig, S), cs = [], rs = [];
+  for (const f of [2, 5]) {
+    let acc = new T.Matrix4(); const P = [];
+    for (let j = 1; j <= 3; j++) { const b = m.bones[m.bi['f' + f + j + S]]; P.push(b.H.clone().applyMatrix4(acc)); acc = acc.multiply(curlRot(fig, hr, S, f, j, 1, 0)); if (j === 3) P.push(b.T.clone().applyMatrix4(acc)); }
+    const c = circum(P[0], P[1], P[2]); cs.push(c); rs.push(c.distanceTo(P[0]));
+  }
+  const dir = cs[0].clone().sub(cs[1]).normalize(), mid = cs[0].clone().add(cs[1]).multiplyScalar(0.5);
+  return (m['gl' + S] = { dir, mid, r: rs });
+}
+root.CCGolfer = { load, make, ready: () => !!DATA && DONE, restPose, GRIP, CURL, _fingers: fingers, _handRest: handRest, _gripLine: gripLine };
 })(typeof window !== 'undefined' ? window : this);

@@ -13,7 +13,7 @@ def measures(m):
     F, ph, fps = m['frames'], m['phases'], m.get('fps', 60)
     f = lambda k: F[ph[k]]
     out = {}
-    for k in ('address', 'top', 'impact'): out['lead_elbow_' + k] = ang(f(k)['ls'], f(k)['le'], f(k)['lh'])
+    for k in ('address', 'top', 'impact'): out['lead_elbow_' + k] = ang(f(k)['ls'], f(k)['le'], f(k)['lw'])
     a = f('address')
     out['shoulder_turn_top'] = abs(yaw(f('top')['Lt']) - yaw(a['Lt'])); out['hip_turn_top'] = abs(yaw(f('top')['H']) - yaw(a['H']))
     out['x_factor_top'] = out['shoulder_turn_top'] - out['hip_turn_top']
@@ -27,7 +27,7 @@ def measures(m):
 CHECKS = {   # name: (low, high)
     'lead_elbow_address': (155, 181), 'lead_elbow_top': (150, 181), 'lead_elbow_impact': (155, 181),
     'shoulder_turn_top': (85, 110), 'hip_turn_top': (38, 58), 'x_factor_top': (38, 62), 'hips_open_impact': (25, 50),
-    'tempo': (2.6, 3.4), 'downswing_s': (0.2, 0.36), 'head_move_cm': (0, 12)}
+    'tempo': (2.6, 3.4), 'downswing_s': (0.2, 0.36), 'head_move_cm': (0, 8)}
 
 if __name__ == '__main__':
     m = json.load(open(sys.argv[1])); r = measures(m); bad = 0
