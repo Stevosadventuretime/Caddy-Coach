@@ -156,12 +156,13 @@ const DRILL_ALIAS={downPlane:'ott'};
 const drillsForCheck=id=>{const k=DRILLS.some(d=>d.fixes.includes(id))?id:(DRILL_ALIAS[id]||id);return DRILLS.filter(d=>d.fixes.includes(k)).sort((a,b)=>a.fixes.indexOf(k)-b.fixes.indexOf(k))};
 function pickPair(a){const ds=drillsFor(a);const r=ds.find(d=>d.where!=='home'),h=ds.find(d=>d.where!=='range'&&d!==r);return [r,h].filter(Boolean)}
 const whereLabel=w=>w==='both'?'Range or home':w==='range'?'Range':'Home';
+const DRILL_LEVEL=['','Beginner','Intermediate','Advanced'];
 let DF={where:'all',area:'mine'};
 let D3P=null;
 function load3D(){if(D3P)return D3P;D3P=addScript('three.min.js').then(()=>addScript('drillstudio.js')).then(()=>true).catch(()=>addScript('drillstudio.js').then(()=>true).catch(()=>false)).then(ok=>ok&&window.DrillStudio&&DrillStudio.loadSwing?Promise.all([DrillStudio.loadSwing('',8000),DrillStudio.prepTextures&&DrillStudio.prepTextures(8000)]).then(()=>ok):ok).then(ok=>{if(window.DrillStudio&&DrillStudio.setMirror)DrillStudio.setMirror(Hand.get()==='left');if(ok&&window.THREE)addScript('golfer.js').then(()=>window.CCGolfer&&CCGolfer.load('').then(()=>{document.dispatchEvent(new Event('cc-golfer'))})).catch(e=>console.warn('Realistic golfer unavailable',e));return ok});return D3P}
 function drillCard(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))].slice(0,3),lk=typeof guestDrillLocked==='function'&&guestDrillLocked(d.id);
  return `<button type="button" class="dcard${lk?' dLocked':''}" id="drill-${d.id}" data-open="${d.id}"${lk?' aria-label="'+esc(d.name)+': create a free profile to watch"':''}><span class="dposter"><img alt="" data-poster="${d.id}" hidden><span class="${lk?'dlock':'dplay'}" aria-hidden="true"></span></span>
- <span class="dbody"><span class="dname">${esc(d.name)}</span><span class="dby">${esc(d.by)}</span>
+ <span class="dbody"><span class="dname">${esc(d.name)}</span><span class="dby">${esc(d.aim||d.by||'')}</span>
  <span class="dfix">${fx.map(f=>`<span>${esc(f)}</span>`).join('')}</span>
  <span class="dmeta">${whereLabel(d.where)} · ${esc(d.time)}</span></span></button>`}
 function weakAreas(scores){return AREAS.filter(a=>scores&&scores[a]!=null&&scores[a]<8).sort((x,y)=>scores[x]-scores[y])}
@@ -218,11 +219,19 @@ function dpHTML(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))];
   </div></div>
  <div class="dpNow" aria-live="polite"><div class="dpDots">${d.steps.map((_,i)=>`<button type="button" data-dp-step="${i}" aria-label="Step ${i+1}"></button>`).join('')}</div><b id="dpStepN"></b><p id="dpStepT"></p><p class="dpFeel" id="dpFeel"></p></div>
  <div class="dpBody">
-  <p class="dpWhy">${esc(d.why)}</p>
-  <p class="dpBy">${esc(d.by)}</p>
-  <div class="dpFacts"><span><b>Where</b>${whereLabel(d.where)}</span><span><b>Kit</b>${esc(d.kit)}</span><span><b>Time</b>${esc(d.time)}</span><span><b>Dose</b>${esc(d.dose)}</span></div>
-  <h3>Step by step</h3><ol class="dpSteps">${d.steps.map((s,i)=>`<li><button type="button" data-dp-step="${i}"><span>${i+1}</span><div>${esc(s)}<em>Feel: ${esc(d.feel[i]||'')}</em></div></button></li>`).join('')}</ol>
-  ${(d.mistakes||[]).length?`<h3>Common mistakes</h3><ul class="dpMist">${d.mistakes.map(m=>`<li>${esc(m)}</li>`).join('')}</ul>`:''}
+  ${d.fault?`<p class="dpFault"><b>What it fixes</b>${esc(d.fault)}</p>`:''}
+  <p class="dpWhy">${d.fault?'<b>Why it matters</b>':''}${esc(d.why)}</p>
+  ${d.by?`<p class="dpBy">${esc(d.by)}</p>`:''}
+  <div class="dpFacts"><span><b>Where</b>${whereLabel(d.where)}</span><span><b>Time</b>${esc(d.time)}</span>${d.level?`<span><b>Level</b>${DRILL_LEVEL[d.level]}</span>`:''}<span><b>Kit</b>${esc(d.kit)}</span>${d.rx?'':`<span><b>Dose</b>${esc(d.dose)}</span>`}</div>
+  ${d.kitAlt?`<p class="dpAlt">${esc(d.kitAlt)}</p>`:''}
+  ${d.setup?`<h3>Setup</h3><p class="dpTxt">${esc(d.setup)}</p>`:''}
+  <h3>Step by step</h3><ol class="dpSteps">${d.steps.map((s,i)=>`<li><button type="button" data-dp-step="${i}"><span>${i+1}</span><div>${esc(s)}${d.feel[i]?`<em>Feel: ${esc(d.feel[i])}</em>`:''}</div></button></li>`).join('')}</ol>
+  ${d.sense?`<h3>What you should feel</h3><p class="dpTxt">${esc(d.sense)}</p>`:''}
+  ${(d.mistakes||[]).length?`<h3>Common mistakes</h3><ul class="dpMist">${d.mistakes.map(m=>Array.isArray(m)?`<li><b>${esc(m[0])}</b> ${esc(m[1])}</li>`:`<li>${esc(m)}</li>`).join('')}</ul>`:''}
+  ${d.rx?`<h3>Practice</h3><p class="dpTxt">${esc(d.rx)}</p>`:''}
+  ${(d.success||[]).length?`<h3>You're doing it right when</h3><ul class="dpOk">${d.success.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+  ${(d.progress||[]).length?`<h3>Take it to the ball</h3><ol class="dpProg">${d.progress.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`:''}
+  ${d.note?`<p class="dpNote">${esc(d.note)}</p>`:''}
   <h3>Fixes</h3><div class="dpFix">${fx.map(f=>`<span>${esc(f)}</span>`).join('')}</div>
   <button type="button" class="liveBtn" data-live="${d.id}"><span class="dot" aria-hidden="true"></span>Practise with live feedback<small>Your camera watches and a voice keeps you in the zone</small></button>
  </div>`}
@@ -893,7 +902,7 @@ function fixCard(c,n,live,open){
  <div class="fixFeel"><b>Practice swings: how it should feel</b><p>${esc(a.feel)}</p>${a.cue?`<b>When you hit: one swing thought</b><p>${esc(a.cue)}</p>`:''}</div>
  ${(()=>{const lib=drillsForCheck(c.id),d0=lib[0];
   if(!d0)return `<details class="fixDrill"${open?' open':''}><summary>Drill: ${esc(a.drill.name)}</summary><ol>${a.drill.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol></details>`;
-  return `<div class="fixDrillBox"><b class="fxLab">The drill that fixes it</b><button type="button" class="watch" data-drill="${d0.id}"><img alt="" data-poster="${d0.id}" hidden><span><b>${esc(d0.name)}</b><span class="dby">${esc(d0.by)}</span><small>Watch the step-by-step demo</small></span></button>
+  return `<div class="fixDrillBox"><b class="fxLab">The drill that fixes it</b><button type="button" class="watch" data-drill="${d0.id}"><img alt="" data-poster="${d0.id}" hidden><span><b>${esc(d0.name)}</b><span class="dby">${esc(d0.aim||d0.by||'')}</span><small>Watch the step-by-step demo</small></span></button>
   ${lib.length>1?`<div class="chips">${lib.slice(1,3).map(d=>`<button type="button" class="chip" data-drill="${d.id}">${esc(d.name)} · ${whereLabel(d.where)}</button>`).join('')}</div>`:''}</div>`})()}
  ${see?`<div class="row" style="gap:12px">${see}</div>`:''}`;
  return open?`<article class="fix open">${head}${body}</article>`:`<details class="fix fixC"><summary>${head}</summary><div class="fixBody">${body}</div></details>`;

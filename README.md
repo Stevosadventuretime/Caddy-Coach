@@ -39,7 +39,7 @@ Live at **https://stevosadventuretime.github.io/Caddy-Coach/** (GitHub Pages, pu
 Run the tests locally:
 
 ```
-node --test tools/test_whs.js tools/golfer/motion/test_drill_motion.js tools/golfer/motion/test_perf.js
+node --test tools/test_whs.js tools/test_drills_content.js tools/golfer/motion/test_drill_motion.js tools/golfer/motion/test_perf.js
 (cd tools/golfer/motion && python -m pytest -q)
 python tools/ci/smoke.py
 ```
