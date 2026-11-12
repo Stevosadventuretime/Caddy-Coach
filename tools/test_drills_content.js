@@ -6,7 +6,7 @@ vm.runInContext(fs.readFileSync(SITE + 'drillstudio.js', 'utf8'), ctx); vm.runIn
 const L = ctx.DRILL_LIBRARY, done = L.filter(d => d.fault);
 const text = d => JSON.stringify([d.name, d.aim, d.fault, d.why, d.kit, d.kitAlt, d.setup, d.steps, d.feel, d.sense, d.mistakes, d.rx, d.success, d.progress, d.note, d.seq.map(k => [k.lab, k.badge, k.say])]);
 test('rewritten drills have the full coaching structure', () => {
-  assert.ok(done.length >= 5, 'benchmark drills ' + done.length);
+  assert.strictEqual(done.length, L.length, 'every drill has the full coaching');
   for (const d of done) {
     for (const f of ['aim', 'cat', 'level', 'fault', 'why', 'kit', 'kitAlt', 'setup', 'sense', 'rx', 'note']) assert.ok(d[f], d.id + ' has ' + f);
     assert.ok(['setup', 'grip', 'backswing', 'transition', 'downswing', 'impact', 'finish'].includes(d.cat), d.id + ' category');
