@@ -1888,7 +1888,7 @@ async function gpsOpen(){const ov=$('gpsOv');ov.hidden=false;if(!BG.bag)BagStore
  if(!site){$('gpsPanel').innerHTML=`<div class="gpsDist"><span class="gpsK">Finding ${esc(c0&&c0.name||'the course')} on the map…</span></div>`;site=await Promise.race([gpsSite(c0),sleep(c0&&c0.lat!=null?1500:4000).then(()=>null)])}
  if(!GPS.map){const L=window.L,c=GPS.course;
   GPS.map=L.map('gpsMapEl',{zoomControl:false,attributionControl:true,maxZoom:20,tap:true});GPS.map.attributionControl.setPrefix(false);GPS.map.setView([c.lat||54,c.lon||-2],c.lat?16:6);
-  const tl=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics | Course data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'}).addTo(GPS.map);
+  const tl=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{crossOrigin:true,maxZoom:20,maxNativeZoom:19,attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics | Course data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'}).addTo(GPS.map);
   tl.on('tileload',()=>GPS.tiles++);tl.on('tileerror',()=>{GPS.tileErr++;if(GPS.tileErr>6&&!GPS.tiles)gpsNote('Satellite imagery isn\'t loading. Check your signal.')});
   GPS.lines=L.layerGroup().addTo(GPS.map);
   GPS.map.on('click',e=>gpsTap(e.latlng))}
