@@ -934,9 +934,9 @@ function hcpMeHTML(){const r=HcpStore.rec;
  const c=WHS.calc(r);
  return `<button type="button" class="hcBox hcTap" data-pf="hcp" aria-label="Handicap estimate ${c.hi==null?'not set yet':WHS.fmt(c.hi)}. Open your handicap record"><span class="hcNum">${c.hi==null?'–':WHS.fmt(c.hi)}</span><span class="hcTxt"><b>Handicap (WHS estimate)</b><small>${esc(hcpSub(c))}</small></span><span class="hcGo" aria-hidden="true">Record</span></button>`}
 const hcpDate=d=>{try{return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}catch(_){return d}};
-function hcpRowHTML(e,row,counts){const s=e.s,n=s.n===9?'9 holes':'18 holes',del=PROF.hcDel===s.id;
+function hcpRowHTML(e,row,counts){const s=e.s,n=s.n===9?'9 holes':s.p&&s.p<18?`${s.p} of 18 holes`:'18 holes',del=PROF.hcDel===s.id;
  const val=e.d+e.adj,adj=e.adj?` <small class="hcEsr">${e.d.toFixed(1)} less ${(-e.adj).toFixed(0)} for an exceptional score</small>`:'';
- return `<li class="hcRow${counts?' on':''}"><div class="hcL"><b>${esc(s.c||'Course')}</b><small>${hcpDate(s.d)} · ${n} · ${s.a}${s.g&&s.g!==s.a?` (${s.g} gross)`:''} · rating ${(+s.cr).toFixed(1)}, slope ${s.sl}</small>${row&&row.d9!=null?`<small>9-hole differential ${row.d9.toFixed(1)}${row.exp!=null?` + ${row.exp.toFixed(1)} expected for the other nine`:row.pair?' + your other nine':''}</small>`:''}${adj}
+ return `<li class="hcRow${counts?' on':''}"><div class="hcL"><b>${esc(s.c||'Course')}</b><small>${hcpDate(s.d)} · ${n} · ${s.p&&s.p<18&&s.ap!=null?s.ap:s.a}${s.g&&s.g!==(s.p&&s.p<18&&s.ap!=null?s.ap:s.a)?` (${s.g} gross)`:''} · rating ${(+s.cr).toFixed(1)}, slope ${s.sl}</small>${row&&row.d9!=null?`<small>9-hole differential ${row.d9.toFixed(1)}${row.exp!=null?` + ${row.exp.toFixed(1)} expected for the other nine`:row.pair?' + your other nine':''}</small>`:''}${row&&row.part?`<small>${row.part.dp.toFixed(1)} for the ${row.part.played} holes played + ${row.part.exp.toFixed(1)} expected for the other ${18-row.part.played}</small>`:''}${adj}
   <button type="button" class="link hcDel" data-pf="hcp-del" data-id="${esc(s.id)}">${del?'Tap again to remove this score':'Remove'}</button></div>
   <div class="hcR"><b>${val.toFixed(1)}</b>${counts?'<span class="hcCount">Counts</span>':''}</div></li>`}
 function hcpRecordHTML(){const r=HcpStore.rec;if(!r||!r.start)return '';const c=WHS.calc(r),byId=new Map(c.rows.map(x=>[x.s.id,x]));
@@ -1023,12 +1023,12 @@ function hcpRoundPreview(r,cr,sl){const rec=HcpStore.rec,n=WHS.eligible(r.holes)
  const cr9=n===9?WHS.rating9(cr):cr,ch=hi==null?null:(n===18?WHS.courseHcp(hi,cr,sl,par):WHS.courseHcp9(hi,cr9,sl,par)),adj=WHS.adjust(r.holes,ch);
  return{n,hi,par,ch,adj,cr,sl}}
 function hcpPreviewText(p){if(!p)return '';const a=p.adj,miss=r=>r.per.filter(x=>x.missing).length;
- return `${p.ch==null?'No index yet, so each hole is capped at par + 5.':`Your course handicap here: <b>${p.ch<0?'+'+(-p.ch):p.ch}</b>.`} Adjusted gross score: <b>${a.ags}</b>${a.capped?` (${a.capped} hole${a.capped===1?'':'s'} capped at net double bogey)`:''}${miss(a)?`, with ${miss(a)} unplayed hole${miss(a)===1?'':'s'} at net par`:''}.${a.siOk?'':' This card has no stroke indexes, so shots are given in hole order.'}`}
+ return `${p.ch==null?'No index yet, so each hole is capped at par + 5.':`Your course handicap here: <b>${p.ch<0?'+'+(-p.ch):p.ch}</b>.`} Adjusted gross score: <b>${miss(a)&&p.ch!=null?a.agsPlayed:a.ags}</b>${miss(a)&&p.ch!=null?` for the ${a.played} holes you played`:''}${a.capped?` (${a.capped} hole${a.capped===1?'':'s'} capped at net double bogey)`:''}.${miss(a)?(p.ch!=null?` The ${miss(a)} hole${miss(a)===1?'':'s'} you didn't play count at your expected score, as the 2024 rules say.`:` With no index yet, the ${miss(a)} hole${miss(a)===1?'':'s'} you didn't play count at par.`):''}${a.siOk?'':' This card has no stroke indexes, so shots are given in hole order.'}`}
 function hcpRoundHTML(r){const rec=HcpStore.rec;if(!rec)return '';
  const rm=new Set(rec.removed),done=rec.scores.find(s=>s.rid===r.id&&!rm.has(s.id));
  if(done){const c=WHS.calc(rec),row=c.rows.find(x=>x.s.id===done.id);
   return `<div class="card hcRound"><h2>Handicap</h2><p class="mut" style="margin:0 0 12px">Submitted. ${row&&row.waiting?'This 9-hole score counts once you add a second nine.':`Score differential <b>${row?row.d.toFixed(1):'–'}</b>. Your handicap estimate is <b>${c.hi==null?'not set yet':WHS.fmt(c.hi)}</b>.`}</p><button type="button" data-rt="hcp-open">See your handicap record</button></div>`}
- const n=WHS.eligible(r.holes);if(!n)return `<div class="card hcRound"><h2>Handicap</h2><p class="mut" style="margin:0">This round can't count for your handicap: a score needs at least 14 of 18 holes, or 7 of 9.</p></div>`;
+ const n=WHS.eligible(r.holes);if(!n)return `<div class="card hcRound"><h2>Handicap</h2><p class="mut" style="margin:0">This round can't count for your handicap: a score needs at least 10 of the 18 holes, or all 9 of a 9-hole round.</p></div>`;
  if(!rec.start)return `<div class="card hcRound"><h2>Handicap</h2><p class="mut" style="margin:0 0 12px">Set your starting handicap in your profile, then rounds like this one can count towards it.</p><button type="button" data-rt="hcp-open-start">Set your starting handicap</button></div>`;
  hcpTeeLookup(r);const t=RT.hcTee[r.id]||{},f=RT.hcF&&RT.hcF.id===r.id?RT.hcF:{id:r.id,cr:r.cr!=null?String(r.cr):t.cr!=null?String(t.cr):'',sl:r.sl!=null?String(r.sl):t.sl!=null?String(t.sl):''};RT.hcF=f;
  const cr=+String(f.cr).replace(',','.'),sl=+f.sl,okN=cr>=25&&cr<=85&&sl>=55&&sl<=155,p=okN?hcpRoundPreview(r,cr,sl):null;
@@ -1042,7 +1042,7 @@ async function hcpSubmitRound(r){const f=RT.hcF||{},cr=+String(f.cr).replace(','
  if(!(cr>=25&&cr<=85))RT.hcErr='Enter the course rating from the scorecard, like 70.4.';else if(n===18&&cr<50)RT.hcErr='That looks like a 9-hole rating. Use the 18-hole rating, like 70.4.';else if(!(sl>=55&&sl<=155&&Number.isInteger(sl)))RT.hcErr='Enter the slope from the scorecard: a whole number from 55 to 155.';
  if(RT.hcErr)return rtRender();
  const p=hcpRoundPreview(r,cr,sl);if(!p)return;
- await hcpAdd({id:'r'+r.id,rid:r.id,d:r.date,t:r.finishedAt||r.createdAt||Date.now(),n,cr:Math.round(cr*10)/10,sl,par:p.par,g:p.adj.gross,a:p.adj.ags,c:r.course.name,tee:r.tee.name,src:'round'});
+ await hcpAdd({id:'r'+r.id,rid:r.id,d:r.date,t:r.finishedAt||r.createdAt||Date.now(),n,cr:Math.round(cr*10)/10,sl,par:p.par,g:p.adj.gross,a:p.adj.ags,...(n===18&&p.adj.played<18?{ap:p.adj.agsPlayed,p:p.adj.played}:{}),c:r.course.name,tee:r.tee.name,src:'round'});
  // remember the rating and slope on the course so they're filled in next time
  try{const c=await RStore.getCourse(r.course.key);if(c&&c.tees){const t=c.tees.find(x=>x.name===r.tee.name);if(t&&(t.rating!==cr||t.slope!==sl)){t.rating=cr;t.slope=sl;await RStore.saveCourse(c);if(RT.course&&keyBase(RT.course.key)===keyBase(c.key)){const t2=RT.course.tees.find(x=>x.name===r.tee.name);if(t2){t2.rating=cr;t2.slope=sl}}}}}catch(_){}
  RT.hcTee[r.id]={cr,sl};toast(hcpAfterNote('r'+r.id).replace('Score added','Submitted'));rtRender()}
