@@ -270,12 +270,13 @@ const TracerUI = {
       note = `Traced from ${obs.length} sightings of your ball after impact. Distance comes from your ${club.name} (edit it below).`;
     } else {
       shot = { D: club.carry * YD, H: club.apex, az: 0, curve: 0, pa: 0.6 }; camp = fx;
-      note = `The ball was too small or fast to follow in this video, so the flight is your ${club.name}'s typical height and distance${target ? ', sent where you tapped' : ''}. Drag the landing point or edit it below.`;
+      note = `I couldn't see the ball clearly enough in this video to follow it, so this line is your ${club.name}'s typical height and distance${target ? ', sent where you tapped' : ''}, not your actual shot. Drag the landing point or set the shape you saw below.`;
       // what would help next time
       if (this._fps && this._fps < 45) note += ` This video is about ${this._fps} frames a second; at 60 the ball is much easier to follow.`;
       else note += ' Next time, film from low down right behind the ball with the phone kept still (tap How to film it above).';
     }
-    this.st = { W, H, start, t0, shot, camp, club, obs, note: (impNote ? impNote + ' ' : '') + note, strike: null, target };
+    // guess: the ball wasn't followed, so the flight is the club's typical one (nothing about the swing can be read from it)
+    this.st = { W, H, start, t0, shot, camp, club, obs, note: (impNote ? impNote + ' ' : '') + note, strike: null, target, guess: obs.length < 4, userSet: false };
     this.rebuildCam();
     if (target) Tr.aimAt(this.st, target);
     this.fitCorr();
@@ -379,7 +380,7 @@ const TracerUI = {
     // the sightings, lightly smoothed, starting from the ball at the moment of impact
     const o = (s.obs || []).filter(x => x.t > s.t0); s.seen = null;
     if (o.length >= 4) { const sm = o.map((x, i) => { const a = o[Math.max(0, i - 1)], b = o[Math.min(o.length - 1, i + 1)]; return { t: x.t, x: (a.x + 2 * x.x + b.x) / 4, y: (a.y + 2 * x.y + b.y) / 4 }; }); sm[0] = o[0]; s.seen = [{ t: s.t0, x: s.start.x, y: s.start.y }].concat(sm); } },
-  edited() { if (this.st) this.st.seen = null; if (this.ready) { this.ready = null; this.q('#trSaveVid').textContent = 'Save video to Photos'; } },
+  edited() { if (this.st) { this.st.seen = null; this.st.userSet = true; } if (this.ready) { this.ready = null; this.q('#trSaveVid').textContent = 'Save video to Photos'; } },
   dragTo(which, x, y, clientY) {
     const s = this.st; this.edited();
     if (which === 'start') { s.start = { x, y, r: s.start.r }; s.corr = null; this.rebuildCam(); this.render(); return; }
@@ -485,6 +486,7 @@ const TracerUI = {
     const fs = Math.round(W / 34), pad = fs * 0.8, lefty = this.lefty();
     const rows = [[s.club.name.toUpperCase(), ''], ['Carry', `${Math.round(s.shot.D / YD)} yd`], ['Apex', `${Math.round(s.shot.H / YD)} yd`], ['Shape', T().describeShape(s.shot, lefty)]];
     if (s.strike) rows.push(['Strike', s.strike]);
+    if (s.guess) rows.push(['Flight', s.userSet ? 'Set by hand' : 'Estimated']);
     x.save(); x.font = `600 ${fs}px system-ui,sans-serif`;
     const w = Math.max(...rows.map(r => x.measureText(r[0] + '    ' + r[1]).width)) + pad * 2, h = rows.length * fs * 1.45 + pad * 1.2, x0 = pad, y0 = pad;
     x.fillStyle = 'rgba(7,17,11,.72)'; x.beginPath(); x.roundRect ? x.roundRect(x0, y0, w, h, fs * 0.6) : x.rect(x0, y0, w, h); x.fill();
@@ -507,9 +509,12 @@ const TracerUI = {
     const c = m * sh.curve / sh.D * 100; set('#trCurve', c.toFixed(1), Math.abs(c) < 0.5 ? 'None' : `${Math.round(Math.abs(c * sh.D / 100) / YD)} yd ${c > 0 ? 'right' : 'left'}`);
     const dt = Math.round((s.t0 - s.auto.t0) * 1000); set('#trTime', dt, dt ? `${dt > 0 ? '+' : ''}${dt} ms` : 'Auto');
     q('#trShapeNow').textContent = desc;
-    const fp = T().faceAndPath(sh, lefty), why = q('#trWhy');
-    if (why) why.innerHTML = `<b>What your ball flight says</b><br>Clubface about <b>${fp.faceTxt}</b> to the target, swing path <b>${fp.pathTxt}</b>. ${fp.why} <span class="mut">Fix: ${fp.fix}</span> <span class="mut" style="font-size:.8rem">Estimated from the start line and curve, so treat it as a guide.</span>`;
-    try { localStorage.setItem('cc_lastflight', JSON.stringify(Object.assign({ t: Date.now(), shape: desc }, fp))); } catch (_) {}
+    const fp = T().faceAndPath(sh, lefty), why = q('#trWhy'), unread = s.guess && !s.userSet;
+    // a flight the tracer didn't actually see says nothing about the swing, until the golfer sets the shape they saw
+    if (why) why.innerHTML = unread
+      ? `<b>What your ball flight says</b><br>I couldn't see the ball clearly enough to read your clubface and swing path. Pick the shape you saw above, or drag the landing point, and I'll explain it.`
+      : `<b>What your ball flight says</b><br>Clubface about <b>${fp.faceTxt}</b> to the target, swing path <b>${fp.pathTxt}</b>. ${fp.why} <span class="mut">Fix: ${fp.fix}</span> <span class="mut" style="font-size:.8rem">${s.guess ? 'Worked out from the flight as you set it' : 'Estimated from the start line and curve'}, so treat it as a guide.</span>`;
+    if (!unread) try { localStorage.setItem('cc_lastflight', JSON.stringify(Object.assign({ t: Date.now(), shape: desc }, fp))); } catch (_) {}
   },
 
   // ---------- export ----------
