@@ -1408,6 +1408,9 @@ body.scrolled .topbar{border-bottom-color:var(--line)}
 .tabbar button[aria-current="page"] svg{background:var(--green-soft);color:var(--green)}
 .tabbar button:focus-visible svg{outline:2px solid var(--green);outline-offset:1px}
 .ccToast{bottom:calc(env(safe-area-inset-bottom,0px) + var(--tabh) + 14px)!important}
+.ccUpd{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + var(--tabh,64px) + 12px);z-index:2100;max-width:520px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 10px 10px 16px;border-radius:16px;background:var(--fairway,#103a27);color:#f3f6f1;font:500 15px/1.35 var(--f-ui);box-shadow:0 10px 30px -10px rgba(8,20,13,.45)}
+.ccUpd span{flex:1}.ccUpd button{min-height:40px;padding:0 16px;border-radius:999px;border:0;background:#f3f6f1;color:var(--fairway,#103a27);font:600 15px/1 var(--f-ui)}
+.ccUpd button:focus-visible{outline:2px solid #f3f6f1;outline-offset:2px}
 .gKeep{background:var(--green-soft,#e3f1e8);border-bottom:1px solid var(--line2,#d0d8d1);color:var(--ink,#0f1813)}
 .gKeepIn{max-width:720px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center}
 .gKeepIn p{margin:0;flex:1;font:400 14px/1.45 var(--f-ui)}
@@ -2218,5 +2221,25 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 <script src="app-2.js"></script>
 <script src="app-3.js"></script>
 
-<script>if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(e=>console.warn('Offline mode unavailable',e)));</script>
+<script>
+// Offline support, and getting updates in one launch: the app opens from the copy saved on the phone and fetches any new
+// version in the background. When the new version takes over, switch to it straight away if the golfer has only just
+// opened the app; otherwise offer a Refresh bar, and switch by itself the next time the app comes back to the screen,
+// never in the middle of an analysis, a drill, a form or typing.
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'))(()=>{
+ const t0=Date.now();let touched=false,ready=false,reg=null,lastCheck=0;
+ const hadCtl=!!navigator.serviceWorker.controller;
+ addEventListener('pointerdown',()=>{touched=true},{capture:true,passive:true});addEventListener('keydown',()=>{touched=true},true);
+ const calm=()=>{try{const a=document.activeElement,typing=a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.isContentEditable);
+  const prof=document.getElementById('prof');return !typing&&!(typeof busy!=='undefined'&&busy)&&!(typeof DP!=='undefined'&&DP.el)&&!(prof&&!prof.hidden&&!(typeof PROF!=='undefined'&&['boot','welcome','gate','me','privacy','settings'].includes(PROF.mode)&&!Object.values(PROF.f||{}).some(v=>v)))&&!document.getElementById('shareAsk')&&!(typeof TracerUI!=='undefined'&&TracerUI.exporting)&&!((document.getElementById('trProg')||{hidden:true}).hidden===false)}catch(_){return false}};
+ const go=()=>location.reload();
+ function bar(){if(document.getElementById('ccUpd'))return;const el=document.createElement('div');el.id='ccUpd';el.className='ccUpd';el.setAttribute('role','status');
+  el.innerHTML='<span>A new version of Caddy Coach is ready.</span><button type="button">Refresh</button>';el.querySelector('button').onclick=go;document.body.appendChild(el)}
+ navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!hadCtl||ready)return;ready=true;   // the first install isn't an update
+  if(!touched&&Date.now()-t0<15000&&calm())go();else bar()});
+ const check=()=>{if(reg&&Date.now()-lastCheck>60000){lastCheck=Date.now();reg.update().catch(()=>{})}};
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')return;if(ready&&calm())go();else check()});
+ addEventListener('load',()=>navigator.serviceWorker.register('sw.js').then(r=>{reg=r;lastCheck=Date.now()}).catch(e=>console.warn('Offline mode unavailable',e)));
+})();
+</script>
 </body></html>
