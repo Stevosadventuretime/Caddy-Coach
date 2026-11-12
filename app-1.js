@@ -157,6 +157,7 @@ const drillsForCheck=id=>{const k=DRILLS.some(d=>d.fixes.includes(id))?id:(DRILL
 function pickPair(a){const ds=drillsFor(a);const r=ds.find(d=>d.where!=='home'),h=ds.find(d=>d.where!=='range'&&d!==r);return [r,h].filter(Boolean)}
 const whereLabel=w=>w==='both'?'Range or home':w==='range'?'Range':'Home';
 const DRILL_LEVEL=['','Beginner','Intermediate','Advanced'];
+const DRILL_CATS=[['setup','Setup'],['grip','Grip'],['backswing','Backswing'],['transition','Transition'],['downswing','Downswing'],['impact','Impact'],['finish','Finish']];
 let DF={where:'all',area:'mine'};
 let D3P=null;
 function load3D(){if(D3P)return D3P;D3P=addScript('three.min.js').then(()=>addScript('drillstudio.js')).then(()=>true).catch(()=>addScript('drillstudio.js').then(()=>true).catch(()=>false)).then(ok=>ok&&window.DrillStudio&&DrillStudio.loadSwing?Promise.all([DrillStudio.loadSwing('',8000),DrillStudio.prepTextures&&DrillStudio.prepTextures(8000)]).then(()=>ok):ok).then(ok=>{if(window.DrillStudio&&DrillStudio.setMirror)DrillStudio.setMirror(Hand.get()==='left');if(ok&&window.THREE)addScript('golfer.js').then(()=>window.CCGolfer&&CCGolfer.load('').then(()=>{document.dispatchEvent(new Event('cc-golfer'))})).catch(e=>console.warn('Realistic golfer unavailable',e));return ok});return D3P}
@@ -164,7 +165,8 @@ function drillCard(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))].slice(0,3)
  return `<button type="button" class="dcard${lk?' dLocked':''}" id="drill-${d.id}" data-open="${d.id}"${lk?' aria-label="'+esc(d.name)+': create a free profile to watch"':''}><span class="dposter"><img alt="" data-poster="${d.id}" hidden><span class="${lk?'dlock':'dplay'}" aria-hidden="true"></span></span>
  <span class="dbody"><span class="dname">${esc(d.name)}</span><span class="dby">${esc(d.aim||d.by||'')}</span>
  <span class="dfix">${fx.map(f=>`<span>${esc(f)}</span>`).join('')}</span>
- <span class="dmeta">${whereLabel(d.where)} · ${esc(d.time)}</span></span></button>`}
+ <span class="dmeta">${whereLabel(d.where)} · ${esc(d.time)}${d.level?` · <span class="dlvl l${d.level}">${DRILL_LEVEL[d.level]}</span>`:''}</span>
+ <span class="dkit">Kit: ${esc(d.kit)}</span></span></button>`}
 function weakAreas(scores){return AREAS.filter(a=>scores&&scores[a]!=null&&scores[a]<8).sort((x,y)=>scores[x]-scores[y])}
 function renderDrills(){
  const mine=LAST?weakAreas(LAST.scores):[];
@@ -173,14 +175,14 @@ function renderDrills(){
  const dkey=JSON.stringify([DF.where,DF.area,mine,mine.length?LAST.scores:0,Hand.get(),DRILLS.length]);
  if(!(dkey===renderDrills.key&&$('drillList').children.length)){renderDrills.key=dkey;
  $('whereChips').innerHTML=[['all','All'],['range','On the range'],['home','At home']].map(([k,l])=>`<button type="button" class="chip${DF.where===k?' on':''}" data-w="${k}">${l}</button>`).join('');
- const areaOpts=(mine.length?[['mine','For my swing']]:[]).concat([['all','All areas']],AREAS.filter(a=>drillsFor(a).length).map(a=>[a,areaName(a)]));
+ const areaOpts=(mine.length?[['mine','For my swing']]:[]).concat([['all','All drills']],DRILL_CATS.filter(([k])=>DRILLS.some(d=>d.cat===k)));
  $('areaChips').innerHTML=areaOpts.map(([k,l])=>`<button type="button" class="chip${DF.area===k?' on':''}" data-a="${esc(k)}">${esc(l)}</button>`).join('');
  $('whereChips').querySelectorAll('button').forEach(b=>b.onclick=()=>{DF.where=b.dataset.w;renderDrills()});
  $('areaChips').querySelectorAll('button').forEach(b=>b.onclick=()=>{DF.area=b.dataset.a;renderDrills()});
  let ds=DRILLS.filter(d=>DF.where==='all'||d.where===DF.where||d.where==='both');
  if(DF.area==='mine'){const best=d=>Math.min(...d.areas.map(a=>mine.includes(a)?LAST.scores[a]:99));ds=ds.filter(d=>d.areas.some(a=>mine.includes(a))).sort((p,q)=>best(p)-best(q))}
- else if(DF.area!=='all')ds=ds.filter(d=>d.areas.includes(DF.area));
- $('drillList').innerHTML=ds.length?ds.map(drillCard).join(''):'<p class="mut">No drills match these filters.</p>';
+ else if(DF.area!=='all')ds=ds.filter(d=>d.cat===DF.area);
+ $('drillList').innerHTML=ds.length?`<p class="dcount mut">${ds.length} drill${ds.length>1?'s':''}</p>`+ds.map(drillCard).join(''):'<p class="mut">No drills match these filters.</p>';
  posters();}
  renderPlan().catch(e=>console.error(e));$('planTop').hidden=!mine.length;if(mine.length)$('planTop').innerHTML=planHTML(LAST.scores,true);
 }

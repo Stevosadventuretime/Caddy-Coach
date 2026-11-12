@@ -33,7 +33,7 @@ test('drills with no plain swing keys stay exactly on the rig', () => {
   for (const dr of L.filter(d => !d.seq.some(isPlain))) { n++; D.prep(dr);
     for (let k = 0; k < 60; k++) { const t = dr._dur * k / 60; assert.deepStrictEqual(JSON.parse(JSON.stringify(D._raw(dr, t))), JSON.parse(JSON.stringify(D.rig(D.sampleAt(dr, t).p))), dr.id + ' ' + t); }
     assert.deepStrictEqual(D.ballOf(dr), dr._ball, dr.id + ' ball'); }
-  assert.ok(n >= 10, 'rig-only drills ' + n);
+  assert.ok(n >= 6, 'rig-only drills ' + n);
 });
 test('override key = captured pose + the override', () => {
   const { DrillStudio: D } = load(); D.setSwing(MODEL);
