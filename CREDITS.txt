@@ -40,3 +40,6 @@ Course maps (holes, greens and tees)
   Course data © OpenStreetMap contributors, available under the Open Database Licence (ODbL 1.0):
   https://www.openstreetmap.org/copyright
   The shared hole maps in Caddy Coach are built partly from OpenStreetMap data and partly from golfers' own mapping.
+
+Fonts: Archivo (The Archivo Project Authors) and Instrument Sans (The Instrument Sans Project Authors), SIL Open Font
+License 1.1, served from fonts/ with the app (licences in fonts/OFL-*.txt).
