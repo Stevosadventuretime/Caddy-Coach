@@ -1107,6 +1107,7 @@ async function profSubmit(kind){profCollect();PROF.err={};
      if(err.status===422&&/already|registered|exists/i.test(err.message+err.code))r='taken';
      else if(err.code==='needs_confirm'){PROF.err._form='Your account was made, but the app\'s server is asking for email confirmation. The app owner needs to turn off "Confirm email" in Supabase.';return profRender()}
      else if(err.status===422||/weak|password/i.test(err.message)){PROF.err.pfPw1='The server says that password isn\'t strong enough. Try a longer one.';return profRender()}
+     else if(err.code==='too_many_signups'){PROF.err._form='Too many new accounts have been made from this connection recently. Try again in an hour, or on a different network.';return profRender()}
      else if(err.status===429){PROF.err._form='Too many tries. Wait a minute and try again.';return profRender()}
      else{PROF.err._form='Couldn\'t create your account just now. Check your signal and try again.';return profRender()}}
     if(!r){try{r=await PDir.create(p)}catch(_){r='error'}if(r!=='ok'){try{await sbRpc('delete_my_account')}catch(_){}await Auth.signOut()}}}}
@@ -1435,7 +1436,7 @@ async function psOpen(){const o=psEl();o.hidden=false;PS.open=true;PS.sheet=fals
  PS.c=await psCourse();PS.holes=(PS.c.tees&&PS.c.tees[0]&&PS.c.tees[0].holes||[]).map(h=>h.n);if(!PS.holes.length)PS.holes=Array.from({length:18},(_,i)=>i+1);
  await pinsLoad(PS.c,true);PS.picks={};PINS.rows.filter(r=>r.source==='club').forEach(r=>{if(!PS.picks[r.hole])PS.picks[r.hole]={lat:r.lat,lon:r.lon,saved:true}});PS.i=0;PS.err='';
  const L=window.L;if(!PS.map){PS.map=L.map('psMap',{zoomControl:false,maxZoom:20}).setView([PS.c.lat||54,PS.c.lon||-2],17);
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics | Course data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'}).addTo(PS.map);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{crossOrigin:true,maxZoom:20,maxNativeZoom:19,attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics | Course data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'}).addTo(PS.map);
   PS.map.on('click',ev=>{PS.picks[PS.holes[PS.i]]={lat:ev.latlng.lat,lon:ev.latlng.lng};psDraw()})}
  setTimeout(()=>PS.map.invalidateSize(),60);
  if(navigator.geolocation&&PS.watch==null)PS.watch=navigator.geolocation.watchPosition(p=>{PS.pos={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy};psPanel()},()=>{},{enableHighAccuracy:true,maximumAge:3000});
