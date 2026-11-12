@@ -1,8 +1,9 @@
 // Caddy Coach: body tracking in a background thread, so several frames are worked on at once on phones with
 // more than one core. Same model and the same code as on the page; frames arrive as JPEG blobs.
 self.window = self;
-importScripts('tflite.js', 'pose.js', 'models.js');
+importScripts('tflite.js', 'pose.js');
 const ab = s => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; };
+// the page sends the models with the first message; an older page that doesn't, gets them from the text copy
 let pose = null, cv = null, cx = null;
 function sampler(src) {
   return (dst, S, roi, lo, hi) => {
@@ -17,7 +18,7 @@ const slim = r => r && { pts: r.pts, world: r.world, roi: r.roi, next: r.next };
 self.onmessage = async e => {
   const m = e.data;
   try {
-    if (!pose) pose = new BlazePose.Pose(ab(POSE_MODELS.det), ab(POSE_MODELS.lm));
+    if (!pose) { if (m.det && m.lm) pose = new BlazePose.Pose(m.det, m.lm); else { importScripts('models.js'); pose = new BlazePose.Pose(ab(POSE_MODELS.det), ab(POSE_MODELS.lm)); self.POSE_MODELS = null; } }
     if (m.type === 'warm') { self.postMessage({ id: m.id, ok: true }); return; }
     // jobs: [{i, blob, roi}] ; chain: each frame starts from the one before it
     const out = []; let roi = m.roi || null;

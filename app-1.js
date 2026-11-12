@@ -290,7 +290,7 @@ document.addEventListener('click',async e=>{
 let LIVEP=null,GRIPP=null,HANDM=null;
 function addScript(src){return new Promise((res,rej)=>{const e=document.createElement('script');if(/^https?:/.test(src))e.crossOrigin='anonymous';e.src=src;e.onload=()=>res(true);e.onerror=()=>rej(new Error(src));document.head.appendChild(e)})}
 function loadGrip(){if(GRIPP)return GRIPP;GRIPP=loadLive().then(()=>addScript('hand.js')).then(()=>addScript('grip.js')).catch(e=>{GRIPP=null;throw e});return GRIPP}
-async function getGripModels(){const pose=await getPose();if(!HANDM){if(!window.HAND_MODEL)await addScript('hand_model.js');const b=atob(HAND_MODEL),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);HANDM=new HandModel.Hand(u.buffer)}return{pose,hand:HANDM}}
+async function getGripModels(){const pose=await getPose();if(!HANDM)HANDM=new HandModel.Hand(await modelBuf('hand'));return{pose,hand:HANDM}}
 document.addEventListener('click',async e=>{const b=e.target.closest('#gripLive');if(!b)return;b.disabled=true;
  try{await loadGrip();GripCoach.GripUI.open({getModels:getGripModels,makeSampler,esc,hand:$('hand').value||'right',onClose:()=>b.focus()})}catch(_){alert('The grip check could not load. Check your connection and try again.')}finally{b.disabled=false}});
 function loadLive(){if(LIVEP)return LIVEP;LIVEP=new Promise((res,rej)=>{const e=document.createElement('script');e.src='live.js';e.onload=()=>res(true);e.onerror=()=>{LIVEP=null;rej(new Error('live'))};document.head.appendChild(e)});return LIVEP}
@@ -386,16 +386,27 @@ function makeSampler(){
 const PW={workers:null,ok:null,seq:0,
  n(){const c=navigator.hardwareConcurrency||2;return Math.max(1,Math.min(4,c-1))},
  async init(){if(this.ok!=null)return this.ok;try{if(typeof Worker==='undefined'||typeof OffscreenCanvas==='undefined'||!window.createImageBitmap||this.n()<2)return this.ok=false;
+   // each thread gets its own copy of the models (5.8 MB), sent once, rather than loading and decoding the text copy itself
+   const det=await modelBuf('det'),lm=await modelBuf('lm');
    this.workers=Array.from({length:this.n()},()=>new Worker('posework.js'));
-   await Promise.race([Promise.all(this.workers.map(w=>this.call(w,{type:'warm'}))),sleep(30000).then(()=>{throw new Error('slow')})]);this.ok=true}
+   await Promise.race([Promise.all(this.workers.map(w=>this.call(w,{type:'warm',det,lm}))),sleep(30000).then(()=>{throw new Error('slow')})]);this.ok=true}
   catch(e){console.warn('Tracking in the background is unavailable here:',e);(this.workers||[]).forEach(w=>w.terminate());this.workers=null;this.ok=false}return this.ok},
  call(w,msg,onProg){const id=++this.seq;return new Promise((res,rej)=>{const f=e=>{const d=e.data;if(d.id!==id)return;if(d.progress){onProg&&onProg();return}w.removeEventListener('message',f);w.removeEventListener('error',g);d.ok?res(d.out||[]):rej(new Error(d.err))},g=e=>{w.removeEventListener('message',f);w.removeEventListener('error',g);rej(e)};w.addEventListener('message',f);w.addEventListener('error',g);w.postMessage(Object.assign({id},msg))})}};
 let POSE=null;
+// the AI models, loaded once as binary files (models/*.tflite, about 11 MB in all). The older text copies
+// (models.js, hand_model.js: the same bytes written out as text, a third bigger and decoded in memory) are only a fallback.
+const MODEL_BUF={};
+const b64buf=s=>{const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u.buffer};
+async function modelBuf(k){if(MODEL_BUF[k])return MODEL_BUF[k];const f={det:'pose_det',lm:'pose_lm',hand:'hand'}[k];
+ try{const r=await fetch('models/'+f+'.tflite');if(!r.ok)throw new Error('HTTP '+r.status);const b=await r.arrayBuffer();if(b.byteLength<1e5)throw new Error('short');return MODEL_BUF[k]=b}
+ catch(e){console.warn('Binary model unavailable, using the text copy:',e);
+  if(k==='hand'){if(!window.HAND_MODEL)await addScript('hand_model.js');const b=b64buf(HAND_MODEL);try{delete window.HAND_MODEL}catch(_){window.HAND_MODEL=null}return MODEL_BUF[k]=b}
+  if(!window.POSE_MODELS)await new Promise((res,rej)=>{const s=document.createElement('script');s.src='models.js';s.onload=res;s.onerror=()=>rej({code:'model_load'});document.head.appendChild(s)});
+  MODEL_BUF.det=b64buf(POSE_MODELS.det);MODEL_BUF.lm=b64buf(POSE_MODELS.lm);try{delete window.POSE_MODELS}catch(_){window.POSE_MODELS=null}return MODEL_BUF[k]}}
 async function getPose(){
  if(POSE)return POSE;
- if(!window.POSE_MODELS)await new Promise((res,rej)=>{const s=document.createElement('script');s.src='models.js';s.onload=res;s.onerror=()=>rej({code:'model_load'});document.head.appendChild(s)});
- const ab=s=>{const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u.buffer};
- POSE=new BlazePose.Pose(ab(POSE_MODELS.det),ab(POSE_MODELS.lm));return POSE;
+ const [det,lm]=await Promise.all([modelBuf('det'),modelBuf('lm')]).catch(()=>{throw {code:'model_load'}});
+ POSE=new BlazePose.Pose(det,lm);return POSE;
 }
 
 // a tiny fingerprint of a picture: two frames with the same one are (almost certainly) the same picture
@@ -1888,7 +1899,7 @@ async function gpsOpen(){const ov=$('gpsOv');ov.hidden=false;if(!BG.bag)BagStore
  if(!site){$('gpsPanel').innerHTML=`<div class="gpsDist"><span class="gpsK">Finding ${esc(c0&&c0.name||'the course')} on the map…</span></div>`;site=await Promise.race([gpsSite(c0),sleep(c0&&c0.lat!=null?1500:4000).then(()=>null)])}
  if(!GPS.map){const L=window.L,c=GPS.course;
   GPS.map=L.map('gpsMapEl',{zoomControl:false,attributionControl:true,maxZoom:20,tap:true});GPS.map.attributionControl.setPrefix(false);GPS.map.setView([c.lat||54,c.lon||-2],c.lat?16:6);
-  const tl=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics | Course data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'}).addTo(GPS.map);
+  const tl=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{crossOrigin:true,maxZoom:20,maxNativeZoom:19,attribution:'Imagery &copy; Esri, Maxar, Earthstar Geographics | Course data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>'}).addTo(GPS.map);
   tl.on('tileload',()=>GPS.tiles++);tl.on('tileerror',()=>{GPS.tileErr++;if(GPS.tileErr>6&&!GPS.tiles)gpsNote('Satellite imagery isn\'t loading. Check your signal.')});
   GPS.lines=L.layerGroup().addTo(GPS.map);
   GPS.map.on('click',e=>gpsTap(e.latlng))}
