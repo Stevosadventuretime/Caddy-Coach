@@ -1,0 +1,23 @@
+# If publishing the site fails, open an issue so it doesn't go unnoticed (GitHub emails the repository owner).
+name: Publish alert
+on:
+  workflow_run:
+    workflows: ['pages-build-deployment']
+    types: [completed]
+permissions:
+  issues: write
+jobs:
+  alert:
+    if: ${{ github.event.workflow_run.conclusion != 'success' && github.event.workflow_run.conclusion != 'cancelled' }}
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.event.workflow_run.html_url }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          RESULT: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Publishing the app failed ($RESULT)" \
+            --body "The live site was not updated for commit $SHA. Details: $RUN
+          Re-run the failed publish from that page, or push a small change to try again."
