@@ -190,11 +190,13 @@ function profRender(){const b=$('pfBody'),m=PROF.mode,f=PROF.f,me=PROF.me;if(v2R
   return}
  if(m==='privacy'){b.innerHTML=privacyHTML();return}
  if(m==='settings'){const d=DISP.get(),seg=(k,opts,cur)=>`<div class="pfSeg pfSeg3" role="radiogroup" aria-label="${k==='size'?'Text size':'Colours'}">${opts.map(([v,l])=>`<button type="button" role="radio" data-disp="${k}:${v}" aria-checked="${(cur||opts[0][0])===v}">${l}</button>`).join('')}</div>`;
-  b.innerHTML=`<div class="pfCard"><button type="button" class="link pfBack" data-pf="to-me">Back</button><h2>Text size and display</h2>
+  b.innerHTML=`<div class="pfCard"><button type="button" class="link pfBack" data-pf="to-me">Back</button><h2>Settings</h2>
   <div class="pfF"><span class="pfLab">Text size</span>${seg('size',[['std','Standard'],['lg','Large'],['xl','Largest']],d.size)}<p class="pfHint">Makes everything in Caddy Coach bigger, including buttons.</p></div>
   <div class="pfF"><span class="pfLab">Colours</span>${seg('theme',[['auto','Match my phone'],['light','Light'],['dark','Dark']],d.theme)}</div>
   <div class="pfF"><span class="pfLab">Notifications</span><label class="fgNo"><input type="checkbox" id="pfNotify" ${lsGet('cc_notify',0)?'checked':''}> Tell me when a swing analysis or shot trace finishes while I'm in another app</label><p class="pfHint" id="pfNotifyMsg">${'Notification' in window?'':'This browser can\'t show notifications. On iPhone, add Caddy Coach to your Home Screen first.'}</p></div>
+  <div class="pfF"><span class="pfLab">Usage and crash reports</span><label class="fgNo"><input type="checkbox" id="pfShare" ${shareOK()?'checked':''}> Share anonymous usage and crash reports to help improve Caddy Coach</label><p class="pfHint">No name, username, email, location or videos are sent.</p></div>
   <p class="pfHint">Caddy Coach also follows your phone's settings for reduced motion and screen readers.</p></div>`;
+  const sb=$('pfShare');if(sb)sb.onchange=()=>{shareSet(sb.checked);toast(sb.checked?'Thanks: anonymous usage and crash reports are on.':'Usage and crash reports are off.')};
   const nb=$('pfNotify');if(nb)nb.onchange=async()=>{const r=await notifyToggle(nb.checked);nb.checked=r==='granted';const m=$('pfNotifyMsg');if(m)m.textContent=r==='granted'?'Notifications are on.':r==='denied'?'Notifications are blocked for Caddy Coach. Turn them on in your phone\'s settings, then try again.':r==='unsupported'?'This browser can\'t show notifications. On iPhone, add Caddy Coach to your Home Screen first.':r==='off'?'Notifications are off.':''};return}
  if(m==='feedback'){const f=PROF.f;b.innerHTML=`<form class="pfCard" data-pf-form="feedback" novalidate><button type="button" class="link pfBack" data-pf="to-me">Back</button><h2>Send feedback</h2>${pErr('_form')}
   <p class="mut" style="margin:0">Found something that doesn't work, or have an idea? It goes straight to the people building Caddy Coach.</p>
@@ -227,7 +229,7 @@ function profRender(){const b=$('pfBody'),m=PROF.mode,f=PROF.f,me=PROF.me;if(v2R
   ${hcpMeHTML()}
   ${me.course?`<div class="pfCourse"><span class="pfFlag" aria-hidden="true">⛳</span><div><span class="pfSmall">Local course</span><b>${esc(me.course.name)}</b></div></div><button type="button" class="pri pfBig" data-pf="play">Start a round at ${esc(me.course.name)}</button>`:`<div class="pfCourse"><span class="pfFlag" aria-hidden="true">⛳</span><div><span class="pfSmall">Local course</span><b>Not set</b></div></div><button type="button" class="pfBig" data-pf="to-edit">Add your local course</button>`}
   <button type="button" class="pfBig" data-pf="to-edit">Edit profile</button>
-  <div class="pfLinks"><button type="button" class="link" data-pf="to-chpw">Change password</button>${HOSTED_IN_CLAUDE?'':'<button type="button" class="link" data-pf="to-email">Email for password reset</button>'}<button type="button" class="link" data-pf="to-privacy">Privacy and your data</button><button type="button" class="link" data-pf="to-feedback">Send feedback</button><button type="button" class="link" data-pf="to-settings">Text size and display</button>${v2MeLinks()}</div>
+  <div class="pfLinks"><button type="button" class="link" data-pf="to-chpw">Change password</button>${HOSTED_IN_CLAUDE?'':'<button type="button" class="link" data-pf="to-email">Email for password reset</button>'}<button type="button" class="link" data-pf="to-privacy">Privacy and your data</button><button type="button" class="link" data-pf="to-feedback">Send feedback</button><button type="button" class="link" data-pf="to-settings">Settings</button>${v2MeLinks()}</div>
   <button type="button" class="pfBig pfOut" data-pf="logout">Log out</button>
   ${PROF.note?`<p class="mut" role="status">${esc(PROF.note)}</p>`:''}</div>`;return}}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-disp]');if(!b)return;const [k,v]=b.dataset.disp.split(':');DISP.set(k,v);profRender()});
@@ -1125,8 +1127,8 @@ function privacyHTML(){const back=PROF.me?'to-me':(PROF.privBack||'to-signup');
   <h3>Kept only on your phone</h3><ul><li>Your swing videos and the body-tracking from them. Tracking runs on your phone; videos aren't uploaded.</li><li>Your practice plan. If you look around without a profile, everything you save stays on your phone.</li></ul>
   <h3>Kept online with your profile</h3><ul><li>Your name, username, photo, local course and which hand you play.</li><li>Your email address, kept with your login and used only to send you a password reset link when you ask for one. Other golfers can't see it.</li><li>Your club yardages and your handicap record, so they're there on any phone you log in on. Only you can read these.</li><li>A private backup of your rounds (scorecards, hole notes and the players you add), your swing analyses (scores, measurements and key-position pictures, never the video) and course yardages you map, so a new phone or a cleared browser doesn't lose them. Only you can read it, and deleting your account deletes it.</li><li>Rounds you choose to post to your club leaderboard, with your first name and initial.</li><li>Feedback you send, with your phone model, so problems can be fixed.</li><li>Pin positions you mark on a green (with your username, for that day).</li><li>If you link to a coach: the swings you choose to send them (scores and key-position pictures, never your video) and their notes.</li></ul>
   <h3>Shared with every Caddy Coach golfer, without your name</h3><ul><li>Green and tee positions you map, and scorecards, course ratings and slopes you correct.</li></ul>
-  <h3>Counted anonymously</h3><ul><li>Which days you open the app and how many rounds, swings and practice sessions you do, stored under a one-way code instead of your name, so we can see how Caddy Coach is used.</li></ul>
-  <h3>Error reports</h3><ul><li>If something goes wrong in the app, a report of the error (the screen, your phone and browser type and the app version, but not your name, username, email, location or videos) is sent to Sentry so it can be fixed.</li></ul>
+  <h3>Counted anonymously</h3><ul><li>If you choose Share when asked (you can change it in Settings): which days you open the app and how many rounds, swings and practice sessions you do, stored under a one-way code instead of your name, so we can see how Caddy Coach is used.</li></ul>
+  <h3>Error reports</h3><ul><li>If you choose Share: when something goes wrong in the app, a report of the error (the screen, your phone and browser type and the app version, but not your name, username, email, location or videos) is sent to Sentry so it can be fixed.</li></ul>
   <h3>Other services the app uses</h3><ul><li>OpenStreetMap (course search and course maps), Esri (satellite pictures) and the weather service (conditions at the course) receive the course or area you look at. Your location itself isn't stored by Caddy Coach.</li></ul>
   <h3>Your rights</h3><p>You can download everything Caddy Coach holds about you, and delete your account and all of it, below. Under UK data protection law you can also ask for a copy or a correction${APP_OWNER_EMAIL?` at <a href="mailto:${esc(APP_OWNER_EMAIL)}">${esc(APP_OWNER_EMAIL)}</a>`:' from the app owner'}.</p>
   ${PROF.me?`<button type="button" class="pfBig" data-pf="data-download">Download all my data</button><button type="button" class="pfBig" data-pf="data-import">Bring in data from a file</button><input type="file" id="pfImport" accept="application/json,.json" hidden><button type="button" class="pfBig pfOut" data-pf="to-delacct">Delete my account</button>${PROF.note?`<p class="mut" role="status">${esc(PROF.note)}</p>`:''}`:''}</div>`}
@@ -1275,7 +1277,7 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-pf],[data-
  if(t.dataset.pfPick!=null){PROF.course=PROF.cl[+t.dataset.pfPick];PROF.err.course='';profCollect();return profRender()}
  const a=t.dataset.pf;profCollect();
  if(a==='gate-close'){profHide();return}
- if(a==='guest'){lsSet('cc_guest',1);PROF.err={};profHide();profTopbar();return}
+ if(a==='guest'){lsSet('cc_guest',1);PROF.err={};profHide();profTopbar();setTimeout(shareAsk,2500);return}
  if(a==='to-signup'){PROF.err={};PROF.f={};PROF.photo=null;PROF.course=null;PROF.cl=null;PROF.clMsg='';return profShow('signup')}
  if(a==='to-login'){PROF.err={};PROF.f={pfU:PROF.f.pfUser||''};return profShow('login')}
  if(a==='to-edit'){const me=PROF.me;PROF.err={};PROF.f={pfFirst:me.first,pfLast:me.last,hand:Hand.get()};PROF.photo=me.photo||null;PROF.course=me.course||null;PROF.cl=null;PROF.clMsg='';PROF.note='';return profShow('edit')}
@@ -1336,7 +1338,7 @@ async function profBoot(){profShow('boot');await Store.init();if(!HOSTED_IN_CLAU
    applyHand();HcpStore.load().then(hcpRefresh).catch(e=>console.error(e));BagStore.load().then(b=>{if(!BG.bag)BG.bag=b;if(lsGet('cc_hand_push_'+p.username,0)){try{localStorage.removeItem('cc_hand_push_'+p.username)}catch(_){}b.hand=Hand.get();return BagStore.save(b)}}).catch(()=>{});
    profFlush();PDir.get(p.username).then(q=>{if(q&&!q.partial&&q.updatedAt!==p.updatedAt&&!lsGet('cc_prof_out',[]).length){PROF.me=q;PDir.cache(q);profTopbar()}}).catch(()=>{});return}}
  if(lsGet('cc_deleted',0)){try{localStorage.removeItem('cc_deleted')}catch(_){}setTimeout(()=>toast('Your account and all its data have been deleted.'),300)}
- if(lsGet('cc_guest',0)){profHide();profTopbar();guestKeepBar();return}
+ if(lsGet('cc_guest',0)){profHide();profTopbar();guestKeepBar();setTimeout(shareAsk,2500);return}
  profShow('welcome')}
 
 // ===================== live pins, club pin sheets, club pages, usage counts, Caddy Coach Plus, coaching =====================
@@ -1354,7 +1356,7 @@ async function sbDel(table,qs){if(typeof Auth!=='undefined'&&Auth.s)await Auth.f
 // ---------- usage counts: anonymous, a one-way code per golfer (never the username) ----------
 async function usageCode(){const u=v2Me();if(!u)return null;const k='cc_uh_'+u,c=lsGet(k,null);if(c)return c;
  try{const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(u+':caddy-coach-usage'));const h=Array.from(new Uint8Array(d).slice(0,10),b=>b.toString(16).padStart(2,'0')).join('');lsSet(k,h);return h}catch(_){return null}}
-async function track(kind){if(!v2On()||!v2Me())return;try{if(kind==='open'){const k='cc_uo_'+v2Me();if(lsGet(k,'')===hcpToday())return;lsSet(k,hcpToday())}
+async function track(kind){if(!v2On()||!v2Me()||!shareOK())return;try{if(kind==='open'){const k='cc_uo_'+v2Me();if(lsGet(k,'')===hcpToday())return;lsSet(k,hcpToday())}
  const uh=await usageCode();if(uh)sbSend('usage_events',[{kind,uhash:uh,day:hcpToday()}])}catch(_){}}
 window.ccTrack=track;
 
@@ -1587,6 +1589,22 @@ function v2MeLinks(){const L=[];if(v2Authed())L.push('<button type="button" clas
 document.addEventListener('click',e=>{const b=e.target.closest('[data-pf="to-coaching"],[data-pf="to-plus"],[data-pf="to-stats"]');if(!b)return;e.stopImmediatePropagation();PROF.err={};PROF.f={};
  const a=b.dataset.pf;if(a==='to-coaching')return coachOpenMine();if(a==='to-stats')return ownerOpen();if(a==='to-plus'){PROF.plusWhy=null;PROF.plusFromMe=true;if(PLUS.portal&&plusActive()){window.open(PLUS.portal,'_blank','noopener');return}return profShow('plus')}},true);
 // once logged in: today's usage, Plus status, coaching links, owner check
-function v2AfterLogin(){track('open');setTimeout(()=>Backup.sync(),800);entLoad();coachLoad().then(()=>{if(PROF.mode==='me')profRender()});ownerCheck().then(()=>{if(PROF.mode==='me')profRender()})}
+// ---- asking once about anonymous usage and crash reports ----
+function shareSet(v){try{localStorage.setItem('cc_share',v?'yes':'no')}catch(_){}if(v)track('open')}
+function shareAsk(){if(HOSTED_IN_CLAUDE)return;let asked=null;try{asked=localStorage.getItem('cc_share')}catch(_){return}if(asked||$('shareAsk'))return;
+ // not on top of sign-up or any other profile screen: try again shortly
+ if(!$('prof').hidden||document.body.classList.contains('dpOpen')){setTimeout(shareAsk,4000);return}
+ const ret=document.activeElement,el=document.createElement('div');el.id='shareAsk';el.className='shareAsk';
+ el.innerHTML=`<div class="shareScrim" data-share-later></div><div class="shareSheet" role="dialog" aria-modal="true" aria-labelledby="shareT" aria-describedby="shareD"><span class="shareGrab" aria-hidden="true"></span>
+  <h2 id="shareT">Help improve Caddy Coach</h2><p class="shareSub">Anonymous usage and crash reports</p>
+  <p id="shareD">They show us where the app is slow or confusing, and when it crashes. No name, username, email, location or videos are sent. You can change this any time in Settings.</p>
+  <div class="shareBtns"><button type="button" data-share="no">No thanks</button><button type="button" class="pri" data-share="yes">Share</button></div></div>`;
+ document.body.appendChild(el);requestAnimationFrame(()=>el.classList.add('in'));
+ const close=()=>{el.classList.remove('in');setTimeout(()=>el.remove(),220);document.removeEventListener('keydown',key);if(ret&&ret.focus)ret.focus()};
+ const key=e=>{if(e.key==='Escape')close();if(e.key==='Tab'){const bs=[...el.querySelectorAll('button')],i=bs.indexOf(document.activeElement);if(e.shiftKey&&i<=0){e.preventDefault();bs[bs.length-1].focus()}else if(!e.shiftKey&&i===bs.length-1){e.preventDefault();bs[0].focus()}}};
+ document.addEventListener('keydown',key);
+ el.addEventListener('click',e=>{const b=e.target.closest('[data-share]');if(b){shareSet(b.dataset.share==='yes');close();return}if(e.target.closest('[data-share-later]'))close()});   // tapping outside asks again next time
+ setTimeout(()=>{const b=el.querySelector('[data-share=yes]');b&&b.focus()},60)}
+function v2AfterLogin(){track('open');setTimeout(shareAsk,2500);setTimeout(()=>Backup.sync(),800);entLoad();coachLoad().then(()=>{if(PROF.mode==='me')profRender()});ownerCheck().then(()=>{if(PROF.mode==='me')profRender()})}
 
 profBoot();

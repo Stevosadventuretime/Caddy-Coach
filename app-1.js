@@ -2,7 +2,9 @@
 // ---- error reports (Sentry): when something breaks on a golfer's phone, the details reach the developer automatically.
 // No names, usernames, emails, locations or videos are sent: just the error, the screen, the phone type and app version.
 const ERR={dsn:'https://cdcbbf48f2cedd52e7d8689150f7b2d7@o4512324783112192.ingest.de.sentry.io/4512324788093008',sent:0,seen:new Set(),crumbs:[]};
-function errOn(){return !!ERR.dsn&&!(window.claude&&window.claude.use)&&/^https:/.test(location.protocol)||window.CC_ERR_TEST}
+// usage counts and crash reports are only sent once the golfer has chosen Share (asked once; changeable in settings)
+function shareOK(){try{return localStorage.getItem('cc_share')==='yes'}catch(_){return false}}
+function errOn(){return !!ERR.dsn&&!(window.claude&&window.claude.use)&&/^https:/.test(location.protocol)&&shareOK()||window.CC_ERR_TEST}
 function errCrumb(t){ERR.crumbs.push({timestamp:Date.now()/1000,category:'ui',message:String(t).slice(0,80)});if(ERR.crumbs.length>12)ERR.crumbs.shift()}
 function errFrames(st){return String(st||'').split('\n').map(l=>{const m=l.match(/at (?:(.+?) \()?(.+?):(\d+):(\d+)\)?$/)||l.match(/^(.*?)@(.+?):(\d+):(\d+)$/);return m?{function:(m[1]||'?').trim().slice(0,80),filename:m[2].replace(location.origin,'').slice(0,160),lineno:+m[3],colno:+m[4],in_app:!/cdn|cloudflare|jsdelivr/.test(m[2])}:null}).filter(Boolean).reverse().slice(-40)}
 function errSend(e,how){try{if(!errOn()||ERR.sent>=10)return;const msg=String(e&&e.message||e||'Unknown error').slice(0,300),top=errFrames(e&&e.stack).slice(-1)[0],key=msg+'|'+(top?top.function+':'+top.lineno+':'+top.colno:'');if(ERR.seen.has(key))return;ERR.seen.add(key);ERR.sent++;

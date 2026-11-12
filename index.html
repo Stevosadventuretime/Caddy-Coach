@@ -1408,6 +1408,19 @@ body.scrolled .topbar{border-bottom-color:var(--line)}
 .tabbar button[aria-current="page"] svg{background:var(--green-soft);color:var(--green)}
 .tabbar button:focus-visible svg{outline:2px solid var(--green);outline-offset:1px}
 .ccToast{bottom:calc(env(safe-area-inset-bottom,0px) + var(--tabh) + 14px)!important}
+.shareAsk{position:fixed;inset:0;z-index:450}
+.shareScrim{position:absolute;inset:0;background:rgba(8,20,13,.45);opacity:0;transition:opacity .2s}
+.shareSheet{position:absolute;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;background:var(--surface,#fff);color:var(--ink,#0f1813);border-radius:22px 22px 0 0;padding:10px 20px calc(env(safe-area-inset-bottom,0px) + 20px);box-shadow:0 -10px 40px rgba(8,20,13,.18);transform:translateY(100%);transition:transform .22s ease-out}
+.shareAsk.in .shareScrim{opacity:1}.shareAsk.in .shareSheet{transform:none}
+.shareGrab{display:block;width:40px;height:5px;border-radius:3px;background:var(--line2,#d0d8d1);margin:0 auto 14px}
+.shareSheet h2{margin:0;font:700 22px/1.2 var(--f-disp);font-stretch:85%}
+.shareSub{margin:4px 0 12px;color:var(--muted,#56625b);font:500 14px/1.3 var(--f-ui)}
+.shareSheet p#shareD{margin:0 0 18px;font:400 16px/1.5 var(--f-ui)}
+.shareBtns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.shareBtns button{min-height:50px;border-radius:999px;font:600 16px/1 var(--f-ui);border:1.5px solid var(--line2,#d0d8d1);background:var(--surface,#fff);color:var(--ink,#0f1813)}
+.shareBtns button.pri{background:var(--green,#167a46);border-color:var(--green,#167a46);color:var(--green-ink,#fff)}
+.shareBtns button:focus-visible{outline:2px solid var(--green,#167a46);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.shareScrim,.shareSheet{transition:none}}
 .gKeep{background:var(--green-soft,#e3f1e8);border-bottom:1px solid var(--line2,#d0d8d1);color:var(--ink,#0f1813)}
 .gKeepIn{max-width:720px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center}
 .gKeepIn p{margin:0;flex:1;font:400 14px/1.45 var(--f-ui)}
