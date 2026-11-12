@@ -180,7 +180,7 @@ function profRender(){const b=$('pfBody'),m=PROF.mode,f=PROF.f,me=PROF.me;if(v2R
    `<p class="pfHint" id="pfAvail" role="status">${!un?'3 to 20 letters, numbers, dots or underscores.':!UN_RE.test(un)?'Use 3 to 20 letters, numbers, dots or underscores.':av==='free'?`@${esc(un)} is free.`:av==='taken'?`@${esc(un)} is taken. Try another.`:av==='checking'?'Checking…':av==='unknown'?`Couldn't check @${esc(un)} right now; it's checked again when you save.`:''}</p>`)}
   <div class="pfF"><span class="pfLab" id="pfHandLab">You play</span><div class="pfSeg" role="radiogroup" aria-labelledby="pfHandLab">${['right','left'].map(v=>`<button type="button" role="radio" data-pf-hand="${v}" aria-checked="${(f.hand||Hand.get())===v}">${v==='right'?'Right-handed':'Left-handed'}</button>`).join('')}</div><p class="pfHint">Caddy Coach shows your setup, grip, drill demos and checks the way you stand.</p></div>
   ${ed&&HcpStore.rec&&HcpStore.rec.start?`<div class="pfF"><span class="pfLab">Starting handicap</span><p class="pfFixed">${HcpStore.rec.start.hi==null?'None':esc(WHS.fmt(HcpStore.rec.start.hi))}</p><p class="pfHint">Locked once it's set. Your handicap estimate updates from the scores you submit.</p></div>`:''}
-  <div class="pfF"><span class="pfLab" id="pfCourseLab">Local course</span><div role="group" aria-labelledby="pfCourseLab">${profCourseHTML()}</div>${pErr('course')}</div>
+  <div class="pfF"><span class="pfLab" id="pfCourseLab">Local course <span class="mut">(optional)</span></span>${ed?'':'<p class="pfHint" style="margin-top:0">For your club\'s leaderboard and competitions. You can add it later.</p>'}<div role="group" aria-labelledby="pfCourseLab">${profCourseHTML()}</div>${pErr('course')}</div>
   ${ed||HOSTED_IN_CLAUDE?'':emailIn('pfEmail')}
   ${ed?'':pwFieldsHTML('pfPw1','Password',un,'pfPw2')}
   ${ed?'':'<p class="pfHint">By creating a profile you agree to how Caddy Coach handles your data. <button type="button" class="link" data-pf="to-privacy">Read the privacy notice</button></p>'}
@@ -225,7 +225,7 @@ function profRender(){const b=$('pfBody'),m=PROF.mode,f=PROF.f,me=PROF.me;if(v2R
  if(m==='me'){b.innerHTML=`<div class="pfCard pfMe"><button type="button" class="pfX" data-pf="close" aria-label="Close your profile"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
   ${profAv(me,96)}<h2>${esc(me.first+' '+me.last)}</h2><p class="pfUn">@${esc(me.username)} · ${Hand.get()==='left'?'Left':'Right'}-handed</p>
   ${hcpMeHTML()}
-  ${me.course?`<div class="pfCourse"><span class="pfFlag" aria-hidden="true">⛳</span><div><span class="pfSmall">Local course</span><b>${esc(me.course.name)}</b></div></div><button type="button" class="pri pfBig" data-pf="play">Start a round at ${esc(me.course.name)}</button>`:''}
+  ${me.course?`<div class="pfCourse"><span class="pfFlag" aria-hidden="true">⛳</span><div><span class="pfSmall">Local course</span><b>${esc(me.course.name)}</b></div></div><button type="button" class="pri pfBig" data-pf="play">Start a round at ${esc(me.course.name)}</button>`:`<div class="pfCourse"><span class="pfFlag" aria-hidden="true">⛳</span><div><span class="pfSmall">Local course</span><b>Not set</b></div></div><button type="button" class="pfBig" data-pf="to-edit">Add your local course</button>`}
   <button type="button" class="pfBig" data-pf="to-edit">Edit profile</button>
   <div class="pfLinks"><button type="button" class="link" data-pf="to-chpw">Change password</button>${HOSTED_IN_CLAUDE?'':'<button type="button" class="link" data-pf="to-email">Email for password reset</button>'}<button type="button" class="link" data-pf="to-privacy">Privacy and your data</button><button type="button" class="link" data-pf="to-feedback">Send feedback</button><button type="button" class="link" data-pf="to-settings">Text size and display</button>${v2MeLinks()}</div>
   <button type="button" class="pfBig pfOut" data-pf="logout">Log out</button>
@@ -1072,7 +1072,7 @@ function profAvailText(){if(PROF.mode!=='signup')return;const el=$('pfAvail');if
  el.className='pfHint'+(av==='taken'?' bad':av==='free'?' good':'')}
 function profValidate(ed){const f=PROF.f,e={};if(!String(f.pfFirst||'').trim())e.pfFirst='Enter your first name.';if(!String(f.pfLast||'').trim())e.pfLast='Enter your last name.';
  if(!ed){const un=unorm(f.pfUser);if(!un)e.pfUser='Choose a username.';else if(!UN_RE.test(un))e.pfUser='Use 3 to 20 letters, numbers, dots or underscores, with no spaces.';else if(PROF.avail[un]==='taken')e.pfUser=`@${un} is taken. Try another.`}
- if(!PROF.course)e.course='Choose your local course. Search for it, or use your location.';return e}
+ return e}   // the local course is optional: it's asked for when a golfer first opens the club leaderboard or competitions
 async function profSubmit(kind){profCollect();PROF.err={};
  if(kind==='hcp-start'||kind==='hcp-add')return hcpSubmitForm(kind);
  if(kind==='login')return profLogin();
