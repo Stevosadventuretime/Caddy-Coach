@@ -599,8 +599,11 @@ const lbName=()=>PROF.me?`${PROF.me.first} ${(PROF.me.last||'')[0]||''}.`.trim()
 const lbOn=()=>SB.on()&&!!lbClub()&&!!(PROF.me&&PROF.me.username);
 function lbEligible(r){const c=lbClub();return lbOn()&&c&&keyBase(r.course.key)===keyBase(c.key)&&r.holes.length===18&&r.ch!=null&&tally(r.holes).thru>=14}
 function lbPosted(r){return lsGet('cc_lbp',{})[r.id]}
-async function lbPost(r){const c=lbClub(),nt=rtNet(r),t=tally(r.holes),m=(r.date||hcpToday()).slice(0,7);
- await sbSend('course_cards',[{course_key:`lb~${keyBase(c.key)}~${m}`.slice(0,120),name:'Leaderboard',card:{v:1,u:PROF.me.username,name:lbName(),pts:nt.pts,net:nt.net,gross:t.total,thru:t.thru,date:r.date,rid:r.id},device:SB.device()}]);
+// leaderboards and competitions use the playing handicap: 95% of the course handicap, the allowance for individual
+// Stableford and stroke play. The hole scores go with the entry and the server works out the points from them.
+const LB_ALLOW=0.95,lbPh=ch=>Math.round(ch*LB_ALLOW);
+async function lbPost(r){const c=lbClub(),ph=lbPh(r.ch),nt=rtNet(Object.assign({},r,{ch:ph})),t=tally(r.holes),m=(r.date||hcpToday()).slice(0,7);
+ await sbSend('course_cards',[{course_key:`lb~${keyBase(c.key)}~${m}`.slice(0,120),name:'Leaderboard',card:{v:2,u:PROF.me.username,name:lbName(),ch:r.ch,ph,holes:r.holes.map(h=>[h.par,h.si||null,h.score==null?null:h.score]),pts:nt.pts,net:nt.net,gross:t.total,thru:t.thru,date:r.date,rid:r.id},device:SB.device()}]);
  const p=lsGet('cc_lbp',{});p[r.id]=1;lsSet('cc_lbp',p);lsSet('cc_lbjoin_'+keyBase(c.key),1);lbHcpPush(true)}
 // your handicap progress this month, for the most-improved table (only once you've joined your club's board)
 function lbHcpPush(force){if(!lbOn())return;const c=lbClub(),k=keyBase(c.key);if(!force&&!lsGet('cc_lbjoin_'+k,0))return;const rec=HcpStore.rec;if(!rec||!rec.start)return;
@@ -608,7 +611,7 @@ function lbHcpPush(force){if(!lbOn())return;const c=lbClub(),k=keyBase(c.key);if
  sbSend('course_cards',[{course_key:`lbh~${k}~${m}`.slice(0,120),name:'Leaderboard',card:{v:1,u:PROF.me.username,name:lbName(),start,now:cc.hi},device:SB.device()}])}
 async function lbLoad(){const c=lbClub();if(!lbOn()){LB.data=null;return}const k=keyBase(c.key),m=lbMonth(LB.month);LB.busy=true;LB.err='';rtRender();
  try{const [a,b]=await Promise.all([sbGet('course_cards',`course_key=eq.${encodeURIComponent(`lb~${k}~${m}`)}&select=card,created_at&order=created_at.desc&limit=500`),sbGet('course_cards',`course_key=eq.${encodeURIComponent(`lbh~${k}~${m}`)}&select=card,created_at&order=created_at.desc&limit=500`)]);
-  const best=new Map();for(const x of a||[]){const v=x.card;if(!v||!v.u||!(v.pts>=0))continue;const o=best.get(v.u);if(!o||v.pts>o.pts||(v.pts===o.pts&&v.gross<o.gross))best.set(v.u,v)}
+  const best=new Map();for(const x of a||[]){const v=x.card;if(!v||!v.u||!(v.pts>=0)||!(v.v>=2))continue;const o=best.get(v.u);if(!o||v.pts>o.pts||(v.pts===o.pts&&v.gross<o.gross))best.set(v.u,v)}
   const imp=new Map();for(const x of b||[]){const v=x.card;if(!v||!v.u||v.start==null||v.now==null)continue;if(!imp.has(v.u))imp.set(v.u,v)}   // newest first: keep each player's latest
   LB.data={m,best:[...best.values()].sort((p,q)=>q.pts-p.pts||p.gross-q.gross).slice(0,30),imp:[...imp.values()].map(v=>Object.assign({},v,{d:+(v.start-v.now).toFixed(1)})).filter(v=>v.d>0).sort((p,q)=>q.d-p.d).slice(0,20)}}
  catch(e){LB.err='The leaderboard couldn\'t be reached just now. Check your signal and try again.'}
@@ -620,10 +623,10 @@ function lbHTML(){const c=lbClub();
  const me=PROF.me.username,mlab=new Date(lbMonth(LB.month)+'-15').toLocaleDateString('en-GB',{month:'long',year:'numeric'}),D=LB.data;
  return `<div class="card"><div class="rtTop"><div><h2 style="margin:0">${esc(c.name)}</h2><small class="mut">${mlab}</small></div><div class="lbMon"><button type="button" data-lb-m="1" aria-label="Previous month">‹</button><button type="button" data-lb-m="-1" aria-label="Next month" ${LB.month===0?'disabled':''}>›</button></div></div>
   ${LB.busy?'<div class="rtLoad" role="status"><span class="spin" aria-hidden="true"></span>Loading the leaderboard…</div>':LB.err?`<p class="rtMsg bad" role="alert">${esc(LB.err)}</p>`:''}
-  ${D&&!LB.busy?`<h3 class="lbH">Best Stableford round</h3>${D.best.length?`<ol class="lbList">${D.best.map((v,i)=>`<li${v.u===me?' class="me"':''}><span class="lbN">${i+1}</span><span class="lbW"><b>${esc(v.name||v.u)}</b><small>${fmtRoundDate(v.date)} · ${v.gross} gross</small></span><span class="lbV">${tiles(v.pts,'sm')}<small> pts</small></span></li>`).join('')}</ol>`:'<p class="mut">No rounds posted yet this month. Finish an 18-hole round here with your handicap set, then post it from the round.</p>'}
+  ${D&&!LB.busy?`<h3 class="lbH">Best Stableford round</h3><p class="mut" style="margin:-4px 0 8px;font-size:13px">Points use 95% of each golfer's course handicap, and are worked out by Caddy Coach from the hole scores.</p>${D.best.length?`<ol class="lbList">${D.best.map((v,i)=>`<li${v.u===me?' class="me"':''}><span class="lbN">${i+1}</span><span class="lbW"><b>${esc(v.name||v.u)}</b><small>${fmtRoundDate(v.date)} · ${v.gross} gross</small></span><span class="lbV">${tiles(v.pts,'sm')}<small> pts</small></span></li>`).join('')}</ol>`:'<p class="mut">No rounds posted yet this month. Finish an 18-hole round here with your handicap set, then post it from the round.</p>'}
    <h3 class="lbH">Most improved handicap</h3>${D.imp.length?`<ol class="lbList">${D.imp.map((v,i)=>`<li${v.u===me?' class="me"':''}><span class="lbN">${i+1}</span><span class="lbW"><b>${esc(v.name||v.u)}</b><small>${WHS.fmt(v.start)} to ${WHS.fmt(v.now)}</small></span><span class="lbV">${tiles('−'+v.d.toFixed(1),'sm red')}</span></li>`).join('')}</ol>`:'<p class="mut">Nobody has brought their index down yet this month.</p>'}`:''}
   <p class="mut" style="font-size:12.5px;margin:12px 0 0">Only rounds players choose to post appear here, with their first name and initial.</p></div>`}
-function lbRoundHTML(r){if(!lbEligible(r))return '';return lbPosted(r)?`<p class="lbDone">Posted to the ${esc(lbClub().name)} leaderboard.</p>`:`<button type="button" class="lbPostBtn" data-rt="lb-post">Post ${rtNet(r).pts} points to the ${esc(lbClub().name)} leaderboard</button>`}
+function lbRoundHTML(r){if(!lbEligible(r))return '';return lbPosted(r)?`<p class="lbDone">Posted to the ${esc(lbClub().name)} leaderboard.</p>`:`<button type="button" class="lbPostBtn" data-rt="lb-post">Post ${rtNet(Object.assign({},r,{ch:lbPh(r.ch)})).pts} points to the ${esc(lbClub().name)} leaderboard</button><p class="mut" style="margin:6px 0 0;font-size:13px">Leaderboards use 95% of your course handicap (${chTxt(lbPh(r.ch))} shots here), as club competitions do.</p>`}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-lb-m]');if(!b)return;LB.month=Math.max(0,Math.min(11,LB.month+ +b.dataset.lbM));LB.data=null;lbLoad()});
 // ===================== getting started, goals, updates inbox, group rounds, club competitions =====================
 const meU=()=>typeof PROF!=='undefined'&&PROF.me&&PROF.me.username||'';
@@ -752,7 +755,7 @@ async function compRows(k){const rows=await sbGet('course_cards',`course_key=eq.
  const seen=new Set();return rows.map(x=>Object.assign({},x.card,{at:x.created_at})).filter(c=>c&&c.id&&c.name&&c.start&&c.end&&COMP_F[c.format]&&!seen.has(c.id)&&seen.add(c.id))}
 const monthsBetween=(a,b)=>{const o=[];let d=new Date(a.slice(0,7)+'-15');const e=b.slice(0,7);while(d.toISOString().slice(0,7)<=e&&o.length<4){o.push(d.toISOString().slice(0,7));d.setMonth(d.getMonth()+1)}return o};
 async function compTable(k,c){const ms=monthsBetween(c.start,c.end),rows=[];for(const m of ms){const r=await sbGet('course_cards',`course_key=eq.${encodeURIComponent(`lb~${k}~${m}`)}&select=card,created_at&order=created_at.desc&limit=500`)||[];rows.push(...r)}
- const best=new Map(),net=c.format==='net';for(const x of rows){const v=x.card;if(!v||!v.u||!v.date||v.date<c.start||v.date>c.end)continue;if(net&&v.net==null)continue;if(!net&&!(v.pts>=0))continue;
+ const best=new Map(),net=c.format==='net';for(const x of rows){const v=x.card;if(!v||!(v.v>=2)||!v.u||!v.date||v.date<c.start||v.date>c.end)continue;if(net&&v.net==null)continue;if(!net&&!(v.pts>=0))continue;
   const o=best.get(v.u);if(!o||(net?v.net<o.net:v.pts>o.pts))best.set(v.u,v)}
  return [...best.values()].sort((a,b)=>net?a.net-b.net:b.pts-a.pts)}
 async function compLoad(){const c=lbClub();if(!c||!lbOn())return;const k=keyBase(c.key);COMP.busy=true;
