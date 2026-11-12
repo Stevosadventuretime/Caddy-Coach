@@ -25,30 +25,35 @@ function strokesOn(ch, rank, n) {
   const c = -ch; return -(Math.floor(c / n) + (rank > n - (c % n) ? 1 : 0));
 }
 // Adjusted Gross Score: each hole capped at net double bogey (par + 2 + strokes received).
-// No Handicap Index yet: each hole capped at par + 5. A hole not played counts as net par.
+// No Handicap Index yet: each hole capped at par + 5.
+// agsPlayed is over the holes played only (used with the expected score for the rest, the 2024 rule);
+// ags also fills each hole not played with net par (par with no index), the pre-2024 method, kept as a fallback.
 function adjust(holes, ch) {
   const { r, ok } = ranks(holes), n = holes.length;
-  let gross = 0, ags = 0, played = 0, capped = 0; const per = [];
+  let gross = 0, ags = 0, agsPlayed = 0, parPlayed = 0, played = 0, capped = 0; const per = [];
   holes.forEach((h, i) => {
     const st = ch == null ? 0 : strokesOn(ch, r[i], n);
     const cap = ch == null ? h.par + 5 : h.par + 2 + st;
     if (h.score == null) { const v = ch == null ? h.par : h.par + st; ags += v; per.push({ n: h.n, par: h.par, st, cap, score: null, counted: v, missing: true }); return; }
     played++; gross += h.score; const v = Math.min(h.score, cap); if (v < h.score) capped++;
-    ags += v; per.push({ n: h.n, par: h.par, st, cap, score: h.score, counted: v });
+    ags += v; agsPlayed += v; parPlayed += h.par; per.push({ n: h.n, par: h.par, st, cap, score: h.score, counted: v });
   });
-  return { gross, ags, played, capped, per, siOk: ok };
+  return { gross, ags, agsPlayed, parPlayed, played, capped, per, siOk: ok };
 }
-// enough holes for a handicap score? 14 of 18, or 7 of 9
+// enough holes for a handicap score? (2024 rules, as CONGU applies them in GB&I) at least 10 of 18 holes, or all 9 of 9
 function eligible(holes) {
   const n = holes.length, p = holes.filter(h => h.score != null).length;
-  if (n === 18) return p >= 14 ? 18 : 0;
-  if (n === 9) return p >= 7 ? 9 : 0;
+  if (n === 18) return p >= 10 ? 18 : 0;
+  if (n === 9) return p === 9 ? 9 : 0;
   return 0;
 }
 // Score Differential = (113 / Slope) x (Adjusted Gross Score - Course Rating - PCC). PCC is taken as 0.
 const differential = (ags, cr, slope, pcc) => r1(113 / slope * (ags - cr - (pcc || 0)));
-// expected 9-hole Score Differential for the nine not played, from the Handicap Index (2024 rule)
+// expected 9-hole Score Differential for the nine not played, from the Handicap Index (2024 rule). The WHS formula itself
+// isn't published; this one reproduces the USGA's worked example (index 14.0: 9-hole differential 7.2 -> 18-hole 15.7).
 const expected9 = hi => 0.52 * hi + 1.2;
+// the same for any number of holes not played, pro rata (used for 10-17 hole rounds)
+const expectedHoles = (hi, m) => expected9(hi) * m / 9;
 
 // how many of the most recent differentials count, and any adjustment, by how many there are
 function table(n) {
@@ -95,7 +100,12 @@ function calc(rec, opts) {
       if (before != null) { row.exp = r1(expected9(before)); d = r1(d9 + expected9(before)); }
       else if (pend) { d = r1(pend.d9 + d9); row.pair = pend.s.id; pend.row.paired = s.id; pend = null; }
       else { pend = { s, d9, row }; row.waiting = true; rows.push(row); continue; }
-    } else d = differential(s.a, s.cr, s.sl);
+    } else if (s.p && s.p >= 10 && s.p < 18 && s.ap != null && before != null) {
+      // 10-17 holes (2024): the differential for the holes played (course rating pro rata to the holes played)
+      // plus the expected differential for the holes not played
+      const dp = 113 / s.sl * (s.ap - s.cr * s.p / 18), ex = expectedHoles(before, 18 - s.p);
+      d = r1(dp + ex); row.part = { played: s.p, dp: r1(dp), exp: r1(ex) };
+    } else d = differential(s.a, s.cr, s.sl);   // a full 18, or older scores (unplayed holes at net par)
     row.d = d;
     const e = { d, adj: 0, s, date: s.d }; list.push(e); row.e = e;
     let last = list.slice(-20), res = fromRecord(last);
@@ -144,7 +154,7 @@ function parse(s) {
   const m = /^([+-]?)(\d{1,2}(?:\.\d)?)$/.exec(s); if (!m) return NaN;
   let v = +m[2]; if (m[1]) v = -v; return v;
 }
-const api = { r1, courseHcp, courseHcp9, rating9, ranks, strokesOn, adjust, eligible, differential, expected9, table, calc, fmt, parse, MAX: 54 };
+const api = { r1, courseHcp, courseHcp9, rating9, ranks, strokesOn, adjust, eligible, differential, expected9, expectedHoles, table, calc, fmt, parse, MAX: 54 };
 root.WHS = api;
 if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : this);

@@ -17,6 +17,8 @@ jobs:
         with: { python-version: '3.12' }
       - name: Every script loads
         run: for f in *.js; do node --check "$f" || exit 1; done
+      - name: Handicap rules
+        run: node --test tools/test_whs.js
       - name: Drill motion and player tests
         run: node --test tools/golfer/motion/test_drill_motion.js tools/golfer/motion/test_perf.js
       - name: Motion capture tools
