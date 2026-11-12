@@ -1107,6 +1107,7 @@ async function profSubmit(kind){profCollect();PROF.err={};
      if(err.status===422&&/already|registered|exists/i.test(err.message+err.code))r='taken';
      else if(err.code==='needs_confirm'){PROF.err._form='Your account was made, but the app\'s server is asking for email confirmation. The app owner needs to turn off "Confirm email" in Supabase.';return profRender()}
      else if(err.status===422||/weak|password/i.test(err.message)){PROF.err.pfPw1='The server says that password isn\'t strong enough. Try a longer one.';return profRender()}
+     else if(err.code==='too_many_signups'){PROF.err._form='Too many new accounts have been made from this connection recently. Try again in an hour, or on a different network.';return profRender()}
      else if(err.status===429){PROF.err._form='Too many tries. Wait a minute and try again.';return profRender()}
      else{PROF.err._form='Couldn\'t create your account just now. Check your signal and try again.';return profRender()}}
     if(!r){try{r=await PDir.create(p)}catch(_){r='error'}if(r!=='ok'){try{await sbRpc('delete_my_account')}catch(_){}await Auth.signOut()}}}}

@@ -28,6 +28,34 @@ function strong(pw: string, user: string): boolean {
   return pw.length >= 10 && pw.length <= 72 && upper && lower && digits >= 2 && special && !hasUser && !common && !pattern && bits >= 55;
 }
 
+// ---- a brake on new accounts: at most 5 an hour and 20 a day from one connection, and 60 an hour in all ----
+// Connections are kept only as a one-way code (never the address), and only for 2 days. Without this, a script could
+// make many accounts and outvote real golfers on the shared course map.
+const LIMITS = { ipHour: 5, ipDay: 20, allHour: 60 };
+async function connCode(req: Request, salt: string): Promise<string> {
+  const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || req.headers.get('x-real-ip') || 'unknown';
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + '|' + ip));
+  return Array.from(new Uint8Array(d), b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+}
+async function countSince(base: string, admin: Record<string, string>, ms: number, code?: string): Promise<number> {
+  const since = new Date(Date.now() - ms).toISOString();
+  const r = await fetch(`${base}/rest/v1/signup_log?select=id${code ? `&ip_hash=eq.${code}` : ''}&created_at=gte.${encodeURIComponent(since)}`,
+    { headers: { ...admin, Prefer: 'count=exact', Range: '0-0' } });
+  if (!r.ok) return 0;   // if the log can't be read, don't lock everyone out
+  const cr = r.headers.get('content-range') || '';
+  return +(cr.split('/')[1] || 0) || 0;
+}
+// true when this connection (or everyone together) has made too many accounts lately; otherwise records this one
+async function signupBrake(req: Request, base: string, admin: Record<string, string>, salt: string): Promise<boolean> {
+  const code = await connCode(req, salt);
+  const [h, d, all] = await Promise.all([countSince(base, admin, 36e5, code), countSince(base, admin, 864e5, code), countSince(base, admin, 36e5)]);
+  if (h >= LIMITS.ipHour || d >= LIMITS.ipDay || all >= LIMITS.allHour) return true;
+  await fetch(`${base}/rest/v1/signup_log`, { method: 'POST', headers: { ...admin, Prefer: 'return=minimal' }, body: JSON.stringify({ ip_hash: code }) }).catch(() => {});
+  if (Math.random() < 0.05) fetch(`${base}/rest/v1/signup_log?created_at=lt.${encodeURIComponent(new Date(Date.now() - 2 * 864e5).toISOString())}`, { method: 'DELETE', headers: admin }).catch(() => {});
+  return false;
+}
+const TOO_MANY = { code: 'too_many_signups', msg: 'Too many new accounts have been made from this connection. Try again in an hour.' };
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json(405, { code: 'method', msg: 'Use POST' });
@@ -44,6 +72,7 @@ Deno.serve(async (req: Request) => {
   const pr = await fetch(`${url}/rest/v1/profiles?username=eq.${encodeURIComponent(username)}&select=auth_id`, { headers: admin });
   if (pr.ok) { const rows = await pr.json(); if (rows.length && rows[0].auth_id) return json(422, { code: 'user_already_exists', msg: 'User already registered' }); }
 
+  if (await signupBrake(req, url, admin, key.slice(-16))) return json(429, TOO_MANY);
   const r = await fetch(`${url}/auth/v1/admin/users`, {
     method: 'POST', headers: admin,
     body: JSON.stringify({ email: `${username}@users.caddycoach.app`, password, email_confirm: true, user_metadata: { username } }),
