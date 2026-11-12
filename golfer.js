@@ -340,7 +340,7 @@ function poseGolfer(fig, J, o) {
     // heel up, toes down: a foot that's meant to be on the ground pivots on its toes (they stay at their rest height)
     // instead of tipping forward into the air. A foot lifted off the ground (stepping drills) is left as the rig says.
     const toeY = ft.T.y, footL = f0.length(), lift = anV.y - toeY;
-    if (toeV.y < 0.12 && lift > -0.0 && fdir.y < 0) {
+    if (toeV.y < 0.12 && lift > -0.0 && fdir.y < 0 && !(lead ? J.lup : J.tup)) {
       const hz = new T.Vector3(fdir.x, 0, fdir.z); if (hz.lengthSq() < 1e-8) hz.set(0, 0, 1); hz.normalize();
       const dy = Math.min(lift, footL * 0.97), dh = Math.sqrt(Math.max(0, footL * footL - dy * dy));
       fdir = hz.multiplyScalar(dh).add(new T.Vector3(0, -dy, 0));

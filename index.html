@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Caddy Coach">
 <style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}#ccSplash{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;align-content:center;gap:18px;background:radial-gradient(120% 80% at 50% 35%,#16553c,#0b2f21);color:#f3f6f1;transition:opacity .35s ease}#ccSplash img{width:96px;height:96px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.35)}#ccSplash b{font:760 30px/1 Archivo,'Instrument Sans',system-ui,sans-serif;font-stretch:72%;letter-spacing:.01em}#ccSplash i{display:block;width:120px;height:3px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}#ccSplash i::after{content:'';display:block;height:100%;width:40%;background:#f3c43a;animation:ccLd 1s ease-in-out infinite alternate}@keyframes ccLd{from{transform:translateX(-10%)}to{transform:translateX(160%)}}@media (prefers-reduced-motion:reduce){#ccSplash i::after{animation:none}}#ccSplash.out{opacity:0;pointer-events:none}</style>
-<script>window.CC_VER='6a5b0b786f'</script></head><body>
+<script>window.CC_VER='d7b1e2c4a9'</script></head><body>
 <div id="ccSplash" aria-hidden="true"><img src="icons/icon-192.png" alt=""><b>Caddy Coach</b><i></i></div>
 <script>(function(){let done=0;const go=d=>{if(done++)return;const s=document.getElementById('ccSplash');if(!s)return;setTimeout(()=>{s.classList.add('out');setTimeout(()=>s.remove(),400)},d)};addEventListener('DOMContentLoaded',()=>go(350));addEventListener('load',()=>go(0));setTimeout(()=>go(0),4000)})()</script>
 <title>Caddy Coach</title>
@@ -449,6 +449,12 @@ body.dpOpen{overflow:hidden}
 .dpSteps li.cur button{border-color:var(--green);box-shadow:inset 3px 0 0 var(--green)}.dpSteps li.cur button>span{background:var(--green);color:var(--green-ink);border-color:var(--green)}
 .dpSteps em{display:block;margin-top:4px;font-style:normal;color:var(--muted);font-size:14px}
 .dpMist{margin:0;padding-left:20px;display:grid;gap:6px;line-height:1.5}
+.dpMist b{font-weight:600}.dpFault{margin:4px 0 0;font-size:17px;line-height:1.5}.dpFault b,.dpWhy b{display:block;font:600 12px/1 var(--f-ui);color:var(--muted);margin-bottom:5px;text-transform:none}
+.dpTxt{margin:0;line-height:1.55}.dpAlt{margin:-2px 0 0;font-size:14px;line-height:1.45;color:var(--ink2)}
+.dpOk{list-style:none;margin:0;padding:0;display:grid;gap:6px;line-height:1.5}.dpOk li{position:relative;padding-left:26px}
+.dpOk li::before{content:"";position:absolute;left:6px;top:.28em;width:6px;height:12px;border:solid var(--green);border-width:0 2.5px 2.5px 0;transform:rotate(45deg)}
+.dpProg{margin:0;padding-left:22px;display:grid;gap:6px;line-height:1.5}.dpProg li::marker{color:var(--green);font-weight:700}
+.dpNote{margin:6px 0 0;padding:10px 12px;border-left:3px solid var(--line2);background:var(--surface);border-radius:0 var(--r-s) var(--r-s) 0;font-size:14px;line-height:1.5;color:var(--ink2)}
 .dpFix{display:flex;flex-wrap:wrap;gap:6px}.dpFix span{font-size:13px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);background:var(--surface)}
 .fixDrillBox{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:10px}.fixDrillBox .dby{font-size:13px}
 .fixDrillBox .watch{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:8px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--surface2);color:var(--ink);font:inherit;min-height:0;cursor:pointer}

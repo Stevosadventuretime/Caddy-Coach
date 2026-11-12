@@ -28,9 +28,12 @@ function ik(A, Tg, a, b, pole) {
 // bend: forward hinge (deg); side: spine tilt (+ = away from target); kf: knee flex; turn: shoulders (+ = back);
 // hip: pelvis turn (+ = back); ws: weight shift (m, + = toward target); hx/hz: extra pelvis move (hz + = toward the ball);
 // theta/hinge: arm swing and wrist set around the swing plane; heel: trail heel up (0-1.6);
-// tfx/tfz, lfx/lfz: move a foot; split: trail hand further down the grip; tdrop: trail hand let go and hanging.
+// tfx/tfz, lfx/lfz: move a foot; tyaw/lyaw: turn a foot's toes toward the target (degrees); split: trail hand further
+// down the grip; tdrop: trail hand let go and hanging. tdx/tdz/tup and ldx/ldz/lup are set by the player, never by a
+// drill: they make a foot that moves between two keys step (lift, move, put down) instead of sliding along the ground.
 const P0 = { bend: 0, side: 0, kf: 4, turn: 0, hip: 0, ws: 0, hx: 0, hz: 0, theta: 0, hinge: 0, plane: 22, splane: 36, clen: 0.89, reach: 0.56, stance: 0.2,
-  heel: 0, lheel: 0, headDx: 0, headDy: 0, leadBend: 4, arms: 'club', walk: 0, tfx: 0, tfz: 0, lfx: 0, lfz: 0, split: 0, tdrop: 0, noclub: 0, head: 0 };
+  heel: 0, lheel: 0, headDx: 0, headDy: 0, leadBend: 4, arms: 'club', walk: 0, tfx: 0, tfz: 0, lfx: 0, lfz: 0, split: 0, tdrop: 0, noclub: 0, head: 0,
+  tyaw: 0, lyaw: 0, tdx: 0, tdz: 0, tup: 0, ldx: 0, ldz: 0, lup: 0 };
 const POSES = {
   stand: { bend: 3, kf: 2, arms: 'hang' },
   address: { bend: 32, kf: 18, side: 4 },
@@ -49,9 +52,11 @@ function mix(a, b, t) { const o = {}; for (const k in a) o[k] = typeof a[k] === 
 function rig(p) {
   const J = {};
   const sw = p.stance, ankY = 0.07;
-  J.la = [sw + p.walk + p.lfx, ankY + 0.08 * p.lheel, p.lfz]; J.ta = [-sw + p.walk + p.tfx, ankY + 0.08 * p.heel, 0.04 * p.heel + p.tfz];
-  J.lt = add(J.la, [0.04, -0.05 - 0.04 * p.lheel, 0.14]); J.tt = add(J.ta, [0.02 + 0.06 * p.heel, -0.05 - 0.08 * p.heel, 0.13 - 0.05 * p.heel]);
-  J.lhl = add(J.la, [-0.01, -0.05, -0.05]); J.thl = add(J.ta, [-0.01, -0.05, -0.05]);
+  J.la = [sw + p.walk + p.lfx + p.ldx, ankY + 0.08 * p.lheel + p.lup, p.lfz + p.ldz]; J.ta = [-sw + p.walk + p.tfx + p.tdx, ankY + 0.08 * p.heel + p.tup, 0.04 * p.heel + p.tfz + p.tdz];
+  const fy = (o, yaw) => { if (!yaw) return o; const c = Math.cos(yaw * D2R), n = Math.sin(yaw * D2R); return [o[0] * c + o[2] * n, o[1], -o[0] * n + o[2] * c]; };
+  J.lt = add(J.la, fy([0.04, -0.05 - 0.04 * p.lheel, 0.14], p.lyaw)); J.tt = add(J.ta, fy([0.02 + 0.06 * p.heel, -0.05 - 0.08 * p.heel, 0.13 - 0.05 * p.heel], p.tyaw));
+  J.lhl = add(J.la, fy([-0.01, -0.05, -0.05], p.lyaw)); J.thl = add(J.ta, fy([-0.01, -0.05, -0.05], p.tyaw));
+  if (p.lup > 0.005) J.lup = p.lup; if (p.tup > 0.005) J.tup = p.tup;
   const hipH = 0.93 - p.kf * 0.0042 - p.bend * 0.0012, hipBack = p.bend * 0.0042 + p.kf * 0.001;
   const pel = [p.ws + p.hx + p.walk, hipH, -hipBack + p.hz];
   const H = rotAxis([1, 0, 0], [0, 1, 0], -p.hip * D2R);
@@ -93,6 +98,12 @@ function rig(p) {
     const bk = mul(F, -0.13); J.spineClub = [add(add(J.head, bk), mul(s, 0.12)), add(add(pel, bk), mul(s, -0.14))];
     J.th = add(add(J.neck, bk), mul(Lt, -0.02)); J.lh = add(add(pel, mul(F, -0.15)), mul(s, 0.05));
     J.te = ik(J.ts, J.th, ua, fa, norm(add(mul(s, 1), mul(Lt, -1)))); J.le = ik(J.ls, J.lh, ua, fa, norm(add(mul(F, -1), mul(Lt, 1))));
+  } else if (a === 'upright') {
+    // the club held upright in front of the body, grip end at the chest, the head hanging down the middle (spine tilt check)
+    const c0 = add(add(C, mul(F, 0.2)), mul(s, -0.04)), dn = mul(s, -1);
+    J.lh = add(c0, mul(Lt, 0.025)); J.th = add(add(c0, mul(Lt, -0.025)), mul(dn, 0.08)); J.sd = dn;
+    J.club = [add(J.lh, mul(dn, -0.06)), add(J.lh, mul(dn, p.clen))];
+    J.le = ik(J.ls, J.lh, ua, fa, norm(add(mul(s, -1), mul(Lt, 0.6)))); J.te = ik(J.ts, J.th, ua, fa, norm(add(mul(s, -1), mul(Lt, -0.6))));
   } else if (a === 'heli') {
     const out = norm(add(Lt, mul(s, -0.05)));
     J.lh = add(J.ls, mul(out, 0.6)); J.th = add(J.ts, mul(out, -0.6)); J.le = add(J.ls, mul(out, 0.3)); J.te = add(J.ts, mul(out, -0.3));
@@ -132,7 +143,41 @@ function sampleAt(dr, t) {
   const tl = dr._tl; t = clamp(t, 0, dr._dur - 1e-3); let i = 0; while (i < tl.length - 1 && t >= tl[i].h) i++;
   const k = tl[i], key = dr.seq[i], prev = dr.seq[(i - 1 + dr.seq.length) % dr.seq.length];
   const raw = i === 0 && t < k.s ? 1 : clamp((t - k.s) / ((k.e - k.s) || 1), 0, 1), u = key.lin ? raw : ease(raw);
-  return { p: mix(prev.P, key.P, u), key, prev, i, u, raw, inHold: t >= k.e, t };
+  const p = mix(prev.P, key.P, u), fs = stepFix(prev.P, key.P, raw, u); if (fs) Object.assign(p, fs);
+  return { p, key, prev, i, u, raw, inHold: t >= k.e, t, fs };
+}
+// ---------- feet step, they don't slide ----------
+// When a foot is in a different place at the next key (stepping in to address, widening the stance, walking through
+// after impact), it lifts, travels and is put down inside its own part of the move, instead of gliding over the ground
+// for the whole of it. If both feet move, the one on the side the golfer is moving toward goes first, like walking.
+function footAt(P, lead) { return lead ? [P.stance + P.walk + P.lfx, P.lfz] : [-P.stance + P.walk + P.tfx, P.tfz]; }
+function stepFix(A, B, raw, u) {
+  if (!A || !B || raw <= 0 || raw >= 1) return null;
+  const fa = [footAt(A, true), footAt(A, false)], fb = [footAt(B, true), footAt(B, false)];
+  const dd = [0, 1].map(j => [fb[j][0] - fa[j][0], fb[j][1] - fa[j][1]]), dist = dd.map(v => Math.hypot(v[0], v[1])), mv = dist.map(v => v > 0.03);
+  if (!mv[0] && !mv[1]) return null;
+  const leadFirst = (dd[0][0] + dd[1][0]) >= 0, win = j => (mv[0] && mv[1]) ? ((j === 0) === leadFirst ? [0.02, 0.58] : [0.42, 0.98]) : [0.08, 0.92];
+  const o = {};
+  for (const j of [0, 1]) {
+    const [x, z, up] = j === 0 ? ['ldx', 'ldz', 'lup'] : ['tdx', 'tdz', 'tup'];
+    if (!mv[j]) continue;
+    const [a, b] = win(j), lw = clamp((raw - a) / (b - a), 0, 1), w = ease(lw);
+    o[x] = dd[j][0] * (w - u); o[z] = dd[j][1] * (w - u); o[up] = clamp(dist[j] * 0.3, 0.035, 0.1) * Math.sin(Math.PI * lw);
+  }
+  return o;
+}
+// the same correction on a pose built from the motion capture (its feet come from the capture plus the drill's change)
+function stepJ(J, fs) {
+  if (!fs || !J) return J;
+  for (const [S, x, z, up, hip, kn] of [['l', 'ldx', 'ldz', 'lup', 'lhip', 'lk'], ['t', 'tdx', 'tdz', 'tup', 'thip', 'tk']]) {
+    if (!fs[x] && !fs[z] && !fs[up]) continue;
+    const d = [fs[x] || 0, fs[up] || 0, fs[z] || 0], a = S + 'a', th = len(sub(J[hip], J[kn])), sh = len(sub(J[kn], J[a]));
+    J = Object.assign({}, J);
+    for (const k of [a, S + 't', S + 'hl']) if (isV(J[k])) J[k] = add(J[k], d);
+    J[kn] = ik(J[a], J[hip], sh, th, norm(sub(J[kn], mul(add(J[a], J[hip]), 0.5))));
+    if (fs[up] > 0.005) J[S + 'up'] = fs[up];
+  }
+  return J;
 }
 // ---------- real swing motion (swing-model.json) ----------
 // Drills that show a normal swing play motion-captured frames. Every key at a standard swing position is the captured
@@ -222,6 +267,8 @@ function compose(f, D) {
   if (g > 0) J.th = lerp3(J.th, add(J.lh, mul(J.sd, D.gl || 0.08)), g);
   if (D.drop > 0) J.th = lerp3(J.th, hangPoint(J.ts, J.F), D.drop);
   if (R.club && R.arms === 'club') { const L = len(sub(R.club[1], R.club[0])); J.club = [sub(J.lh, mul(J.sd, 0.06)), add(J.lh, mul(J.sd, L - 0.06))]; }
+  else if (R.club && R.arms === 'upright') { const sN = norm(J.s), dn = mul(sN, -1), L = len(sub(R.club[1], R.club[0])), F0 = norm(J.F), Fq = norm(sub(F0, mul(sN, dot(F0, sN)))), Lq = norm(J.Lt), c0 = add(add(J.chest, mul(Fq, 0.22)), mul(sN, -0.04)); J.sd = dn;
+    J.lh = add(c0, mul(Lq, 0.025)); J.th = add(add(c0, mul(Lq, -0.025)), mul(dn, 0.08)); J.le = ik(J.ls, J.lh, 0.3, 0.29, norm(add(dn, mul(Lq, 0.6)))); J.te = ik(J.ts, J.th, 0.3, 0.29, norm(add(dn, mul(Lq, -0.6)))); J.club = [add(J.lh, mul(dn, -0.06)), add(J.lh, mul(dn, L - 0.06))]; }
   else if (!R.club) J.club = null;
   return finish(J);
 }
@@ -258,10 +305,17 @@ function standTall(J) {
   const miss = dy => { const P = place(dy), d = sub(P, J.pel); let e = -1; for (const g of legs) e = Math.max(e, len(sub(add(J[g.h], d), J[g.a])) - g.want); return e; };
   let lo = 0, hi = 0.25; if (miss(0) >= 0) return J;
   for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (miss(m) < 0) lo = m; else hi = m; }
-  const P = place(lo), d = sub(P, J.pel), O = Object.assign({}, J);
+  // Bent over (address and the swing), the pelvis rises and slides back under a head that stays where it is, so the
+  // hands and club stay at the ball. Standing up straight there is nothing to keep at the ball, and pivoting would tip
+  // an upright golfer forward, so the whole body rises instead. In between, the two are blended.
+  const up0 = (J.neck[1] - J.pel[1]) / (L || 1), wUp = clamp((up0 - 0.9) / 0.07, 0, 1);
+  const Pp = place(lo), Pu = [J.pel[0], J.pel[1] + lo, J.pel[2]], P = lerp3(Pp, Pu, wUp), d = sub(P, J.pel), O = Object.assign({}, J);
   O.pel = P; for (const k of ['lhip', 'thip', 'seat', 'bum', 'sdBelt']) if (isV(J[k])) O[k] = add(J[k], d);
+  if (wUp > 0) { const lift = [0, lo * wUp, 0], LOW = { la: 1, ta: 1, lt: 1, tt: 1, lhl: 1, thl: 1, lk: 1, tk: 1, pel: 1, lhip: 1, thip: 1, seat: 1, bum: 1, sdBelt: 1 };
+    for (const k in J) { if (LOW[k] || MOTION_VEC[k]) continue; const v = J[k];
+      if (isV(v)) O[k] = add(v, lift); else if (isPair(v)) O[k] = [add(v[0], lift), add(v[1], lift)]; } }
   for (const g of legs) O[g.k] = ik(O[g.a], O[g.h], g.sh, g.th, g.pole);
-  const s = norm(sub(J.neck, P)), cr = len(sub(J.chest, J.pel)) / (L || 1); O.s = s; O.chest = add(P, mul(sub(J.neck, P), cr));
+  const nk = O.neck, s = norm(sub(nk, P)), cr = len(sub(J.chest, J.pel)) / (L || 1); O.s = s; O.chest = add(P, mul(sub(nk, P), cr));
   O._tall = 1; return O; }
 function keyJoints(dr, i) { return standTall(keyJoints0(dr, i)); }
 function keyJoints0(dr, i) { return usesCapture(dr) ? poseOf(dr, keyInfo(dr, i)) : rig(dr.seq[i].P); }
@@ -304,13 +358,14 @@ function clubClear(J) {
   return J;
 }
 // the club down the spine lies ON the golfer's back (it used to run through him)
+const SPINE_BACK = [0.15, 0.095];   // how far behind the spine line the back surface is, at the seat and at head height
 function spineClubOn(J) {
   if (!J || !J.spineClub || !J.pel || !J.s || !J.F) return J;
-  const F = norm(J.F), s0 = norm(J.s), s = norm(sub(s0, mul(F, dot(s0, F))));   // along the back, square to facing
+  const s = norm(J.s), F0 = norm(J.F), F = norm(sub(F0, mul(s, dot(F0, s))));   // along the spine as shown (after standing tall), facing square to it
   // laid against the two points that stick out most, the seat and the back of the head (measured on the figure: the seat
   // 13 cm behind the spine line at belt height, the back of the head up to 1 cm in front of it at 78 cm up), 1.5 cm clear
-  const back = h => 0.148 + (0.002 - 0.148) * (h - 0.02) / 0.76, at = h => add(J.pel, add(mul(s, h), mul(F, -back(h))));
-  J.spineClub = [at(0.95), at(-0.16)];
+  const back = h => SPINE_BACK[0] + (SPINE_BACK[1] - SPINE_BACK[0]) * (h - 0.02) / 0.76, at = h => add(J.pel, add(mul(s, h), mul(F, -back(h))));
+  J.spineClub = [at(0.95), at(-0.16)]; J.bkHead = at(0.8); J.bkUpper = at(0.48); J.bkTail = at(0.0);
   // and the hands on it: the trail hand behind the neck, the lead hand in the small of the back
   const on = (h, out) => add(at(h), mul(F, -out)), Lt = norm(J.Lt || [1, 0, 0]);
   // (eased in by how close the hands already are, so blending into or out of this pose stays smooth)
@@ -322,6 +377,9 @@ function spineClubOn(J) {
 function jointsAt0(dr, t) {
   prep(dr); const s = sampleAt(dr, t);
   if (!usesCapture(dr)) return rig(s.p);
+  return stepJ(jointsCap(dr, s), s.fs);
+}
+function jointsCap(dr, s) {
   const n = dr.seq.length, i = s.i, pi = (i - 1 + n) % n, B = keyInfo(dr, i), A = keyInfo(dr, pi);
   if (s.u >= 1 || s.inHold || (i === 0 && s.raw >= 1)) return poseOf(dr, B);
   if (A.f == null && B.f == null) return shiftJ(rig(s.p), rigShift());
@@ -378,7 +436,7 @@ function monoCubic(T, F, t, rest0, rest1) {   // Fritsch-Carlson monotone interp
   return (2 * u3 - 3 * u2 + 1) * F[k] + (u3 - 2 * u2 + u) * hh * m[k] + (-2 * u3 + 3 * u2) * F[k + 1] + (u3 - u2) * hh * m[k + 1];
 }
 // the red "not this" pose for key i: the golfer's own pose with the fault added
-function ghostAt(dr, i) { const J = ghostAt0(dr, i); return J && standTall(J); }
+function ghostAt(dr, i) { const J = ghostAt0(dr, i); return J && spineClubOn(standTall(J)); }
 function ghostAt0(dr, i) {
   prep(dr); const key = dr.seq[i]; if (!key || !key.G) return null;
   if (!usesCapture(dr)) return rig(key.G);
@@ -397,8 +455,16 @@ const VIEWS = {
   tqf: { yaw: 35, pitch: 9, dist: 5.5, ty: 0.92, tz: 0.2 },
   behind: { yaw: -150, pitch: 14, dist: 5.0, ty: 0.8, tz: 0.2 },
   top: { yaw: -18, pitch: 56, dist: 5.6, ty: 0.7, tz: 0.35 },
+  // close and side-on: the spine, hips and knees in profile (posture)
+  side: { yaw: -90, pitch: 3, dist: 4.1, ty: 0.86, tz: 0.12, tx: 0 },
+  // behind the ball, looking down the target line (aim and alignment)
+  line: { yaw: -90, pitch: 9.6, dist: 9.6, ty: 0.4, tz: 0.72, tx: 4 },
+  // straight down from above (where the feet, ball and sticks are)
+  over: { yaw: 0, pitch: 80, dist: 4.6, ty: 0.2, tz: 0.38, tx: 0 },
+  // close on the hands and club at impact
+  hands: { yaw: 22, pitch: 4, dist: 2.6, ty: 0.62, tz: 0.42, tx: 0.08 },
 };
-const VIEW_NAME = { face: 'Face-on', dtl: 'Down the line', tq: 'From the side', tqf: 'From the front', behind: 'From behind', top: 'From above', back: 'From behind' };
+const VIEW_NAME = { face: 'Face-on', dtl: 'Down the line', tq: 'From the side', tqf: 'From the front', behind: 'From behind', top: 'From above', back: 'From behind', side: 'Side-on', line: 'Down the target line', over: 'Overhead', hands: 'Close-up' };
 function camState(v, extra) { const b = Object.assign({ tx: 0 }, VIEWS[v] || VIEWS.face, extra || {}); return b; }
 function camMix(a, b, u) { const o = {}; for (const k in a) o[k] = lerp(a[k], b[k] == null ? a[k] : b[k], u); let dy = b.yaw - a.yaw; if (dy > 180) dy -= 360; if (dy < -180) dy += 360; o.yaw = a.yaw + dy * u; return o; }
 function camPos(c) { const y = c.yaw * D2R, p = c.pitch * D2R; const dir = [Math.sin(y) * Math.cos(p), Math.sin(p), Math.cos(y) * Math.cos(p)]; const tg = [c.tx, c.ty, c.tz]; return { pos: add(tg, mul(dir, c.dist)), tg }; }
@@ -489,6 +555,11 @@ function poseFigure(FG, J) {
 const HLR = { hips: ['hips'], head: ['head', 'neck'], chest: ['chest'], shoulders: ['chest'], leadarm: ['leadarm', 'leadhand'], trailarm: ['trailarm', 'trailhand'], arms: ['leadarm', 'trailarm'],
   trailleg: ['trailleg'], leadleg: ['leadleg'], legs: ['leadleg', 'trailleg'], trailknee: ['trailleg'], leadknee: ['leadleg'], feet: ['leadfoot', 'trailfoot'], trailfoot: ['trailfoot'], leadfoot: ['leadfoot'], bum: ['hips'] };
 function poseAny(FG, J) { if (FG.real) FG.pose(J); else poseFigure(FG, J); }
+// where the ghost and the golfer overlap, the golfer wins: he marks his pixels in the stencil buffer and the ghost is
+// only drawn outside them. So the red shows exactly where the wrong position differs, as a clean shape, instead of a
+// speckled mix of two bodies at nearly the same depth.
+function figStencil(FG) { if (FG && FG.mats) FG.mats.forEach(m => { m.stencilWrite = true; m.stencilRef = 1; m.stencilFunc = T.AlwaysStencilFunc; m.stencilZPass = T.ReplaceStencilOp; }); return FG; }
+function ghostLook(FG) { if (FG && FG.mats) FG.mats.forEach(m => { m.stencilWrite = true; m.stencilRef = 1; m.stencilFunc = T.NotEqualStencilFunc; m.stencilZPass = T.KeepStencilOp; m.stencilFail = T.KeepStencilOp; }); return FG; }
 function ghostOpacity(FG, o) { if (FG.real) { FG.mats[0].opacity = Math.min(0.55, o * 1.6); FG.G.renderOrder = 2; } else FG.P.chest.material.opacity = o; }
 function setTone(FG, hl, t) {
   if (FG.real) { const ps = []; for (const h of hl || []) for (const n of (HLR[h] || [h])) ps.push(n); return FG.highlight(ps, t); }
@@ -756,6 +827,9 @@ function cyl(r, mat, seg) { const g = new T.CylinderGeometry(r, r, 1, seg || 14)
 function box(w, h, d, mat, pos) { const m = new T.Mesh(new T.BoxGeometry(w, h, d), mat); m.castShadow = true; m.receiveShadow = true; if (pos) m.position.set(pos[0], pos[1], pos[2]); return m; }
 function between(m, a, b) { const A = v3(a), d = v3(b).sub(A), L = d.length(); m.position.copy(A); m.quaternion.setFromUnitVectors(Y, d.clone().normalize()); m.scale.set(1, L, 1); }
 let PM = null;
+// the red ghost's stick: its own plain material (the ghost's skinned material must not be shared with a plain mesh)
+let GSM = null;
+function ghostStickMat() { return GSM || (GSM = new T.MeshStandardMaterial({ color: 0xff5a4a, transparent: true, opacity: 0.45, roughness: 0.5, depthWrite: false })); }
 function propMats() {
   if (PM) return PM;
   return (PM = { stick: std(0xffb020, { roughness: 0.4 }), stick2: std(0xff5fa2, { roughness: 0.4 }), white: std(0xffffff, { roughness: 0.35 }), black: std(0x161616, { roughness: 0.4, metalness: 0.3 }),
@@ -796,7 +870,13 @@ function buildProps(S, dr) {
       case 'glove': { const gl = new T.Mesh(ell(0.075, 0.04, 0.095, 16), propMats().cap); gl.castShadow = true; g.add(gl); g.userData.attach = q.attach; break; }
       case 'mirror': { const at = R3(q.at); g.add(box(0.04, 1.8, 0.8, M.frame, [at[0], 0.95, at[2]])); g.add(box(0.045, 1.7, 0.7, M.mirror, [at[0] - 0.005, 0.95, at[2]])); break; }
       case 'bag': { const at = R3(q.at); const b = cyl(0.13, M.bag, 20); b.position.set(at[0], 0, at[2]); b.scale.y = 0.85; g.add(b); break; }
-      case 'impactbag': { const at = R3(q.at); g.add(box(0.36, 0.3, 0.28, M.red, [at[0], 0.15, at[2]])); break; }
+      case 'impactbag': { const at = R3(q.at), b = new T.Mesh(new T.CylinderGeometry(0.145, 0.15, 0.26, 28), M.red); b.position.set(at[0], 0.13, at[2]); b.castShadow = true; b.receiveShadow = true;
+        const band = new T.Mesh(new T.CylinderGeometry(0.149, 0.155, 0.04, 28), M.black); band.position.set(at[0], 0.045, at[2]); band.castShadow = true;
+        const hd = new T.Mesh(new T.TorusGeometry(0.05, 0.011, 8, 16, Math.PI), M.black); hd.position.set(at[0], 0.26, at[2]); g.add(b, band, hd); g.userData.squash = true; break; }
+      case 'flag': { const at = R3(q.at), h = q.h || 2.2; const pole = cyl(0.012, M.white); pole.position.set(at[0], 0, at[2]); pole.scale.y = h; g.add(pole);
+        const sh = new T.Shape(); sh.moveTo(0, 0); sh.lineTo(-0.55, -0.18); sh.lineTo(0, -0.36); sh.closePath();
+        const fl = new T.Mesh(new T.ShapeGeometry(sh), std(0xffd21f, { roughness: 0.7, side: T.DoubleSide })); fl.position.set(at[0], h - 0.02, at[2]); fl.rotation.y = Math.PI / 2; g.add(fl);
+        const cup = new T.Mesh(new T.CircleGeometry(0.1, 20), M.black); cup.rotation.x = -Math.PI / 2; cup.position.set(at[0], 0.004, at[2]); g.add(cup); break; }
       case 'belt': { m = cyl(0.009, M.stick); g.add(m); g.userData.belt = true; break; }
       case 'shadowballs': { for (const j of [J0.pel, J0.chest, J0.head]) { const b = new T.Mesh(new T.SphereGeometry(0.021, 16, 12), M.white); b.position.set(j[0] + 0.1 * j[1] / 4.4, 0.021, j[2] + 0.5 * j[1]); b.castShadow = true; g.add(b); } break; }
     }
@@ -811,6 +891,8 @@ function updateProps(props, J, key, dr, st) {
     if (q.type === 'glove') { const a = q.attach === 'larm' ? [J.ls, J.le] : [J.ts, J.te], c = add(add(mul(a[0], 0.72), mul(a[1], 0.28)), add(mul(J.F, 0.05), mul(J.Lt, q.attach === 'larm' ? 0.1 : -0.1))); g.children[0].position.copy(v3(add(c, mul(norm(sub(J.chest, a[0])), 0.02)))); g.children[0].quaternion.setFromUnitVectors(Y, v3(norm(sub(a[1], a[0])))); }
     if (q.type === 'belt') between(g.children[0], J.belt[0], J.belt[1]);
     if (g.userData.knock) { const k = key.knock ? (st.inHold ? 1 : st.raw) : 0; g.rotation.set(k * 1.4, 0, -k * 0.5); }
+    // an impact bag gives a little when the club meets it
+    if (g.userData.squash) { const k = key.hit && !REDUCED ? Math.max(0, 1 - Math.abs(st.raw - 1) * 6) * (st.inHold ? Math.max(0, 1 - (st.t - dr._tl[st.i].e) * 4) : 1) : 0; g.children[0].scale.set(1 - 0.07 * k, 1, 1 + 0.03 * k); }
   }
 }
 
@@ -865,23 +947,23 @@ function scene(dr) {
   const tg = new T.Group(); for (let i = 0; i < 8; i++) { const d = box(0.16, 0.003, 0.018, std(0xffffff, { roughness: 0.8 }), [0.55 + i * 0.26, 0.004, ballOf(dr)[2]]); d.castShadow = false; tg.add(d); }
   const arr = new T.Mesh(new T.ConeGeometry(0.05, 0.14, 3), std(0xffffff)); arr.rotation.z = -Math.PI / 2; arr.position.set(2.75, 0.01, ballOf(dr)[2]); arr.scale.set(1, 1, 0.15); tg.add(arr); S.add(tg);
   const real = typeof CCGolfer !== 'undefined' && CCGolfer.ready();
-  const fig = real ? CCGolfer.make(false) : figure(false), ghost = real ? CCGolfer.make(true) : figure(true); fig.real = real; ghost.real = real; S.add(fig.G); S.add(ghost.G); ghost.G.visible = false;
+  const fig = figStencil(real ? CCGolfer.make(false) : figure(false)), ghost = ghostLook(real ? CCGolfer.make(true) : figure(true)); fig.real = real; ghost.real = real; S.add(fig.G); S.add(ghost.G); ghost.G.visible = false;
   const M = propMats();
   const club = new T.Group(); const hd = new T.Mesh(ironHead(), M.chrome || (M.chrome = std(0xe2e5e8, { roughness: 0.18, metalness: 1 }))); hd.castShadow = true;
   const gr = cyl(0.0125, M.grip || (M.grip = std(0x1c1d20, { roughness: 0.75 })), 18); club.add(shaftMesh(M.steel), gr, hd); S.add(club); const trail = speedTrail(); S.add(trail);
-  const gclub = new T.Group(); const gm = ghost.real ? ghost.mats[0] : ghost.P.chest.material; gclub.add(cyl(0.007, gm), cyl(0.014, gm), new T.Mesh(ell(0.048, 0.016, 0.022, 12), gm)); gclub.children.forEach(c => { c.castShadow = false; }); S.add(gclub);
+  const gclub = new T.Group(), gm = ghostStickMat(); gclub.add(cyl(0.007, gm), cyl(0.014, gm), new T.Mesh(ell(0.048, 0.016, 0.022, 12), gm)); gclub.children.forEach(c => { c.castShadow = false; }); S.add(gclub);
   const stick = cyl(0.01, M.stick); S.add(stick); stick.visible = false;      // a stick across the chest, or a club down the spine
+  const gstick = cyl(0.011, ghostStickMat()); gstick.castShadow = false; S.add(gstick); gstick.visible = false;   // the same on the red ghost
   let ball = null; if (dr.ball) { const b = new T.Mesh(new T.SphereGeometry(0.021, 20, 14), M.white); b.castShadow = true; b.position.set(ballOf(dr)[0], 0.042, ballOf(dr)[2]); S.add(b); const t = cyl(0.006, M.white); t.position.set(ballOf(dr)[0], 0, ballOf(dr)[2]); t.scale.y = 0.022; S.add(t); ball = b; }
   const props = buildProps(S, dr);
   const cam = new T.PerspectiveCamera(30, 0.8, 0.1, 400);
-  const sc = { S, fig, ghost, club, gclub, stick, ball, props, cam, key, trail };
+  const sc = { S, fig, ghost, club, gclub, stick, gstick, ball, props, cam, key, trail };
   SCN.set(dr.id, sc); return sc;
 }
 // swap the simple figure for the realistic golfer as soon as he has loaded
 function upgrade(sc) {
-  const f = CCGolfer.make(false), g = CCGolfer.make(true); f.real = g.real = true;
+  const f = CCGolfer.make(false), g = CCGolfer.make(true); f.real = g.real = true; ghostLook(g); figStencil(f);
   sc.S.remove(sc.fig.G); sc.S.remove(sc.ghost.G); sc.S.add(f.G); sc.S.add(g.G); g.G.visible = false; sc.fig = f; sc.ghost = g;
-  const gm = g.mats[0]; sc.gclub.children.forEach(c => { c.material = gm; });
 }
 function poseClub(cg, club, J, flex) {
   if (!club) { cg.visible = false; return; } cg.visible = true;
@@ -978,6 +1060,9 @@ function at3(J, a, dr) {
   if (a === 'knees') return mul(add(J.lk, J.tk), 0.5);
   if (a === 'feet') return mul(add(J.la, J.ta), 0.5);
   if (a === 'shoulders') return mul(add(J.ls, J.ts), 0.5);
+  if (a === 'hipmid') return mul(add(J.lhip, J.thip), 0.5);
+  if (a === 'grip') return J.club ? J.club[0] : J.lh;
+  if (a === 'ltoe') return J.lt; if (a === 'ttoe') return J.tt;
   if (a === 'shHead' || a === 'shBelt') { const j = startJ(dr)[a === 'shHead' ? 'head' : 'pel']; return [j[0] + 0.1 * j[1] / 4.4, 0.03, j[2] + 0.5 * j[1]]; }
   return J[a] || J.pel;
 }
@@ -990,8 +1075,23 @@ function overlay(x, W, Hh, proj, J, key, st, dr, dpr, path, GJ, cf, cpitch) {
     x.lineCap = 'round'; x.lineJoin = 'round';
     for (let i = 1; i < n; i++) { const a = proj(path[i - 1]), b = proj(path[i]); x.strokeStyle = `rgba(255,214,10,${0.25 + 0.65 * i / n})`; x.lineWidth = 4 * dpr; x.beginPath(); x.moveTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.stroke(); }
   }
-  // arrows: which way to move
   const vis = (st.inHold || st.raw > 0.15) ? 1 : 0;
+  // reference lines: the spine, the line across the shoulders, a plumb line, the shaft. 'down' drops straight to the
+  // ground, 'up' rises straight up; ext lengthens the line past each end. A 'bad' line is drawn on the red ghost.
+  for (const l of key.ln || []) {
+    if (!vis) break; const JJ = l.tone === 'bad' && GJ ? GJ : J, col = l.tone === 'bad' ? C.bad : l.tone === 'info' ? '#ffffff' : l.tone === 'warn' ? '#ffd21f' : C.good;
+    let A = at3(JJ, l.a, dr), B = l.b === 'down' ? [A[0], 0.004, A[2]] : l.b === 'up' ? [A[0], A[1] + (l.len || 1.2), A[2]] : at3(JJ, l.b, dr);
+    if (l.ext) { const d = sub(B, A); A = sub(A, mul(d, l.ext[0] || 0)); B = add(B, mul(d, l.ext[1] || 0)); }
+    const a = proj(A), b = proj(B); x.lineCap = 'round';
+    x.strokeStyle = l.tone === 'info' ? 'rgba(16,32,26,.55)' : 'rgba(255,255,255,.85)'; x.lineWidth = lw + 2.5 * dpr; x.beginPath(); x.moveTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.stroke();
+    x.strokeStyle = col; x.lineWidth = lw; if (l.dash !== false) x.setLineDash([9 * dpr, 6 * dpr]); x.beginPath(); x.moveTo(a[0], a[1]); x.lineTo(b[0], b[1]); x.stroke(); x.setLineDash([]);
+  }
+  // the pace of this part of the demo: a slow rehearsal, or the real speed
+  if (key.pace) { const t = { slow: 'Slow rehearsal', real: 'Real speed', hold: 'Hold' }[key.pace] || key.pace, f = Math.round(11.5 * dpr);
+    x.font = `700 ${f}px "Instrument Sans",system-ui,sans-serif`; const tw = x.measureText(t).width, ph = f + 12 * dpr, pw = tw + 22 * dpr, px = W - pw - 12 * dpr, py = 12 * dpr;
+    x.fillStyle = key.pace === 'real' ? 'rgba(23,180,95,.92)' : 'rgba(16,32,26,.78)'; roundRect(x, px, py, pw, ph, ph / 2); x.fill();
+    x.fillStyle = '#fff'; x.textBaseline = 'middle'; x.fillText(t, px + 11 * dpr, py + ph / 2 + 1); }
+  // arrows: which way to move
   for (const ar of key.arr || []) {
     if (!vis) break; const col = toneCol(ar.tone);
     let A, B;
@@ -1146,7 +1246,8 @@ function Player(wrap, dr, opt) {
     if (key.step !== st.step) { st.step = key.step; opt.onStep && opt.onStep(key.step); }
     // camera: ease toward this key's view
     const want = camState(viewFor(key), key.camo || dr.camo);
-    if (!st.cam) st.cam = want; else st.cam = camMix(st.cam, want, 0.08);
+    // a key marked cut is a cut in the film: the camera jumps straight to its view
+    if (!st.cam || (key.cut && s.i !== st.ki)) st.cam = want; else st.cam = camMix(st.cam, want, 0.08); st.ki = s.i;
     st.still = Object.keys(want).every(k => typeof want[k] !== 'number' || Math.abs(k === 'yaw' ? ((want.yaw - st.cam.yaw) % 360 + 540) % 360 - 180 : want[k] - st.cam[k]) < 1e-3);
     const cp = camPos(st.cam);
     let proj;
@@ -1158,10 +1259,11 @@ function Player(wrap, dr, opt) {
       poseClub(sc.club, noClub ? null : J.club, J, fx && fx.flex); poseTrail(sc.trail, fx && fx.trail);
       // the red "not this" ghost
       const gw = key.G ? (s.inHold ? 1 : s.raw) : 0;
-      sc.ghost.G.visible = gw > 0.05; sc.gclub.visible = false;
-      if (gw > 0.05) { const GJ = ghostAt(dr, s.i); poseAny(sc.ghost, GJ); ghostOpacity(sc.ghost, 0.3 * gw); if (GJ.club) { poseClub(sc.gclub, GJ.club, GJ); sc.gclub.visible = true; } }
+      sc.ghost.G.visible = gw > 0.05; sc.gclub.visible = false; sc.gstick.visible = false;
+      if (gw > 0.05) { const GJ = ghostAt(dr, s.i); poseAny(sc.ghost, GJ); ghostOpacity(sc.ghost, 0.3 * gw); if (GJ.club && !(dr.noclub || key.G.noclub)) { poseClub(sc.gclub, GJ.club, GJ); sc.gclub.visible = true; }
+        const ga = GJ.stickAcross || GJ.spineClub; if (ga) { between(sc.gstick, ga[0], ga[1]); sc.gstick.visible = true; } }
       const across = J.stickAcross || J.spineClub; sc.stick.visible = !!across; if (across) between(sc.stick, across[0], across[1]);
-      if (sc.ball) { const hit = key.hit && (s.inHold || s.raw > 0.5); sc.ball.visible = !hit && !(dr.seq.slice(0, s.i).some(k => k.hit) && !key.reset); }
+      if (sc.ball) { const hit = key.hit && (s.inHold || s.raw > 0.5); sc.ball.visible = !key.noball && !(hit && !key.bag) && !(dr.seq.slice(0, s.i).some(k => k.hit && !k.bag) && !key.reset); }
       updateProps(sc.props, J, key, dr, s);
       faceTrees(sc); R.render(sc.S, sc.cam); STATS.renders++;
       const v = new T.Vector3(); proj = p => { const q = mx(p); v.set(q[0], q[1], q[2]).project(sc.cam); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H, v.z]; };
@@ -1181,7 +1283,7 @@ function Player(wrap, dr, opt) {
     goStep(i) { st.t = stepStart(dr, clamp(i, 0, dr.steps.length - 1)); st.step = -1; draw(); },
     next() { this.goStep(st.step + 1 >= dr.steps.length ? 0 : st.step + 1); }, prev() { this.goStep(Math.max(0, st.step - 1)); },
     setSpeed(s) { st.speed = s; }, setView(v) { st.view = v; st.dirty = true; },
-    seek(t) { st.t = t; st.cam = null; draw(); }, get dur() { return dr._dur; },
+    seek(t) { st.t = t; st.cam = null; draw(); }, get dur() { return dr._dur; }, get _sc() { return sc; },
     keyTimes() { return dr._tl.map(k => k.e + Math.min(0.4, (k.h - k.e) * 0.6)); },
     destroy() { st.dead = true; cancelAnimationFrame(st.raf); if (ro) ro.disconnect(); if (gl && cv.parentNode) cv.parentNode.removeChild(cv); },
   };
@@ -1200,12 +1302,12 @@ function poster(dr, w, h, warm) {   // warm: also draw the red ghost, so its sha
     if (!sc.fig.real && typeof CCGolfer !== 'undefined' && CCGolfer.ready()) upgrade(sc); poseAny(sc.fig, J); setTone(sc.fig, [], 0); poseClub(sc.club, (dr.noclub || s.p.noclub) ? null : J.club, J); poseTrail(sc.trail, null); sc.ghost.G.visible = false; sc.gclub.visible = false;
     if (warm) { poseAny(sc.ghost, J); ghostOpacity(sc.ghost, 0.3); poseClub(sc.gclub, J.club, J); sc.ghost.G.visible = !!J; sc.gclub.visible = !!J.club; }
     const across = J.stickAcross || J.spineClub; sc.stick.visible = !!across; if (across) between(sc.stick, across[0], across[1]);
-    if (sc.ball) sc.ball.visible = true; updateProps(sc.props, J, {}, dr, s);
+    if (sc.ball) sc.ball.visible = !key.noball; updateProps(sc.props, J, key, dr, s);
     faceTrees(sc); R.render(sc.S, sc.cam); STATS.shared++; if (warm) { sc.ghost.G.visible = false; sc.gclub.visible = false; } const x = c.getContext('2d'); x.drawImage(R.domElement, 0, 0, w, h);
   } else { const x = c.getContext('2d'), yaw = (VIEWS[dr.view] || VIEWS.face).yaw * D2R, Rr = [Math.cos(yaw), 0, -Math.sin(yaw)], kk = h * 0.42; flat(x, w, h, p => [w / 2 + (MIR ? -1 : 1) * dot(p, Rr) * kk, h * 0.9 - p[1] * kk, 0], J, dr); }
   const url = c.toDataURL('image/jpeg', 0.86); POSTERS.set(id, url); if (typeof CCGolfer !== 'undefined' && CCGolfer.ready()) POSTERS.set(id + ':real', true); return url;
 }
 function stats() { return { scenes: SCN.size, renders: STATS.renders, scale: QUAL.s, programs: R && R.info.programs ? R.info.programs.length : 0 }; }
-const api = { _raw: (dr, t) => jointsAt0(dr, t), _ghostRaw: (dr, i) => ghostAt0(dr, i), _standTall: J => standTall(J), prepTextures, stats, slowFrames, QUAL, Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, _clubFx: clubFx, ballOf, propPoint };
+const api = { _scene: id => SCN.get(id), _raw: (dr, t) => jointsAt0(dr, t), _ghostRaw: (dr, i) => ghostAt0(dr, i), _standTall: J => standTall(J), prepTextures, stats, slowFrames, QUAL, Player, poster, rig, pose, prep, sampleAt, webgl, VIEW_NAME, POSES, setMirror, setSwing, loadSwing, hasSwing, jointsAt, ghostAt, _clubFx: clubFx, ballOf, propPoint };
 root.DrillStudio = api;
 })(this);

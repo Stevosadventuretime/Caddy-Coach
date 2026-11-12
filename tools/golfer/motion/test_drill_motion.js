@@ -132,3 +132,27 @@ test('club flex and blur work out at every moment of every drill (100 a second),
     for (let t = 0; t < dr._dur; t += 0.01) { const J = D.jointsAt(dr, t);
       assert.doesNotThrow(() => D._clubFx(dr, t, J), dr.id + ' at ' + t.toFixed(2)); } }
 });
+test('a foot that moves between keys steps: it lifts and lands, it does not slide', () => {
+  const { DrillStudio: D, DRILL_LIBRARY: L } = load(); D.setSwing(MODEL);
+  const dr = L.find(d => d.id === 'stepthrough'); D.prep(dr);
+  const i = dr.seq.findIndex(k => k.o && k.o.tfx), tl = dr._tl[i], y = t => D.jointsAt(dr, t).ta[1];
+  const ground = y(tl.s), peak = Math.max(...[0.3, 0.4, 0.5, 0.6, 0.7].map(u => y(tl.s + (tl.e - tl.s) * u)));
+  assert.ok(peak - ground > 0.04, 'trail foot lifts ' + (peak - ground).toFixed(3));
+  assert.ok(Math.abs(y(tl.e) - D.jointsAt(dr, tl.e + 0.2).ta[1]) < 1e-6, 'and is put down');
+  // early in the move the foot hasn't left yet; it gets there inside its own window
+  const x0 = D.jointsAt(dr, tl.s).ta[0], x1 = D.jointsAt(dr, tl.e).ta[0], xe = D.jointsAt(dr, tl.s + (tl.e - tl.s) * 0.05).ta[0];
+  assert.ok(Math.abs(xe - x0) < 0.03 * Math.abs(x1 - x0) + 0.005, 'foot waits before stepping');
+});
+test('standing up straight looks straight (the body rises instead of tipping forward)', () => {
+  const { DrillStudio: D, DRILL_LIBRARY: L } = load();
+  const dr = L.find(d => d.id === 'hinge'); D.prep(dr); const J = D.jointsAt(dr, dr._tl[0].e + 0.1);
+  const lean = Math.atan2(Math.hypot(J.neck[0] - J.pel[0], J.neck[2] - J.pel[2]), J.neck[1] - J.pel[1]) * 180 / Math.PI;
+  assert.ok(lean < 8, 'stand lean ' + lean.toFixed(1));
+});
+test('the club down the spine lies along the back, parallel to the spine', () => {
+  const { DrillStudio: D, DRILL_LIBRARY: L } = load();
+  const dr = L.find(d => d.id === 'hinge'); D.prep(dr);
+  for (const i of [0, 2, 3]) { const J = D.jointsAt(dr, dr._tl[i].e + 0.1), c = J.spineClub, u = sub(c[0], c[1]), s = sub(J.neck, J.pel);
+    const cos = (u[0] * s[0] + u[1] * s[1] + u[2] * s[2]) / (Math.hypot(...u) * Math.hypot(...s));
+    assert.ok(cos > 0.995, 'key ' + i + ' club off the spine line ' + (Math.acos(Math.min(1, cos)) * 180 / Math.PI).toFixed(1) + ' deg'); }
+});
