@@ -87,7 +87,7 @@ NEW IN THIS VERSION
 - Goals and a getting-started checklist on Home, and an Updates card (handicap changes, goals reached,
   practice reminders, new rounds and competitions at your club).
 - Phone notifications when a swing analysis or shot trace finishes while you're in another app
-  (Me > Text size and display). On iPhone this works once the app is added to the Home Screen.
+  (Me > Settings). On iPhone this works once the app is added to the Home Screen.
   Notifications sent when the app is closed (true push) need a small server; see APP STORES below.
 - Course rating, slope and stroke index fill in automatically when other golfers have entered them
   for those tees, with a note saying how many golfers they came from.
