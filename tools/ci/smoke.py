@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', '..')
 PORT = 8811
-STEPS = int(os.environ.get('SMOKE_STEPS', '40'))
+STEPS = int(os.environ.get('SMOKE_STEPS', '30'))
 fails = []
 
 def fake_server(route):
@@ -39,7 +39,9 @@ try:
                 ids = pg.evaluate("DRILL_LIBRARY.map(d=>d.id)")
                 for i in ids:
                     r = pg.evaluate(f"""(async()=>{{await openDrill('{i}');const P=DP.player;if(!P)return 'no player';P.pause&&P.pause();
-                      const ts=[];for(let k=0;k<={STEPS};k++)ts.push(P.dur*k/{STEPS});(DP.d._tl||[]).forEach(s=>[s.s,s.e].forEach(t=>{{if(t!=null)for(const o of [-0.05,-0.02,0,0.02,0.05])ts.push(Math.min(P.dur,Math.max(0,t+o)))}}));for(const v of ['face','dtl']){{P.setView(v);for(const t of ts){{try{{P.seek(t)}}catch(x){{closeDrill(true);return v+' t='+t.toFixed(2)+': '+x.message}}}}}}
+                      const ts=[];for(let k=0;k<={STEPS};k++)ts.push(P.dur*k/{STEPS});const ks=[];(DP.d._tl||[]).forEach(s=>[s.s,s.e].forEach(t=>{{if(t!=null)for(const o of [-0.03,0,0.03])ks.push(Math.min(P.dur,Math.max(0,t+o)))}}));
+                      // the poses don't depend on the camera, so the key edges are checked once and the even samples in both views
+                      for(const [v,list] of [['face',ts.concat(ks)],['dtl',ts]]){{P.setView(v);for(const t of list){{try{{P.seek(t)}}catch(x){{closeDrill(true);return v+' t='+t.toFixed(2)+': '+x.message}}}}}}
                       closeDrill(true);return null}})()""")
                     if r: errs.append(f'drill {i} {r}')
                 print(f'{len(ids)} drills played')

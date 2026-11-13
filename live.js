@@ -12,18 +12,20 @@ const SPECS = {
   mirror:      { mode: 'hold', views: ['dtl'], hold: 3, arms: true },
   station:     { mode: 'hold', views: ['dtl'], hold: 2, arms: true },
   chair:       { mode: 'swing', views: ['dtl'], checks: ['hips', 'tilt', 'height'] },
-  chestturn:   { mode: 'swing', views: ['dtl', 'face'], checks: ['tilt', 'height', 'head', 'hipsway'], crossed: true },
+  chestturn:   { mode: 'swing', views: ['dtl', 'face'], checks: ['tilt', 'height', 'head', 'hipsway'], crossed: true, sub: 'Arms out, level with your shoulders' },
   headwall:    { mode: 'swing', views: ['dtl'], checks: ['head', 'height'], crossed: true },
   partnerhead: { mode: 'swing', views: ['face', 'dtl'], checks: ['head', 'height'] },
-  feettogether:{ mode: 'swing', views: ['face'], checks: ['head', 'height'], finish: 2 },
+  doorhead:    { mode: 'swing', views: ['face'], checks: ['head', 'height'], crossed: true },
+  feettogether:{ mode: 'swing', views: ['face'], checks: ['head', 'height'], finish: 3 },
   crossarms:   { mode: 'swing', views: ['face'], checks: ['head', 'hipsway', 'turn'], crossed: true },
+  pocket:      { mode: 'swing', views: ['face'], checks: ['head', 'hipsway', 'turn'] },
   hipstick:    { mode: 'swing', views: ['face'], checks: ['hipsway', 'head'] },
   leadarm:     { mode: 'swing', views: ['face', 'dtl'], checks: ['arm', 'head', 'height'] },
   pump:        { mode: 'swing', views: ['face', 'dtl'], checks: ['arm', 'head', 'height'], impactLo: 0.25 },
   ltol:        { mode: 'swing', views: ['face', 'dtl'], checks: ['head', 'height'] },
   tempo:       { mode: 'swing', views: ['face', 'dtl'], checks: ['tempo'], metro: true },
   pausetop:    { mode: 'swing', views: ['face', 'dtl'], checks: ['pause', 'head'] },
-  impactbag:   { mode: 'swing', views: ['dtl'], checks: ['hips', 'tilt', 'height'], holdEnd: 2 },
+  impactbag:   { mode: 'swing', views: ['dtl'], checks: ['hips', 'tilt', 'height'], holdEnd: 3 },
   lowpoint:    { mode: 'swing', views: ['face'], checks: ['head', 'height'] },
   holdfinish:  { mode: 'swing', views: ['face', 'dtl'], checks: ['height'], finish: 3 },
   oneleg:      { mode: 'swing', views: ['face'], checks: [], finish: 5 },
@@ -227,7 +229,7 @@ LiveEngine.prototype.swingStep = function (f, out) {
       out.say.push(firstRef ? { text: this.checks.includes('tempo') ? 'Locked in. Swing when ready, and I will time your tempo.' : 'Locked in. Swing when ready.', pri: 2 } : { text: 'Set', pri: 1, tone: 'ready' });
     } else {
       out.level = 'idle'; out.text = this.state === 'calib' ? 'Get into your setup and hold still' : 'Back to address and hold still';
-      out.sub = this.sp.crossed ? 'Arms crossed on your chest' : 'Club down at address';
+      out.sub = this.sp.sub || (this.sp.crossed ? 'Arms crossed on your chest' : 'Club down at address');
       return out;
     }
   }
