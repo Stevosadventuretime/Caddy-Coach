@@ -436,7 +436,7 @@ function monoCubic(T, F, t, rest0, rest1) {   // Fritsch-Carlson monotone interp
   return (2 * u3 - 3 * u2 + 1) * F[k] + (u3 - 2 * u2 + u) * hh * m[k] + (-2 * u3 + 3 * u2) * F[k + 1] + (u3 - u2) * hh * m[k + 1];
 }
 // the red "not this" pose for key i: the golfer's own pose with the fault added
-function ghostAt(dr, i) { const J = ghostAt0(dr, i); return J && spineClubOn(standTall(J)); }
+function ghostAt(dr, i) { const J = ghostAt0(dr, i); return J && clubClear(spineClubOn(standTall(J))); }
 function ghostAt0(dr, i) {
   prep(dr); const key = dr.seq[i]; if (!key || !key.G) return null;
   if (!usesCapture(dr)) return rig(key.G);

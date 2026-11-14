@@ -156,3 +156,7 @@ test('the club down the spine lies along the back, parallel to the spine', () =>
     const cos = (u[0] * s[0] + u[1] * s[1] + u[2] * s[2]) / (Math.hypot(...u) * Math.hypot(...s));
     assert.ok(cos > 0.995, 'key ' + i + ' club off the spine line ' + (Math.acos(Math.min(1, cos)) * 180 / Math.PI).toFixed(1) + ' deg'); }
 });
+test('a ghost\'s club never goes into the ground', () => {
+  const { DrillStudio: D, DRILL_LIBRARY: L } = load(); D.setSwing(MODEL);
+  for (const dr of L) { D.prep(dr); dr.seq.forEach((k, i) => { const G = D.ghostAt(dr, i); if (G && G.club) assert.ok(G.club[1][1] > -0.005, dr.id + ' ghost ' + i + ' club at ' + G.club[1][1].toFixed(3)); }); }
+});
