@@ -555,7 +555,8 @@ const LiveUI = {
     q('#lvSet').hidden = true; q('#lvRun').hidden = false; q('#lvStart').disabled = false; this.msg('');
     try { if (navigator.wakeLock) this.wake = await navigator.wakeLock.request('screen'); } catch (_) {}
     this.eng = new LiveEngine(this.d.id, { right: this.opt.hand !== 'left', view: this.opt.view });
-    this.spk.say({ text: src === 'camera' ? 'Camera on. Step into view.' : 'Checking your video.', force: true, pri: 2 });
+    const cue = this.d && this.d.cue ? ' ' + this.d.cue : '';
+    this.spk.say({ text: src === 'camera' ? 'Camera on.' + cue + ' Step into view.' : 'Checking your video.', force: true, pri: 2 });
     this.run = true; this.loop(pose, v);
   },
   async loop(pose, v) {

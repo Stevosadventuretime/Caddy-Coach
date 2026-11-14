@@ -314,7 +314,9 @@ const TASKS={
  landing:{name:'Chip to a landing spot',time:'15 min',where:'Short-game area',steps:['Lay a towel 3 paces onto the green.','Chip 20 balls trying to land on the towel and let them run out.','Change club (wedge, 9 iron, 7 iron) and watch how far each rolls.'],why:'chipping close'},
  sand:{name:'Line in the sand',time:'15 min',where:'Bunker',steps:['Draw a line in the sand. Without a ball, hit the sand just after the line, 10 times.','Put a ball 2 inches ahead of a new line and splash it out. 20 balls.'],why:'bunker play'},
  fairway:{name:'Fairway finder',time:'20 min',where:'Range',steps:['Pick two flags about 30 yards apart as the edges of a fairway.','Hit 14 drives, one per hole of a round, with your full routine each time.','Count how many finish between the flags. Aim to beat 7.'],why:'hitting fairways'},
- approach:{name:'Three-club approach ladder',time:'20 min',where:'Range',steps:['Pick three flags at your 9 iron, 7 iron and 5 iron distances.','Hit 5 balls to each, with your full routine.','Score each one that finishes within about 10 yards of the flag.'],why:'hitting greens'}};
+ approach:{name:'Three-club approach ladder',time:'20 min',where:'Range',steps:['Pick three flags at your 9 iron, 7 iron and 5 iron distances.','Hit 5 balls to each, with your full routine.','Score each one that finishes within about 10 yards of the flag.'],why:'hitting greens'},
+ mixed:{name:'Same feeling, different shot',time:'20 min',where:'Range',steps:['Hit 15 balls, changing club and target every ball (for example 9 iron, driver, 7 iron, wedge).','Before each one, make one practice swing with your focus feeling, then hit with your normal routine.','Count the balls where the feeling and the strike both held. Mixing it up is harder, so expect fewer than in the drill; that is where it starts to last.'],why:'making it stick'},
+ pressure:{name:'Range round',time:'25 min',where:'Range',steps:['Play 9 holes in your head: pick a target and club for each tee shot and approach, as on your course.','Full routine every ball, one ball per shot, no do-overs.','Score each shot good, playable or poor, and count the good ones. Beat it next time.'],why:'taking it to the course'}};
 const isoWeek=()=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));return d.toISOString().slice(0,10)};
 const planKey=()=>'cc_plan_'+((typeof Store!=='undefined'&&Store.user)||'me');
 async function planBasis(){let rs=[];try{rs=await RStore.list()}catch(_){}const rec=rs.slice(0,5),agg=rec.map(r=>rtStats(r.holes)).reduce((a,s)=>{for(const k in s)if(typeof s[k]==='number')a[k]=(a[k]||0)+s[k];return a},{});
@@ -326,6 +328,10 @@ async function planBasis(){let rs=[];try{rs=await RStore.list()}catch(_){}const 
  if(agg.fwN>=7&&agg.fw/agg.fwN<0.4)need.push({t:'fairway',why:`${Math.round(agg.fw/agg.fwN*100)}% fairways hit`});
  return{sw,need,rounds:rec.length}}
 async function planMake(){const B=await planBasis(),S=[];
+ // a two-week focus takes the first two sessions; the third comes from the usual mix
+ const F=typeof PR!=='undefined'?PR.focus():null,fs=F&&typeof Coach!=='undefined'?Coach.focusSessions(F):[];
+ if(fs.length){S.push(...fs);const extra=B.need[0]?{title:TASKS[B.need[0].t].name,why:`Your rounds: ${B.need[0].why}`,items:[{kind:'task',id:B.need[0].t}]}:{title:'Putting',why:'Most strokes are lost on the greens',items:[{kind:'task',id:'gate'},{kind:'task',id:'ladder'}]};
+  S.push(extra);return{week:isoWeek(),fw:Coach.focusWeek(F),made:Date.now(),sessions:S.map(s=>Object.assign(s,{items:s.items.filter(it=>it.kind==='task'?TASKS[it.id]:DRILLS.some(d=>d.id===it.id))})),done:{},last:null,basis:{swing:!!B.sw.length,rounds:B.rounds,focus:true}}}
  const swingSession=a=>{const p=pickPair(a);return p.length?{title:areaName(a),why:`Your swing: ${areaName(a).toLowerCase()} scored ${LAST.scores[a]}/10`,items:p.map(d=>({kind:'drill',id:d.id}))}:null};
  if(B.sw[0])S.push(swingSession(B.sw[0]));
  if(B.need[0])S.push({title:TASKS[B.need[0].t].name,why:`Your rounds: ${B.need[0].why}`,items:[{kind:'task',id:B.need[0].t}].concat(B.need[1]?[{kind:'task',id:B.need[1].t}]:[])});
@@ -335,13 +341,17 @@ async function planMake(){const B=await planBasis(),S=[];
  let out=S.filter(Boolean);for(const f of fill){if(out.length>=3)break;if(!out.some(o=>o.title===f.title))out.push(f)}
  out=out.slice(0,3).map((s,i)=>Object.assign(s,{items:s.items.filter(it=>it.kind==='task'?TASKS[it.id]:DRILLS.some(d=>d.id===it.id))}));
  return{week:isoWeek(),made:Date.now(),sessions:out,done:{},last:null,basis:{swing:!!B.sw.length,rounds:B.rounds}}}
-async function planGet(force){let p=lsGet(planKey(),null);const prev=p;if(force||!p||p.week!==isoWeek()){p=await planMake();if(prev){p.streak=(prev.sessions&&prev.sessions.every((s,i)=>prev.done['s'+i]))?(prev.streak||0)+1:0;p.last=prev.last}lsSet(planKey(),p)}return p}
+async function planGet(force){let p=lsGet(planKey(),null);const prev=p;
+ // a new week of the focus (or a focus that has ended) rebuilds the plan too
+ const fw=typeof PR!=='undefined'&&typeof Coach!=='undefined'?Coach.focusWeek(PR.focus()):0;if(p&&(p.fw||0)!==fw)force=true;
+ if(force||!p||p.week!==isoWeek()){p=await planMake();if(prev){p.streak=(prev.sessions&&prev.sessions.every((s,i)=>prev.done['s'+i]))?(prev.streak||0)+1:0;p.last=prev.last}lsSet(planKey(),p)}return p}
 function planDoneN(p){return p.sessions.filter((s,i)=>p.done['s'+i]).length}
 async function renderPlan(){const el=$('weekPlan');if(!el)return;const p=await planGet();const n=planDoneN(p),all=n===p.sessions.length;const st=await practiceStreak().catch(()=>null);
  el.hidden=false;el.innerHTML=`<div class="rtTop"><div><h2 style="margin:0">This week's practice</h2><small class="mut">${n} of ${p.sessions.length} sessions done${st&&st.n?` · ${st.n}-week practice streak`:''}</small></div><button type="button" class="rtLink" data-plan="new">Rebuild</button></div>
   <div class="wpBar" aria-hidden="true">${p.sessions.map((s,i)=>`<i class="${p.done['s'+i]?'on':''}"></i>`).join('')}</div>
   ${p.sessions.map((s,i)=>`<details class="wpS${p.done['s'+i]?' done':''}"${!p.done['s'+i]&&p.sessions.findIndex((x,j)=>!p.done['s'+j])===i?' open':''}><summary><span class="wpN">${p.done['s'+i]?'✓':i+1}</span><span><b>${esc(s.title)}</b><small>${esc(s.why)}</small></span></summary>
-   <ul class="wpItems">${s.items.map(it=>{if(it.kind==='task'){const t=TASKS[it.id];return `<li><b>${esc(t.name)}</b><small>${esc(t.where)} · ${esc(t.time)}</small><ol>${t.steps.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></li>`}const d=DRILLS.find(x=>x.id===it.id);return `<li><b>${esc(d.name)}</b><small>${whereLabel(d.where)} · ${esc(d.time)}</small><button type="button" class="link wpGo" data-drill="${d.id}">See how to do it</button></li>`}).join('')}</ul>
+   <ul class="wpItems">${s.items.map(it=>{if(it.kind==='task'){const t=TASKS[it.id];return `<li><b>${esc(t.name)}</b><small>${esc(t.where)} · ${esc(t.time)}</small><ol>${t.steps.map(x=>`<li>${esc(x)}</li>`).join('')}</ol></li>`}const d=DRILLS.find(x=>x.id===it.id);const S=it.test&&d.test&&typeof Coach!=='undefined'?Coach.testState(d,PR.all(),PR.stage(d.id)):null,last=S&&S.recent[S.recent.length-1];
+    return `<li><b>${esc(d.name)}</b><small>${whereLabel(d.where)} · ${esc(d.time)}</small>${S?`<small class="wpTest">Test: ${esc(d.test.q.toLowerCase())}, pass ${d.test.pass}/${d.test.of}${last?` · last ${last.score}/${last.of}`:''} · step ${S.stage+1} of ${S.steps}</small>`:''}<button type="button" class="link wpGo" data-drill="${d.id}">${S?'Do the drill and score it':'See how to do it'}</button></li>`}).join('')}</ul>
    <button type="button" class="${p.done['s'+i]?'':'pri '}wpDo" data-plan="done" data-i="${i}">${p.done['s'+i]?'Done. Tap to undo':'I did this session'}</button></details>`).join('')}
   ${all?`<div class="hcNote" style="margin-top:12px">All done this week. Film a swing to see if it's working${p.basis.rounds?', and your next round will show it in the stats':''}. <button type="button" class="link" data-go="1">Analyse a swing</button></div>`:''}
   ${!p.basis.swing&&!p.basis.rounds?'<p class="mut" style="font-size:13px;margin:10px 0 0">Analyse a swing and log putts and fairways in your rounds, and next week\'s plan is built around what you need.</p>':''}`}
@@ -353,6 +363,7 @@ async function renderHomePlan(){const el=$('homePlan');if(!el)return;let p=null;
  const n=planDoneN(p),N=p.sessions.length,next=p.sessions.find((s,i)=>!p.done['s'+i]),days=p.last?Math.floor((Date.now()-p.last)/864e5):null;
  el.hidden=false;el.innerHTML=`<div class="rtTop"><div><span class="mut">This week's practice</span><h2 class="hgT">${n===N?'All done this week':`${n} of ${N} sessions done`}</h2></div><div class="wpRing" aria-hidden="true" style="--p:${n/N}"><b>${n}/${N}</b></div></div>
   ${days!=null&&days>=5&&n<N?`<p class="hcNote" style="margin:10px 0 0">It's been ${days} days since you last practised. ${next?`Next up: ${esc(next.title.toLowerCase())}.`:''}</p>`:next?`<p class="mut" style="margin:6px 0 0">Next up: ${esc(next.title)}. ${esc(next.why)}.</p>`:''}
+  ${(()=>{const f=typeof PR!=='undefined'?PR.focus():null;if(!f||!Coach.focusActive(f))return'';const day=Math.min(Coach.FOCUS_DAYS,Math.floor((Date.now()-f.from)/864e5)+1);return `<p class="mut" style="margin:6px 0 0">Your focus: <b>${esc(f.label)}</b>, day ${day} of ${Coach.FOCUS_DAYS}.</p>`})()}
   ${streakLine(st)}
   <button type="button" data-go-plan style="margin-top:12px;width:100%">${n===N?'See the plan':'Open this week\'s plan'}</button>`}
 

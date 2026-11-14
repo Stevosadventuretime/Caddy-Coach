@@ -166,7 +166,7 @@ function drillCard(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))].slice(0,3)
  <span class="dbody"><span class="dname">${esc(d.name)}</span><span class="dby">${esc(d.aim||d.by||'')}</span>
  <span class="dfix">${fx.map(f=>`<span>${esc(f)}</span>`).join('')}</span>
  <span class="dmeta">${whereLabel(d.where)} · ${esc(d.time)}${d.level?` · <span class="dlvl l${d.level}">${DRILL_LEVEL[d.level]}</span>`:''}</span>
- <span class="dkit">Kit: ${esc(d.kit)}</span></span></button>`}
+ <span class="dkit">Kit: ${esc(d.kit)}</span>${typeof drillProgressLine==='function'?drillProgressLine(d):''}</span></button>`}
 function weakAreas(scores){return AREAS.filter(a=>scores&&scores[a]!=null&&scores[a]<8).sort((x,y)=>scores[x]-scores[y])}
 function renderDrills(){
  const mine=LAST?weakAreas(LAST.scores):[];
@@ -226,11 +226,13 @@ function dpHTML(d){const fx=[...new Set(d.fixes.map(FAULT_TITLE))];
   ${d.by?`<p class="dpBy">${esc(d.by)}</p>`:''}
   <div class="dpFacts"><span><b>Where</b>${whereLabel(d.where)}</span><span><b>Time</b>${esc(d.time)}</span>${d.level?`<span><b>Level</b>${DRILL_LEVEL[d.level]}</span>`:''}<span><b>Kit</b>${esc(d.kit)}</span>${d.rx?'':`<span><b>Dose</b>${esc(d.dose)}</span>`}</div>
   ${d.kitAlt?`<p class="dpAlt">${esc(d.kitAlt)}</p>`:''}
+  ${d.cue?`<p class="dpCue"><b>Focus on</b>${esc(d.cue)}</p>`:''}
   ${d.setup?`<h3>Setup</h3><p class="dpTxt">${esc(d.setup)}</p>`:''}
   <h3>Step by step</h3><ol class="dpSteps">${d.steps.map((s,i)=>`<li><button type="button" data-dp-step="${i}"><span>${i+1}</span><div>${esc(s)}${d.feel[i]?`<em>Feel: ${esc(d.feel[i])}</em>`:''}</div></button></li>`).join('')}</ol>
   ${d.sense?`<h3>What you should feel</h3><p class="dpTxt">${esc(d.sense)}</p>`:''}
   ${(d.mistakes||[]).length?`<h3>Common mistakes</h3><ul class="dpMist">${d.mistakes.map(m=>Array.isArray(m)?`<li><b>${esc(m[0])}</b> ${esc(m[1])}</li>`:`<li>${esc(m)}</li>`).join('')}</ul>`:''}
   ${d.rx?`<h3>Practice</h3><p class="dpTxt">${esc(d.rx)}</p>`:''}
+  ${typeof testHTML==='function'?testHTML(d):''}
   ${(d.success||[]).length?`<h3>You're doing it right when</h3><ul class="dpOk">${d.success.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
   ${(d.progress||[]).length?`<h3>Take it to the ball</h3><ol class="dpProg">${d.progress.map(x=>`<li>${esc(x)}</li>`).join('')}</ol>`:''}
   ${d.note?`<p class="dpNote">${esc(d.note)}</p>`:''}
@@ -259,7 +261,7 @@ async function openDrill(id){
  el.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrill();if(e.key===' '&&e.target===el){e.preventDefault();DP.player.toggle();syncPlay()}});
 }
 function closeDrill(quiet){if(DP.player){DP.player.destroy();DP.player=null}if(DP.el){const el=DP.el;el.classList.remove('in');setTimeout(()=>el.remove(),quiet?0:220)}
- document.body.classList.remove('dpOpen');const r=DP.ret;DP.el=null;DP.d=null;DP.ret=null;if(!quiet&&r&&r.focus)r.focus()}
+ if(!(typeof MS!=='undefined'&&MS.el))document.body.classList.remove('dpOpen');const r=DP.ret;DP.el=null;DP.d=null;DP.ret=null;if(!quiet&&r&&r.focus)r.focus()}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-open]');if(b){e.preventDefault();openDrill(b.dataset.open)}});
 
 let TRP=null;
@@ -985,7 +987,7 @@ function summaryHTML(s,txt,m){const g=grade(s.overall),L=SwingMetrics.level(s.ov
  ${C.length?`<div class="shTally"><span><b class="g-good">${t.tour}</b> spot on</span><span><b class="g-mid">${t.ok}</b> nearly there</span><span><b class="g-bad">${t.f}</b> ${t.f===1?'needs':'need'} work</span></div>`:''}
  ${txt&&txt.summary?`<p class="shSum">${esc(txt.summary)}</p>`:''}
  ${good.length?`<div class="shGood"><b>What you do well</b><ul>${good.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
- ${top?`<div class="shPri"><span>${top.borderline?'Worth working on first':'Fix this first'}</span><b>${esc(ta.title)}</b>${top.missWhy?`<p class="missWhy"><b>Why this causes your ${esc(SwingMetrics.MISSES[m.miss].name)}:</b> ${esc(top.missWhy)}</p>`:''}${typeof RES!=='undefined'&&RES&&RES.evidence&&RES.evidence.id===top.id?`<figure class="evShot"><img src="${RES.evidence.img}" alt="${esc(RES.evidence.frame)}, with the coaching line drawn on"><figcaption>${esc(RES.evidence.frame)}. ${esc(RES.evidence.cap)} You measured ${esc(top.shown)}; the target is ${esc(top.target)}.</figcaption></figure>`:''}<p>${esc(ta.feel||'')}</p>${ta.cue?`<p class="cue"><b>Swing thought when you hit:</b> ${esc(ta.cue)}</p>`:''}${d0?`<button type="button" class="pri" data-drill="${d0.id}">Show me the drill: ${esc(d0.name)}</button>`:''}</div>`
+ ${top?`<div class="shPri"><span>${top.borderline?'Worth working on first':'Fix this first'}</span><b>${esc(ta.title)}</b>${top.missWhy?`<p class="missWhy"><b>Why this causes your ${esc(SwingMetrics.MISSES[m.miss].name)}:</b> ${esc(top.missWhy)}</p>`:''}${typeof RES!=='undefined'&&RES&&RES.evidence&&RES.evidence.id===top.id?`<figure class="evShot"><img src="${RES.evidence.img}" alt="${esc(RES.evidence.frame)}, with the coaching line drawn on"><figcaption>${esc(RES.evidence.frame)}. ${esc(RES.evidence.cap)} You measured ${esc(top.shown)}; the target is ${esc(top.target)}.</figcaption></figure>`:''}<p>${esc(ta.feel||'')}</p>${ta.cue?`<p class="cue"><b>Swing thought when you hit:</b> ${esc(ta.cue)}</p>`:''}${d0?`<button type="button" class="pri" data-drill="${d0.id}">Show me the drill: ${esc(d0.name)}</button><button type="button" class="link shFocus" data-focus-drill="${d0.id}" data-focus-label="${esc(ta.title)}">Make this my focus for 2 weeks</button>`:''}</div>`
   :txt&&txt.top_priority?`<div class="shPri"><span>Work on first</span><b>${esc(txt.top_priority)}</b></div>`:''}
  ${missNoteHTML(m,F)}
  <div class="acts2"><button type="button" data-go="3">Open the drill library</button></div></div>`}
@@ -1032,7 +1034,7 @@ function clipToBall(A){return Math.sign((A[15][0]+A[16][0])/2-(A[23][0]+A[24][0]
 const J=[0,7,8,11,12,13,14,15,16,23,24,25,26,27,28,29,30,31,32];
 const Store={mode:null,db:null,uid:null,ns:'',mem:{idx:[],det:{}},
  // each profile's own data: rounds, swings, yardages, saved place (shared course data isn't split)
- k(k){return this.ns&&/^cc_(index|d_|rounds|rlive|bag|where|hcp)/.test(k)?'cc_'+this.ns+'_'+k.slice(3):k},
+ k(k){return this.ns&&/^cc_(index|d_|rounds|rlive|bag|where|hcp|dtests|dstage|focus)/.test(k)?'cc_'+this.ns+'_'+k.slice(3):k},
  base(){return this.db.collection('data/users/'+this.uid)},
  async init(){if(this.mode)return this.mode;if(!this._p)this._p=this.init0().then(async m=>{let u=null;
    try{const s=JSON.parse(localStorage.getItem('cc_session')||'null');u=s&&s.u||null}catch(_){}
@@ -1336,21 +1338,25 @@ const Backup={busy:false,
  async flush(){if(!this.on()||this.flushing||navigator.onLine===false)return;this.flushing=true;
   const same=(a,b)=>a.kind===b.kind&&a.item_id===b.item_id&&a.deleted===b.deleted&&JSON.stringify(a.data)===JSON.stringify(b.data);
   try{for(;;){const q=lsGet(this.qk(),[]);if(!q.length)break;
-    const batch=q.slice(0,10);   // a few at a time: swing results can be a couple of hundred KB each
-    await this.req('user_backup?on_conflict=owner,kind,item_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(batch)});
+    // a few at a time: swing results can be a couple of hundred KB each. Practice scores (small) go up in their own
+    // batches after everything else, so if the server ever refuses them they can't hold up rounds and swings.
+    const main=q.filter(x=>x.kind!=='practice'),batch=main.length?main.slice(0,10):q.slice(0,50),prac=!main.length;
+    try{await this.req('user_backup?on_conflict=owner,kind,item_id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(batch)})}
+    catch(e){if(prac&&e.status===400){lsSet(this.qk(),lsGet(this.qk(),[]).filter(x=>x.kind!=='practice'));console.warn('practice backup refused; kept on this phone');break}throw e}
     // drop what was sent, unless it changed again while uploading
     lsSet(this.qk(),lsGet(this.qk(),[]).filter(x=>!batch.some(b=>same(b,x))))}}
   catch(e){console.warn('backup upload',e)}finally{this.flushing=false}},
  // bring down anything changed since this phone last looked, and on the first sign-in here send up what the phone has
  async sync(){if(!this.on()||this.busy)return;this.busy=true;let got=0;
-  try{const ck='cc_bk_at_'+this.uid(),first=!lsGet(ck,null);let since=lsGet(ck,null)||'1970-01-01T00:00:00Z';const seen={round:new Set(),analysis:new Set(),course:new Set()};
+  try{const ck='cc_bk_at_'+this.uid(),first=!lsGet(ck,null);let since=lsGet(ck,null)||'1970-01-01T00:00:00Z';const seen={round:new Set(),analysis:new Set(),course:new Set(),practice:new Set()};
    for(;;){const r=await this.req(`user_backup?select=kind,item_id,data,deleted,updated_at&updated_at=gt.${encodeURIComponent(since)}&order=updated_at.asc&limit=200`);const rows=await r.json();
     for(const x of rows){seen[x.kind]&&seen[x.kind].add(x.item_id);if(await this.apply(x))got++;since=x.updated_at}
     lsSet(ck,since);if(rows.length<200)break}
    if(first){   // this phone's own items the account doesn't have yet
     for(const r of Store.lget('cc_rounds',[]))if(!seen.round.has(String(r.id)))this.enqueue('round',r.id,r);
     for(const e of Store.lget('cc_index',[]))if(!seen.analysis.has(String(e.id))){const d=await Store.detail(e.id);if(d)this.analysis(e.id,e,d)}
-    for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i),pre=Store.k('cc_course_');if(k&&k.startsWith(pre)){const c=lsGet(k,null);if(c&&c.key&&!seen.course.has(c.key))this.enqueue('course',c.key,c)}}}
+    for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i),pre=Store.k('cc_course_');if(k&&k.startsWith(pre)){const c=lsGet(k,null);if(c&&c.key&&!seen.course.has(c.key))this.enqueue('course',c.key,c)}}
+    if(typeof practiceEnqueueAll==='function')practiceEnqueueAll(seen.practice)}
    await this.flush();
    if(got){if(typeof RT!=='undefined'){RT.rounds=null;rtLoadRounds()}if(typeof loadHistory==='function'&&$('histNote'))loadHistory().catch(()=>{});
     toast(first?`Your rounds and swings are back on this phone (${got} item${got>1?'s':''}).`:'Updated from your other devices.')}}
@@ -1365,6 +1371,7 @@ const Backup={busy:false,
    if(i>=0)return false;   // already on this phone (with its film, if it has one)
    try{await KV.set('d_'+x.item_id,x.data.det)}catch(_){Store.lset('cc_d_'+x.item_id,x.data.det)}
    idx.push(Object.assign({id:x.item_id},x.data.sum));idx.sort((p,q)=>String(q.createdAt||'').localeCompare(String(p.createdAt||'')));Store.lset('cc_index',idx);return true}
+  if(x.kind==='practice')return typeof practiceApply==='function'?practiceApply(x):false;
   if(x.kind==='course'){if(x.deleted||!x.data)return false;const cur=Store.lget('cc_course_'+x.item_id,null);if(cur&&(cur.updatedAt||0)>=(x.data.updatedAt||0))return false;Store.lset('cc_course_'+x.item_id,x.data);return true}
   return false}};
 addEventListener('online',()=>{Backup.flush()});
