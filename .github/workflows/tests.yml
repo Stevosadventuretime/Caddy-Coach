@@ -18,7 +18,7 @@ jobs:
       - name: Every script loads
         run: for f in *.js; do node --check "$f" || exit 1; done
       - name: Handicap rules and drill coaching
-        run: node --test tools/test_whs.js tools/test_drills_content.js
+        run: node --test tools/test_whs.js tools/test_drills_content.js tools/test_coach.js
       - name: Drill motion and player tests
         run: node --test tools/golfer/motion/test_drill_motion.js tools/golfer/motion/test_perf.js
       - name: Motion capture tools
