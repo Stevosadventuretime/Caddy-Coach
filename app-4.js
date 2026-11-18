@@ -121,7 +121,26 @@ setTimeout(()=>{try{renderMissCard()}catch(e){console.error(e)}},0);
 
 // ---- motion hooks (motion.js): GPS yardages roll to new values; the weekly practice ring fills
 if(typeof gpsPanel==='function')gpsPanel=(f=>function(){const r=f.apply(this,arguments);try{const p=$('gpsPanel');if(p&&window.ccRoll){ccRoll(p.querySelector('.gpsBig b'),'gps-mid');const fb=p.querySelectorAll('.fbRow b');ccRoll(fb[0],'gps-front');ccRoll(fb[1],'gps-back')}}catch(_){}return r})(gpsPanel);
-if(typeof renderHomePlan==='function')renderHomePlan=(f=>async function(){const r=await f.apply(this,arguments);try{const el=$('homePlan');if(el&&!el.hidden&&window.ccRing)ccRing(el.querySelector('.wpRing'),'home-plan')}catch(_){}return r})(renderHomePlan);
+if(typeof renderHomePlan==='function')renderHomePlan=(f=>async function(){const r=await f.apply(this,arguments);try{const el=$('homePlan');if(el&&!el.hidden){if(window.ccRing)ccRing(el.querySelector('.wpRing'),'home-plan');await homePlanThumb(el)}renderHomeStats()}catch(_){}return r})(renderHomePlan);
+// ---- Home: drill pictures beside today's focus and the next practice session
+function homeThumb(id){if(!id)return null;const im=document.createElement('img');im.className='hThumb';im.alt='';im.dataset.poster=id;im.loading='lazy';im.decoding='async';im.onerror=()=>{const p=im.parentElement;im.remove();if(p)p.classList.remove('hasThumb')};
+ try{im.src='posters/'+id+(typeof Hand!=='undefined'&&Hand.get()==='left'?'-L':'')+'.jpg'}catch(_){im.src='posters/'+id+'.jpg'}return im}
+function homeFocusThumb(){const el=$('homeFocus');if(!el||el.querySelector('.hThumb'))return;const b=el.querySelector('[data-live]');const im=homeThumb(b&&b.dataset.live);if(!im)return;el.prepend(im);el.classList.add('hasThumb')}
+async function homePlanThumb(el){const top=el.querySelector('.rtTop');if(!top||top.querySelector('.hThumb')||typeof planGet!=='function')return;let p=null;try{p=await planGet()}catch(_){}if(!p||!p.sessions)return;
+ const s=p.sessions.find((x,i)=>!p.done['s'+i])||p.sessions[0];const it=s&&(s.items||[]).find(x=>x.kind==='drill');const im=homeThumb(it&&it.id);if(im)top.prepend(im)}
+// ---- Home: scoreboard strip (handicap, this week's practice, last swing score); hidden until there's something to show
+async function renderHomeStats(){const el=$('homeStats');if(!el)return;let hcp=null,pr=null,sw=null;
+ try{const r=typeof HcpStore!=='undefined'&&HcpStore.rec;if(r&&typeof WHS!=='undefined'){const c=WHS.calc(r);if(c&&c.hi!=null)hcp=WHS.fmt(c.hi)}}catch(_){}
+ try{if(typeof planGet==='function'){const p=await planGet();if(p&&p.sessions&&p.sessions.length)pr={n:planDoneN(p),N:p.sessions.length}}}catch(_){}
+ try{const rows=await Store.list();if(rows&&rows.length){const l=rows.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))[0];if(l&&l.overall!=null)sw=(+l.overall).toFixed(1)}}catch(_){}
+ if(hcp==null&&sw==null&&!(pr&&pr.n>0)){el.hidden=true;el.innerHTML='';return}
+ el.hidden=false;
+ el.innerHTML=`<button type="button" class="hStat" data-hs="hcp" aria-label="Handicap ${hcp??'not set'}"><b>${hcp??'–'}</b><small>Handicap</small></button>`+
+  `<button type="button" class="hStat" data-go="3" aria-label="Practice ${pr?`${pr.n} of ${pr.N} sessions`:'not started'}"><b>${pr?`<i class="mr" aria-hidden="true" style="--p:${pr.n/pr.N}"></i>${pr.n}/${pr.N}`:'–'}</b><small>Practice</small></button>`+
+  `<button type="button" class="hStat" data-go="2" aria-label="Last swing ${sw??'none yet'}"><b>${sw??'–'}</b><small>Last swing</small></button>`}
+document.addEventListener('click',e=>{if(!e.target.closest('[data-hs=hcp]'))return;const h=$('homeHcp');if(h&&!h.hidden)h.scrollIntoView({behavior:'smooth',block:'start'});else if(typeof tab==='function')tab(2)});
+if(typeof renderHome==='function')renderHome=(f=>async function(){const r=await f.apply(this,arguments);try{homeFocusThumb();renderHomeStats()}catch(_){}return r})(renderHome);
+setTimeout(()=>{try{homeFocusThumb();renderHomeStats();const el=$('homePlan');if(el&&!el.hidden)homePlanThumb(el)}catch(_){}},300);
 // which way a page change goes, in tab-bar order (then order within a section): 1 = forward, -1 = back, 0 = unknown
 function pgDir(n){const prev=[0,1,2,3,4,5,6,7,8,9].find(k=>{const e=$('p'+k);return e&&!e.hidden});if(prev==null||prev===n)return 0;const pos=k=>{for(let i=0;i<GROUPS.length;i++){const j=GROUPS[i].p.indexOf(k);if(j>=0)return i*10+j}return -1};const a=pos(prev),b=pos(n);return a<0||b<0?0:b>a?1:-1}
 if(window.ccTabInd)setTimeout(ccTabInd,0);
