@@ -265,8 +265,13 @@ a{color:var(--green)}
 /* buttons */
 button,.btn{font:600 15px/1 var(--f-ui);min-height:44px;padding:0 16px;border-radius:var(--r-m);border:1px solid var(--line2);background:var(--surface);color:var(--ink);gap:8px;justify-content:center;transition:background .15s,border-color .15s,scale var(--sp-snappy-ms,350ms) var(--sp-snappy,cubic-bezier(.2,.9,.25,1.1)),filter .2s}
 button:hover,.btn:hover{border-color:var(--muted)}
-button:not(:disabled):active,.btn:active,.is-pressed{scale:var(--press,.965);filter:brightness(.94);transition:background .15s,border-color .15s,scale 90ms cubic-bezier(.3,0,.5,1),filter 90ms}
+button:not(:disabled):active,.btn:active,.is-pressed{scale:var(--press,.94);filter:brightness(.9);transition:background .15s,border-color .15s,scale 90ms cubic-bezier(.3,0,.5,1),filter 90ms}
 .subnav button{--press:1}
+.ccRolling{position:relative;color:transparent!important}
+.ccOdo{position:absolute;inset:0;display:flex;overflow:hidden;font-variant-numeric:tabular-nums;pointer-events:none}
+.ccOdoC{display:flex;flex-direction:column;flex:none;will-change:transform}
+.ccOdoC span{display:block;text-align:center}
+#gpsPanel .gpsBig b,#gpsPanel .fbRow b{font-variant-numeric:tabular-nums lining-nums}
 button.on,.pri,.btn.pri{background:var(--green);border-color:var(--green);color:var(--green-ink)}
 .pri:hover,.btn.pri:hover{background:color-mix(in srgb,var(--green) 88%,#000)}
 button:focus-visible,.btn:focus-within,select:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid color-mix(in srgb,var(--green) 45%,transparent);outline-offset:2px}

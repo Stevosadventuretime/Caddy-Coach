@@ -118,3 +118,7 @@ document.addEventListener('click',e=>{
  const fi=e.target.closest('[data-ms-film]');if(fi){closeMiss(true);tab(1);setTimeout(()=>{const s=$('miss');if(s){s.value=fi.dataset.msFilm;s.dispatchEvent(new Event('change'))}},60)}});
 // a drill opened from the miss page goes over it; closing the drill comes back to the miss page
 setTimeout(()=>{try{renderMissCard()}catch(e){console.error(e)}},0);
+
+// ---- motion hooks (motion.js): GPS yardages roll to new values; the weekly practice ring fills
+if(typeof gpsPanel==='function')gpsPanel=(f=>function(){const r=f.apply(this,arguments);try{const p=$('gpsPanel');if(p&&window.ccRoll){ccRoll(p.querySelector('.gpsBig b'),'gps-mid');const fb=p.querySelectorAll('.fbRow b');ccRoll(fb[0],'gps-front');ccRoll(fb[1],'gps-back')}}catch(_){}return r})(gpsPanel);
+if(typeof renderHomePlan==='function')renderHomePlan=(f=>async function(){const r=await f.apply(this,arguments);try{const el=$('homePlan');if(el&&!el.hidden&&window.ccRing)ccRing(el.querySelector('.wpRing'),'home-plan')}catch(_){}return r})(renderHomePlan);
