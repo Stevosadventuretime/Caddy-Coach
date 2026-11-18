@@ -263,7 +263,7 @@ function filmGuide(kind){const g=FILM[kind];if(fgSkip(kind)){$(g.input).click();
   <ul class="fgTips">${g.tips.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>
   <label class="fgNo"><input type="checkbox" id="fgNo"> Don't show this again</label>
   <button type="button" class="pri pfBig" data-fg="go" data-k="${kind}">Open the camera</button></div>`;
- o.hidden=false;document.documentElement.classList.add('pfOpen');setTimeout(()=>{const b=o.querySelector('[data-fg=go]');if(b)b.focus()},30)}
+ o.hidden=false;document.documentElement.classList.add('pfOpen');const fs=o.querySelector('.fgSheet');if(fs&&window.ccSheetIn){const gr=document.createElement('span');gr.className='ccGrab';gr.setAttribute('aria-hidden','true');fs.prepend(gr);ccSheetIn(fs,o);ccDragClose(fs,fgClose,gr)}setTimeout(()=>{const b=o.querySelector('[data-fg=go]');if(b)b.focus()},30)}
 function fgClose(){const o=$('fgOv');if(o)o.hidden=true;document.documentElement.classList.remove('pfOpen')}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-film]');if(b){e.preventDefault();filmGuide(b.dataset.film);return}
  const f=e.target.closest('[data-fg]');if(!f){if(e.target.id==='fgOv')fgClose();return}
@@ -1613,7 +1613,7 @@ function shareAsk(){if(HOSTED_IN_CLAUDE)return;let asked=null;try{asked=localSto
  document.body.appendChild(el);requestAnimationFrame(()=>el.classList.add('in'));
  const close=()=>{el.classList.remove('in');setTimeout(()=>el.remove(),220);document.removeEventListener('keydown',key);if(ret&&ret.focus)ret.focus()};
  const key=e=>{if(e.key==='Escape')close();if(e.key==='Tab'){const bs=[...el.querySelectorAll('button')],i=bs.indexOf(document.activeElement);if(e.shiftKey&&i<=0){e.preventDefault();bs[bs.length-1].focus()}else if(!e.shiftKey&&i===bs.length-1){e.preventDefault();bs[0].focus()}}};
- document.addEventListener('keydown',key);
+ document.addEventListener('keydown',key);if(window.ccDragClose)ccDragClose(el.querySelector('.shareSheet'),close);
  el.addEventListener('click',e=>{const b=e.target.closest('[data-share]');if(b){shareSet(b.dataset.share==='yes');close();return}if(e.target.closest('[data-share-later]'))close()});   // tapping outside asks again next time
  setTimeout(()=>{const b=el.querySelector('[data-share=yes]');b&&b.focus()},60)}
 function v2AfterLogin(){track('open');setTimeout(shareAsk,2500);setTimeout(()=>Backup.sync(),800);entLoad();coachLoad().then(()=>{if(PROF.mode==='me')profRender()});ownerCheck().then(()=>{if(PROF.mode==='me')profRender()})}

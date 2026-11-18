@@ -111,7 +111,7 @@ td.v,span.v{font:600 14px var(--f-num);font-variant-numeric:tabular-nums;white-s
 .holeNow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.8;white-space:nowrap}
 #scrim{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40;opacity:0;transition:opacity .25s}
 #scrim.show{opacity:1}
-#panel{position:fixed;top:0;bottom:0;left:0;width:min(84vw,320px);z-index:50;background:var(--bar);color:var(--bar-tx);transform:translateX(-105%);transition:transform .28s ease;display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top,0px) + 14px) 14px calc(env(safe-area-inset-bottom,0px) + 14px);overflow-y:auto;visibility:hidden}
+#panel{position:fixed;top:0;bottom:0;left:0;width:min(84vw,320px);z-index:50;background:var(--bar);color:var(--bar-tx);transform:translateX(-105%);transition:transform var(--sp-smooth-ms,.28s) var(--sp-smooth,ease);display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top,0px) + 14px) 14px calc(env(safe-area-inset-bottom,0px) + 14px);overflow-y:auto;visibility:hidden}
 #panel.open{transform:none;visibility:visible}
 #panel .ph{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 #panel #panel .x{width:40px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:transparent;color:var(--bar-tx);padding:0;display:grid;place-items:center}
@@ -272,6 +272,8 @@ button:not(:disabled):active,.btn:active,.is-pressed{scale:var(--press,.94);filt
 .ccOdoC{display:flex;flex-direction:column;flex:none;will-change:transform}
 .ccOdoC span{display:block;text-align:center}
 #gpsPanel .gpsBig b,#gpsPanel .fbRow b{font-variant-numeric:tabular-nums lining-nums}
+.ccGrab{display:block;width:40px;height:5px;border-radius:3px;background:var(--line2,#d0d8d1);margin:-10px auto 4px;touch-action:none;position:relative}
+.ccGrab::after{content:"";position:absolute;inset:-14px -60px}
 button.on,.pri,.btn.pri{background:var(--green);border-color:var(--green);color:var(--green-ink)}
 .pri:hover,.btn.pri:hover{background:color-mix(in srgb,var(--green) 88%,#000)}
 button:focus-visible,.btn:focus-within,select:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid color-mix(in srgb,var(--green) 45%,transparent);outline-offset:2px}
@@ -425,7 +427,7 @@ td,th{border-bottom-color:var(--line);padding:10px 8px}
 .dmeta{font-size:12.5px;color:var(--muted)}.dkit{font-size:12.5px;color:var(--ink2)}.dcount{margin:0;font-size:13px}
 .dlvl{font-weight:600}.dlvl.l1{color:var(--green)}.dlvl.l3{color:var(--ink)}
 body.dpOpen{overflow:hidden}
-.dpSheet{position:fixed;inset:0;z-index:80;background:var(--canvas);overflow-y:auto;overscroll-behavior:contain;transform:translateY(24px);opacity:0;transition:transform .22s ease,opacity .22s ease}
+.dpSheet{position:fixed;inset:0;z-index:80;background:var(--canvas);overflow-y:auto;overscroll-behavior:contain;transform:translateY(32px);opacity:0;transition:transform var(--sp-sheet-ms,.3s) var(--sp-sheet,ease),opacity .2s ease}
 .dpSheet.in{transform:none;opacity:1}
 .dpSheet{padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-reduced-motion:reduce){.dpSheet{transition:none;transform:none}}
@@ -1444,7 +1446,7 @@ body.scrolled .topbar{border-bottom-color:var(--line)}
 .ccUpd button:focus-visible{outline:2px solid #f3f6f1;outline-offset:2px}
 .shareAsk{position:fixed;inset:0;z-index:450}
 .shareScrim{position:absolute;inset:0;background:rgba(8,20,13,.45);opacity:0;transition:opacity .2s}
-.shareSheet{position:absolute;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;background:var(--surface,#fff);color:var(--ink,#0f1813);border-radius:22px 22px 0 0;padding:10px 20px calc(env(safe-area-inset-bottom,0px) + 20px);box-shadow:0 -10px 40px rgba(8,20,13,.18);transform:translateY(100%);transition:transform .22s ease-out}
+.shareSheet{position:absolute;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;background:var(--surface,#fff);color:var(--ink,#0f1813);border-radius:22px 22px 0 0;padding:10px 20px calc(env(safe-area-inset-bottom,0px) + 20px);box-shadow:0 -10px 40px rgba(8,20,13,.18);transform:translateY(100%);transition:transform var(--sp-sheet-ms,.3s) var(--sp-sheet,ease-out);touch-action:none}
 .shareAsk.in .shareScrim{opacity:1}.shareAsk.in .shareSheet{transform:none}
 .shareGrab{display:block;width:40px;height:5px;border-radius:3px;background:var(--line2,#d0d8d1);margin:0 auto 14px}
 .shareSheet h2{margin:0;font:700 22px/1.2 var(--f-disp);font-stretch:85%}

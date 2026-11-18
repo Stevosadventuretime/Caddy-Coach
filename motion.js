@@ -144,6 +144,60 @@ window.ccPageIn = function (el, dir) {
   } catch (_) {}
 };
 
+// ---- bottom sheets: rise on a spring, and drag down (or flick) to close
+window.ccSheetIn = function (sheet, scrim) {
+  try {
+    if (!sheet || !sheet.animate || still()) return;
+    sheet.animate([{ transform: 'translateY(100%)' }, { transform: 'none' }], { duration: S.sheet.ms, easing: S.sheet.e });
+    if (scrim && scrim.animate) scrim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
+  } catch (_) {}
+};
+window.ccDragClose = function (sheet, onClose, handle) {
+  try {
+    if (!sheet || sheet.dataset.ccDrag) return;
+    sheet.dataset.ccDrag = '1';
+    const grip = handle || sheet;
+    let y0 = 0, y = 0, drag = false, moved = false, pts = [];
+    grip.addEventListener('pointerdown', e => {
+      if (e.button > 0 || (!handle && e.target.closest('input,textarea,select,[contenteditable]'))) return;
+      drag = true; moved = false; y0 = e.clientY; y = 0; pts = [[e.clientY, e.timeStamp]];
+    }, { passive: true });
+    grip.addEventListener('pointermove', e => {
+      if (!drag) return;
+      const dy = e.clientY - y0;
+      if (!moved) {
+        if (dy > 8) { moved = true; sheet.style.transition = 'none'; release(); try { grip.setPointerCapture(e.pointerId); } catch (_) {} }
+        else if (dy < -8) { drag = false; return; }
+        else return;
+      }
+      y = Math.max(0, dy);
+      sheet.style.transform = 'translateY(' + y + 'px)';
+      pts.push([e.clientY, e.timeStamp]); if (pts.length > 5) pts.shift();
+    });
+    const end = () => {
+      if (!drag) return; drag = false;
+      if (!moved) return;
+      const a = pts[0], b = pts[pts.length - 1], v = (b[0] - a[0]) / Math.max(1, b[1] - a[1]);
+      if (y > 90 || v > 0.5) {
+        const h = sheet.offsetHeight + 20;
+        const an = sheet.animate([{ transform: 'translateY(' + y + 'px)' }, { transform: 'translateY(' + h + 'px)' }], { duration: still() ? 1 : 200, easing: 'ease-in', fill: 'forwards' });
+        let done = false;
+        const fin = () => { if (done) return; done = true; try { onClose(); } catch (_) {} };
+        an.onfinish = fin;
+        setTimeout(fin, 320);
+      } else {
+        sheet.style.transition = still() ? 'none' : 'transform ' + S.sheet.ms + 'ms ' + S.sheet.e;
+        sheet.style.transform = '';
+        setTimeout(() => { sheet.style.transition = ''; }, S.sheet.ms);
+      }
+      setTimeout(() => { moved = false; }, 0);
+    };
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
+    sheet.addEventListener('click', e => { if (moved) { e.stopPropagation(); e.preventDefault(); } }, true);
+  } catch (_) {}
+};
+
 // ---- progress rings (CSS --p from 0 to 1): fill from the last value, or from empty the first time each launch
 const RING = {};
 let propOK = false;
