@@ -2049,6 +2049,21 @@ body.homeHole #homeRound .hrSub,body.homeHole #homeRound .hrCourse small,body.ho
 body.homeHole #p0>.card:not(#homeRound),body.homeHole #homeMapSlot>*,body.homeHole #homeStats,body.homeHole .qt{background:rgba(8,24,14,.7)!important;border:1px solid rgba(255,255,255,.14)!important;border-radius:20px!important;box-shadow:none!important;-webkit-backdrop-filter:blur(14px) saturate(1.15);backdrop-filter:blur(14px) saturate(1.15)}
 body.homeHole #p0>.card:not(#homeRound){padding:16px!important;margin-top:8px}
 body.homeHole .qh{color:var(--ink);text-shadow:0 1px 12px rgba(0,0,0,.4)}
+/* welcome questions (onboard.js) */
+.obWrap{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;justify-content:center}
+.obScrim{position:absolute;inset:0;background:rgba(4,14,8,.55);opacity:0;transition:opacity .25s}
+.obSheet{position:relative;width:100%;max-width:560px;max-height:92vh;overflow:auto;background:var(--surface,#fff);color:var(--ink,#132018);border-radius:24px 24px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));transform:translateY(100%);transition:transform var(--sp-sheet-ms,.42s) var(--sp-sheet,cubic-bezier(.2,.8,.2,1))}
+.obWrap.on .obScrim{opacity:1}.obWrap.on .obSheet{transform:none}
+.obTop{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.obDots{display:flex;gap:6px}.obDots i{width:22px;height:4px;border-radius:2px;background:var(--line,#dde4de)}.obDots i.on{background:var(--green,#1e6b3e)}
+.obSheet h2{margin:6px 0 4px;text-wrap:balance}.obSheet>p{margin:0 0 12px}
+.obOpts{display:grid;gap:8px}
+.obOpt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:13px 14px;border-radius:14px;border:1.5px solid var(--line,#dde4de);background:var(--surface,#fff);color:inherit;font:inherit}
+.obOpt small{color:var(--muted,#5f6f64)}
+.obOpt.on{border-color:var(--green,#1e6b3e);background:color-mix(in srgb,var(--green,#1e6b3e) 9%,var(--surface,#fff))}
+.obNav{display:flex;justify-content:space-between;gap:10px;margin-top:14px}.obNav .btn{min-width:110px}
+.obFor{display:block;margin-top:2px}
+@media (prefers-reduced-motion:reduce){.obSheet,.obScrim{transition:none}}
 </style>
 
 <header class="topbar"><div class="in">
@@ -2173,7 +2188,7 @@ body.homeHole .qh{color:var(--ink);text-shadow:0 1px 12px rgba(0,0,0,.4)}
  <div class="card" id="missCard" hidden></div>
  <div class="lib">
   <figure class="heroImg"><img src="hero-swing.jpg" alt="" loading="lazy" decoding="async" onerror="this.parentElement.hidden=true"><figcaption>Drill library</figcaption></figure>
-  <p class="mut" style="margin:0 0 14px">Every drill has a 3D demo and a live mode that coaches you through your camera.</p>
+  <p class="mut" style="margin:0 0 14px">Every drill has a 3D demo and a scored test, and most have a live mode that coaches you through your camera.</p>
   <div class="chips scroll" id="whereChips" style="margin-bottom:10px" aria-label="Where"></div>
   <div class="chips scroll" id="areaChips" aria-label="Part of the swing"></div>
   <div class="list" id="drillList" style="margin-top:12px"></div>
@@ -2365,6 +2380,7 @@ body.homeHole .qh{color:var(--ink);text-shadow:0 1px 12px rgba(0,0,0,.4)}
 <script src="app-4.js"></script>
 <script src="swingcoach.js"></script>
 <script src="homehole.js"></script>
+<script src="onboard.js"></script>
 
 <script>
 // Offline support, and getting updates in one launch: the app opens from the copy saved on the phone and fetches any new

@@ -149,9 +149,9 @@ function profCourseHTML(){const c=PROF.course,L=PROF.cl;
 function profRender(){const b=$('pfBody'),m=PROF.mode,f=PROF.f,me=PROF.me;if(v2Render(b,m))return;
  if(m==='boot'){b.innerHTML='<div class="pfCard"><p class="mut" role="status">Loading…</p></div>';return}
  if(m==='gate'){b.innerHTML=`<div class="pfCard pfWelcome"><span class="pfEmb" aria-hidden="true"></span><h2>Create your free profile</h2><p>To ${esc(PROF.gateWhy||'use everything')}, create a free Caddy Coach profile. It takes a minute, and it keeps your rounds and swings safe.</p>
-  <p class="mut">Until then you can watch three drills and analyse one swing.</p>
+  <p class="mut">Until then you can analyse a swing, watch three drills, and use the grip, setup and shot-tracer checks.</p>
   <button type="button" class="pri pfBig" data-pf="to-signup">Create your profile</button><button type="button" class="pfBig" data-pf="to-login">I already have a profile</button><button type="button" class="link pfLook" data-pf="gate-close">Not now</button></div>`;return}
- if(m==='welcome'){b.innerHTML=`<div class="pfCard pfWelcome"><span class="pfEmb" aria-hidden="true"></span><h1>Caddy Coach</h1><p>Swing analysis, GPS yardages, scoring and drills for your game. A free profile keeps your rounds, swings and club yardages safe under your username.</p><p class="mut">Not ready? Look around first: watch three drills and analyse one swing.</p>
+ if(m==='welcome'){b.innerHTML=`<div class="pfCard pfWelcome"><span class="pfEmb" aria-hidden="true"></span><h1>Caddy Coach</h1><p>Swing analysis, GPS yardages, scoring and drills for your game. A free profile keeps your rounds, swings and club yardages safe under your username.</p><p class="mut">Not ready? Look around first: analyse a swing, watch three drills, and use the grip, setup and shot-tracer checks.</p>
   <button type="button" class="pri pfBig" data-pf="to-signup">Create your profile</button><button type="button" class="pfBig" data-pf="to-login">I already have a profile</button><button type="button" class="link pfLook" data-pf="guest">Look around first</button></div>`;return}
  if(m==='login'){b.innerHTML=`<form class="pfCard" data-pf-form="login" novalidate><h2>Log in</h2>${pErr('_form')}
   ${pIn('pfU','Username','autocomplete="username" autocapitalize="none" spellcheck="false" required',f.pfU)}
@@ -657,7 +657,7 @@ async function onbSteps(){const [rs,sw]=await Promise.all([allRounds(),allSwings
   {k:'trace',t:'Trace a shot',d:'Draws the ball flight and reads your clubface and path.',done:!!lsGet('cc_lastflight',null),act:'data-go="6"',btn:'Trace'},
   {k:'round',t:'Play a round',d:'Score as you go, with yardages to the green.',done:rs.some(r=>tally(r.holes||[]).thru>=9),act:'data-onb-round',btn:'Start'},
   {k:'goal',t:'Set a goal',d:'Break 90, get your handicap down, or a better swing score.',done:goalsGet().length>0,act:'data-goal-new',btn:'Add'}]}
-async function renderHomeStart(){const el=$('homeStart');if(!el)return;if(!meU()||lsGet(uKey('onb_off'),0)){el.hidden=true;homeDedupe();return}
+async function renderHomeStart(){const el=$('homeStart');if(!el)return;if((!meU()&&!lsGet('cc_guest',0))||lsGet(uKey('onb_off'),0)){el.hidden=true;homeDedupe();return}
  const S=await onbSteps(),n=S.filter(s=>s.done).length;if(n===S.length){el.hidden=true;homeDedupe();return}el.hidden=false;setTimeout(homeDedupe,0);
  el.innerHTML=`<figure class="heroImg sm"><img src="hero-swing.jpg" alt="" decoding="async" onerror="this.parentElement.hidden=true"></figure><div class="rtTop"><div><h2 style="margin:0">Get started</h2><small class="mut">${n} of ${S.length} done</small></div><button type="button" class="link" data-onb-off>Hide</button></div>
   <div class="onbBar" role="progressbar" aria-valuemin="0" aria-valuemax="${S.length}" aria-valuenow="${n}" aria-label="Getting started"><i style="width:${n/S.length*100}%"></i></div>
@@ -1263,7 +1263,8 @@ async function profSetPw(kind){const f=PROF.f,base=kind==='chpw'?PROF.me:(PROF.p
 function profTopbar(){const b=$('pfBtn');if(!b)return;const me=PROF.me;b.hidden=false;b.classList.toggle('pfGuest',!me);
  if(me){b.innerHTML=profAv(me,34);b.setAttribute('aria-label',`Your profile, ${me.first} ${me.last}`)}else{b.textContent='Sign up';b.setAttribute('aria-label','Create a profile or log in')}}
 // a visitor can try three drills and everything else except where noted; the rest asks for a free profile first
-const GUEST_OPEN=new Set(['p0','p1','p3']);
+// visitors can use everything that runs only on the phone; rounds and swing history need a profile (they're backed up)
+const GUEST_OPEN=new Set(['p0','p1','p3','p4','p5','p6','p7','p9']);
 const GUEST_WHY={p8:'score rounds with GPS yardages at any UK course',p6:'trace your shots',p2:'keep your swing history',p5:'check your setup with the camera',p4:'check your grip live',p7:'read the full practice guide',p9:'set up your bag and club yardages',swing2:'analyse more swings',drill:'watch all 30 drills'};
 const GUEST_DRILLS=new Set(['tempo','feettogether','chair']);   // the three drills a visitor can watch: a range swing, a balance drill, a home drill
 const guestDrillLocked=id=>isGuest()&&!GUEST_DRILLS.has(id);
