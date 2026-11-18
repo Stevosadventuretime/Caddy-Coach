@@ -61,7 +61,7 @@ function renderHero(n){HOLE=n;const g=grpOf(n);LASTSUB[g.k]=n;const hr=new Date(
 document.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(g){tab(+g.dataset.go);return}});
 document.querySelectorAll('#tabbar [data-grp]').forEach(b=>b.onclick=()=>{const g=GROUPS.find(x=>x.k===b.dataset.grp);const n=LASTSUB[g.k]??g.p[0];if(n===HOLE){window.scrollTo({top:0,behavior:'smooth'});return}tab(n)});
 // a light tap on phones that support it (Android); iPhones ignore it
-function buzz(ms){try{const ua=navigator.userActivation;if(navigator.vibrate&&(!ua||ua.isActive)&&!matchMedia('(prefers-reduced-motion:reduce)').matches)navigator.vibrate(ms)}catch(_){}}
+function buzz(ms){if(window.ccHaptic)return ccHaptic('tap');try{const ua=navigator.userActivation;if(navigator.vibrate&&(!ua||ua.isActive)&&!matchMedia('(prefers-reduced-motion:reduce)').matches)navigator.vibrate(ms)}catch(_){}}
 // the page slides in without making the browser re-measure the whole page first
 const RMOTION=matchMedia('(prefers-reduced-motion:reduce)');
 function tab(n){if(typeof guestGate==='function'&&guestGate('p'+n))return;if((n===6||n===4)&&typeof PLUS!=='undefined'&&PLUS.on&&!plusActive()){plusGate(n===6?'trace':'grip');return}[0,1,2,3,4,5,6,7,8,9].forEach(k=>{$('p'+k).hidden=k!==n});document.querySelectorAll('#panel [data-hole]').forEach(b=>{if(+b.dataset.hole===n)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
