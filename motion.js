@@ -32,7 +32,7 @@ const still = () => RM.matches;
 
 // ---- press feedback: mark the button the moment a finger lands, before any click handler runs
 const PRESSABLE = 'button:not(:disabled),.btn';
-let pressed = null;
+let pressed = null, lastTap = null;
 function release() { if (pressed) { pressed.classList.remove('is-pressed'); pressed.style.removeProperty('--press'); pressed = null; } }
 document.addEventListener('pointerdown', e => {
   if (e.button > 0) return;
@@ -40,6 +40,7 @@ document.addEventListener('pointerdown', e => {
   if (!el || el.getAttribute('aria-disabled') === 'true') return;
   release();
   pressed = el;
+  try { lastTap = { el: el, t: Date.now(), r: el.getBoundingClientRect() }; } catch (_) {}
   if (el.offsetWidth > 240 && !el.style.getPropertyValue('--press')) el.style.setProperty('--press', '.975');
   el.classList.add('is-pressed');
 }, { passive: true, capture: true });
@@ -136,9 +137,29 @@ window.ccPop = function (el) {
 };
 
 // ---- a page arriving: slides in from the side you're heading towards (dir 1 = from the right, -1 = from the left)
+// a big card tapped on Home grows to fill the screen, then fades away over the page it opened
+function growFrom(tap, page) {
+  const src = tap.el, r = tap.r, cs = getComputedStyle(src);
+  let bg = cs.backgroundColor;
+  if (!bg || bg === 'transparent' || /rgba\(.*,\s*0\)$/.test(bg)) bg = getComputedStyle(document.body).backgroundColor;
+  const W = innerWidth, H = innerHeight, rad = cs.borderTopLeftRadius || '16px';
+  const ov = document.createElement('div');
+  ov.className = 'ccGrow'; ov.setAttribute('aria-hidden', 'true'); ov.style.background = bg;
+  document.body.appendChild(ov);
+  const from = 'inset(' + Math.max(0, r.top) + 'px ' + Math.max(0, W - r.right) + 'px ' + Math.max(0, H - r.bottom) + 'px ' + Math.max(0, r.left) + 'px round ' + rad + ')';
+  const grow = ov.animate([{ clipPath: from }, { clipPath: 'inset(0px 0px 0px 0px round 0px)' }], { duration: Math.round(S.smooth.ms * 0.8), easing: S.smooth.e, fill: 'forwards' });
+  let gone = false;
+  const fade = () => { if (gone) return; gone = true; const f = ov.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-out', fill: 'forwards' }); f.onfinish = () => ov.remove(); };
+  grow.onfinish = fade;
+  setTimeout(fade, S.smooth.ms);
+  setTimeout(() => ov.remove(), S.smooth.ms + 700);
+  if (page && page.animate) page.animate([{ transform: 'scale(.98)' }, { transform: 'none' }], { duration: S.smooth.ms, easing: S.smooth.e });
+}
 window.ccPageIn = function (el, dir) {
   try {
     if (!el || !el.animate || still()) return;
+    const tap = lastTap;
+    if (tap && Date.now() - tap.t < 700 && tap.r.width >= 200 && tap.el.closest && tap.el.closest('#p0') && el.id !== 'p0') { lastTap = null; growFrom(tap, el); return; }
     const from = dir ? 'translateX(' + (dir * 28) + 'px)' : 'translateY(8px)';
     el.animate([{ opacity: 0, transform: from }, { opacity: 1, transform: 'none' }], { duration: S.smooth.ms, easing: S.smooth.e });
   } catch (_) {}
