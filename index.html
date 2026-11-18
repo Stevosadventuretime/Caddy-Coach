@@ -1971,7 +1971,20 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 #homeRound .hrLine span,#homeRound p,#homeRound .mut{color:rgba(255,255,255,.82)}
 #homeRound .hrBtn{border-radius:999px}
 #homeRound .hrBtn.ghost{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
-@media (max-width:600px){#homeRound{margin-inline:-16px;border-radius:0}}
+@media (max-width:600px){#homeRound{margin-inline:-16px;border-radius:0 0 28px 28px}}
+/* phones, top of Home: the photo runs up behind the top bar and greeting, which turn white until you scroll */
+body.homeImm #homeRound{background-repeat:no-repeat;background-size:100% 280px,100% 100%,cover;padding-bottom:22px}
+body.homeImm #homeRound:has(+ #homeStats:not([hidden])){padding-bottom:58px}
+body.homeImm #homeRound{background-image:linear-gradient(180deg,rgba(6,20,12,.6),rgba(6,20,12,0)),linear-gradient(180deg,rgba(6,20,12,0) 0%,rgba(6,20,12,.4) 45%,rgba(6,20,12,.9) 100%),url(home-hero.jpg);
+ background-image:linear-gradient(180deg,rgba(6,20,12,.6),rgba(6,20,12,0)),linear-gradient(180deg,rgba(6,20,12,0) 0%,rgba(6,20,12,.4) 45%,rgba(6,20,12,.9) 100%),-webkit-image-set(url(home-hero.jpg) 1x,url(home-hero@2x.jpg) 2x);
+ background-image:linear-gradient(180deg,rgba(6,20,12,.6),rgba(6,20,12,0)),linear-gradient(180deg,rgba(6,20,12,0) 0%,rgba(6,20,12,.4) 45%,rgba(6,20,12,.9) 100%),image-set(url(home-hero.jpg) 1x,url(home-hero@2x.jpg) 2x)}
+body.homeImm #hero.phead{position:relative;z-index:2}
+body.homeImm #hero.phead h1{color:#fff;text-shadow:0 1px 14px rgba(0,0,0,.3)}
+body.homeImm #hero.phead p,body.homeImm #hero.phead .hin>*:not(h1){color:rgba(255,255,255,.85)}
+body.homeImm:not(.scrolled) .topbar{background:transparent;border-bottom-color:transparent;-webkit-backdrop-filter:none;backdrop-filter:none}
+body.homeImm:not(.scrolled) .topbar .word,body.homeImm:not(.scrolled) .topbar .emb{color:#fff}
+body.homeImm .topbar{transition:background-color .25s ease,border-color .2s}
+body.homeImm #homeStats{margin:-38px 16px 0;border:1px solid var(--line);border-radius:18px;box-shadow:0 14px 34px -14px rgba(6,20,12,.45);position:relative;z-index:3}
 #homeStats{display:grid;grid-template-columns:repeat(3,1fr);padding:10px 4px;background:var(--surface);border:1px solid var(--line);border-radius:18px}
 @media (max-width:600px){#homeStats{margin:-12px -16px 0;border-width:0 0 1px;border-radius:0}}
 #homeStats .hStat{display:grid;justify-items:center;gap:5px;position:relative;min-height:0;padding:6px 0;border:0;border-radius:12px;background:transparent;color:var(--ink);font:inherit}
