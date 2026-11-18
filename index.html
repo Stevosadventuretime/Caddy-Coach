@@ -2037,12 +2037,13 @@ body.homeImm #homeStats{margin:-38px 16px 0;border:1px solid var(--line);border-
 body.homeHole{background:#06140c}
 body.homeHole #holeBg{display:block;position:fixed;left:50%;top:0;z-index:0;pointer-events:none;will-change:transform;transform-origin:50% 0}
 #holeBg img,#holeBg svg{position:absolute;inset:0;width:100%;height:100%;display:block}#holeBg img{object-fit:cover}
-body.homeHole #holeShade{display:block;position:fixed;inset:0;z-index:0;pointer-events:none;background:linear-gradient(180deg,rgba(6,20,12,.6) 0%,rgba(6,20,12,.12) 30%,rgba(6,20,12,.12) 60%,rgba(6,20,12,.6) 100%)}
+body.homeHole #holeShade{display:block;position:fixed;inset:0;z-index:0;pointer-events:none;background:linear-gradient(180deg,rgba(6,20,12,.62) 0%,rgba(6,20,12,.34) 30%,rgba(6,20,12,.34) 60%,rgba(6,20,12,.62) 100%)}
 #holeBg .hbRoute{fill:none;stroke:rgba(255,255,255,.55);stroke-width:3;stroke-dasharray:2 14;stroke-linecap:round}
 #holeBg .hbTrail{fill:none;stroke:#fff;stroke-width:5;stroke-linecap:round;filter:drop-shadow(0 0 6px rgba(255,255,255,.6))}
 #holeBg .hbBall{fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
 #holeBg .hbLand{fill:none;stroke:#fff;stroke-width:3;opacity:0;transition:opacity .4s}#holeBg .hbLand.on{opacity:.85}
-body.homeHole #holePin{display:flex;position:fixed;z-index:15;left:50%;transform:translateX(-50%);bottom:calc(var(--tabh,64px) + env(safe-area-inset-bottom,0px) + 12px);align-items:center;gap:10px;padding:8px 14px 8px 12px;border-radius:999px;background:rgba(6,20,12,.8);border:1px solid rgba(255,255,255,.14);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);white-space:nowrap;color:#f3f7f2;pointer-events:none}
+body.homeHole #holePin{display:flex;position:fixed;z-index:15;left:50%;transform:translateX(-50%);bottom:calc(var(--tabh,64px) + env(safe-area-inset-bottom,0px) + 12px);align-items:center;gap:10px;padding:8px 14px 8px 12px;border-radius:999px;background:rgba(6,20,12,.8);border:1px solid rgba(255,255,255,.14);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);white-space:nowrap;color:#f3f7f2;pointer-events:none;opacity:0;transition:opacity .3s ease}
+body.homeHole #holePin.show{opacity:1}
 #holePin i{width:10px;height:20px;position:relative;flex:none}
 #holePin i::before{content:"";position:absolute;left:1px;top:0;width:2px;height:20px;background:#fff;border-radius:1px}
 #holePin i::after{content:"";position:absolute;left:3px;top:1px;border-left:9px solid #f3c43a;border-top:5px solid transparent;border-bottom:5px solid transparent}
@@ -2052,8 +2053,11 @@ body.homeHole #holePin{display:flex;position:fixed;z-index:15;left:50%;transform
 body.homeHole #p0,body.homeHole #hero{--bg:#0d1510;--bg2:#101a13;--card:#16201a;--tx:#e6efe7;--mut:#98aa9c;--ac:#4cbf74;--ac-tx:#08130c;--bd:#2a3a2e;--chip:#1d2b21;--sign:#1c4a2b;--sign-tx:#f1f7ef;--good:#46c06e;--mid:#e0b13a;--bad:#ef6b5e;
  --canvas:#0a120d;--surface:rgba(255,255,255,.06);--surface2:rgba(255,255,255,.09);--ink:#eef4ef;--ink2:#d2ddd5;--muted:#a9b9ad;--line:rgba(255,255,255,.14);--line2:rgba(255,255,255,.2);--fairway:#08190f;--fairway2:#0c2416;--green:#5cc488;--green-ink:#06130b;color:var(--ink);color-scheme:dark}
 body.homeHole #p0{position:relative;z-index:1;padding-bottom:88px!important}
-body.homeImm.homeHole #homeRound{background:linear-gradient(180deg,rgba(6,20,12,.55),rgba(6,20,12,0) 240px)!important;border-radius:0;box-shadow:none}
-body.homeHole #p0>.card:not(#homeRound),body.homeHole #homeMapSlot>*,body.homeHole #homeStats,body.homeHole .qt{background:rgba(8,24,14,.58)!important;border:1px solid rgba(255,255,255,.14)!important;border-radius:20px!important;box-shadow:none!important;-webkit-backdrop-filter:blur(14px) saturate(1.15);backdrop-filter:blur(14px) saturate(1.15)}
+body.homeImm.homeHole #homeRound{background:linear-gradient(180deg,rgba(6,20,12,.6) 0,rgba(6,20,12,.42) 260px,rgba(6,20,12,.42) calc(100% - 60px),rgba(6,20,12,0) 100%)!important;border-radius:0;box-shadow:none}
+body.homeHole #homeRound,body.homeHole #hero{text-shadow:0 1px 3px rgba(0,0,0,.55),0 0 18px rgba(0,0,0,.35)}
+body.homeHole #homeRound .hrCourse,body.homeHole #homeRound .hrBtn.ghost{background:rgba(8,24,14,.62)!important;border-color:rgba(255,255,255,.18)!important;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);text-shadow:none}
+body.homeHole #homeRound .hrSub,body.homeHole #homeRound .hrCourse small,body.homeHole #homeRound .hrCourse span{color:rgba(243,247,242,.86)!important}
+body.homeHole #p0>.card:not(#homeRound),body.homeHole #homeMapSlot>*,body.homeHole #homeStats,body.homeHole .qt{background:rgba(8,24,14,.7)!important;border:1px solid rgba(255,255,255,.14)!important;border-radius:20px!important;box-shadow:none!important;-webkit-backdrop-filter:blur(14px) saturate(1.15);backdrop-filter:blur(14px) saturate(1.15)}
 body.homeHole #p0>.card:not(#homeRound){padding:16px!important;margin-top:8px}
 body.homeHole .qh{color:var(--ink);text-shadow:0 1px 12px rgba(0,0,0,.4)}
 </style>

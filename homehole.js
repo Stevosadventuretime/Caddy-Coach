@@ -48,6 +48,7 @@ function draw() {
   land.classList.toggle('on', p >= seg1);
   const y = p < seg1 ? Math.round(HOLE - TEE * (p / seg1)) : Math.round((HOLE - TEE) * (1 - (p - seg1) / (1 - seg1)));
   yds.textContent = Math.max(0, y);
+  pin.classList.toggle('show', scrollY > 60);   // hidden at the very top, so it never sits over the stats
   stage.textContent = p < 0.03 ? 'Tee' : p < seg1 ? 'Tee shot' : p < 0.92 ? 'Approach' : p < 0.995 ? 'On the green' : 'In the hole';
 }
 function sync() {
