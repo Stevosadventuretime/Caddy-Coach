@@ -55,17 +55,17 @@ function renderHero(n){HOLE=n;const g=grpOf(n);LASTSUB[g.k]=n;const hr=new Date(
  $('heroTitle').textContent=n?g.t:'Ready to play?';$('heroDesc').textContent=HDESC[n];$('heroDesc').hidden=!HDESC[n];
  const sn=$('subnav');sn.hidden=g.p.length<2;$('hero').classList.toggle('hasSub',g.p.length>1);
  if(g.p.length>1)sn.innerHTML=g.p.map(k=>`<button type="button" role="tab" data-go="${k}" aria-selected="${k===n}">${SUBN[k]}</button>`).join('');
- document.querySelectorAll('#tabbar [data-grp]').forEach(b=>{if(b.dataset.grp===g.k)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+ document.querySelectorAll('#tabbar [data-grp]').forEach(b=>{if(b.dataset.grp===g.k)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});if(window.ccTabInd)ccTabInd();
  document.body.dataset.page=n;
  document.title=n?`${HOLES[n]} · Caddy Coach`:'Caddy Coach'}
 document.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(g){tab(+g.dataset.go);return}});
-document.querySelectorAll('#tabbar [data-grp]').forEach(b=>b.onclick=()=>{const g=GROUPS.find(x=>x.k===b.dataset.grp);const n=LASTSUB[g.k]??g.p[0];if(n===HOLE){window.scrollTo({top:0,behavior:'smooth'});return}tab(n)});
+document.querySelectorAll('#tabbar [data-grp]').forEach(b=>b.onclick=()=>{if(window.ccPop)ccPop(b.querySelector('svg'));const g=GROUPS.find(x=>x.k===b.dataset.grp);const n=LASTSUB[g.k]??g.p[0];if(n===HOLE){window.scrollTo({top:0,behavior:'smooth'});return}tab(n)});
 // a light tap on phones that support it (Android); iPhones ignore it
 function buzz(ms){if(window.ccHaptic)return ccHaptic('tap');try{const ua=navigator.userActivation;if(navigator.vibrate&&(!ua||ua.isActive)&&!matchMedia('(prefers-reduced-motion:reduce)').matches)navigator.vibrate(ms)}catch(_){}}
 // the page slides in without making the browser re-measure the whole page first
 const RMOTION=matchMedia('(prefers-reduced-motion:reduce)');
-function tab(n){if(typeof guestGate==='function'&&guestGate('p'+n))return;if((n===6||n===4)&&typeof PLUS!=='undefined'&&PLUS.on&&!plusActive()){plusGate(n===6?'trace':'grip');return}[0,1,2,3,4,5,6,7,8,9].forEach(k=>{$('p'+k).hidden=k!==n});document.querySelectorAll('#panel [data-hole]').forEach(b=>{if(+b.dataset.hole===n)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
- {const el=$('p'+n);if(el.animate){if(!RMOTION.matches)el.animate([{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'none'}],{duration:260,easing:'cubic-bezier(.2,.7,.2,1)'})}else{el.classList.remove('pgEnter');void el.offsetWidth;el.classList.add('pgEnter')}}buzz(6);renderHero(n);closeMenu(true);if(n===0)setTimeout(renderHome,0);if(n===2)loadHistory();if(n===3)renderDrills();if(n===5)renderSetup();if(n===6)initTracer();if(n===8)initRounds();if(n===9)initBag();window.scrollTo(0,0)}
+function tab(n){if(typeof guestGate==='function'&&guestGate('p'+n))return;if((n===6||n===4)&&typeof PLUS!=='undefined'&&PLUS.on&&!plusActive()){plusGate(n===6?'trace':'grip');return}const PGDIR=typeof pgDir==='function'?pgDir(n):0;[0,1,2,3,4,5,6,7,8,9].forEach(k=>{$('p'+k).hidden=k!==n});document.querySelectorAll('#panel [data-hole]').forEach(b=>{if(+b.dataset.hole===n)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+ {const el=$('p'+n);if(el.animate){if(!RMOTION.matches){if(window.ccPageIn)ccPageIn(el,PGDIR);else el.animate([{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'none'}],{duration:260,easing:'cubic-bezier(.2,.7,.2,1)'})}}else{el.classList.remove('pgEnter');void el.offsetWidth;el.classList.add('pgEnter')}}buzz(6);renderHero(n);closeMenu(true);if(n===0)setTimeout(renderHome,0);if(n===2)loadHistory();if(n===3)renderDrills();if(n===5)renderSetup();if(n===6)initTracer();if(n===8)initRounds();if(n===9)initBag();window.scrollTo(0,0)}
 const panel=$('panel'),scrim=$('scrim'),menuBtn=$('menuBtn');let menuOpen=false;
 function openMenu(){if(menuOpen)return;menuOpen=true;scrim.hidden=false;panel.setAttribute('aria-hidden','false');menuBtn.setAttribute('aria-expanded','true');document.body.style.overflow='hidden';
  requestAnimationFrame(()=>{scrim.classList.add('show');panel.classList.add('open');const c=panel.querySelector('[aria-current]')||panel.querySelector('[data-hole]');setTimeout(()=>c&&c.focus(),60)})}

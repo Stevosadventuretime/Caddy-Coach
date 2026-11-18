@@ -1910,7 +1910,9 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 /* tab bar: the current tab gets a small pennant, not a pill */
 .tabbar button[aria-current="page"] svg{background:transparent;color:var(--green)}
 .tabbar button{position:relative}
-.tabbar button[aria-current="page"]::before{content:"";position:absolute;top:0;left:50%;width:22px;height:3px;margin-left:-11px;border-radius:0 0 3px 3px;background:var(--green)}
+.tabbar .in{position:relative}
+.tabInd{position:absolute;top:0;left:0;height:3px;display:flex;justify-content:center;pointer-events:none;transition:transform var(--sp-snappy-ms,350ms) var(--sp-snappy,cubic-bezier(.2,.9,.25,1.1)),opacity .2s}
+.tabInd::before{content:"";width:22px;height:3px;border-radius:0 0 3px 3px;background:var(--green)}
 /* screen changes: a short slide, never for people who prefer less motion */
 @media (prefers-reduced-motion:no-preference){.pgEnter{animation:pgIn .26s cubic-bezier(.2,.7,.2,1)}@keyframes pgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}}
 
