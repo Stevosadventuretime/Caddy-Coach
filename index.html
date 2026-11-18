@@ -1960,6 +1960,37 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 :where(button.link,button.rtLink){position:relative}
 .gpsWarn{margin:10px 0 0;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--gold,#e6b422) 22%,transparent);color:var(--ink);font-size:13.5px}
 :where(button.link,button.rtLink)::after{content:'';position:absolute;inset:-9px -6px}
+/* ---- Home: real photo hero, scoreboard strip, quiet rows, corners by role ---- */
+#homeRound{min-height:300px;align-content:end;padding:22px 18px 18px;border-radius:24px;box-shadow:none;color:#fff;background-color:#0f3a22;background-size:cover;background-position:center 42%;
+ background-image:linear-gradient(180deg,rgba(6,20,12,.3) 0%,rgba(6,20,12,0) 20%,rgba(6,20,12,.45) 44%,rgba(6,20,12,.92) 100%),url(home-hero.jpg);
+ background-image:linear-gradient(180deg,rgba(6,20,12,.3) 0%,rgba(6,20,12,0) 20%,rgba(6,20,12,.45) 44%,rgba(6,20,12,.92) 100%),-webkit-image-set(url(home-hero.jpg) 1x,url(home-hero@2x.jpg) 2x);
+ background-image:linear-gradient(180deg,rgba(6,20,12,.3) 0%,rgba(6,20,12,0) 20%,rgba(6,20,12,.45) 44%,rgba(6,20,12,.92) 100%),image-set(url(home-hero.jpg) 1x,url(home-hero@2x.jpg) 2x)}
+#homeRound:before{display:none}
+#homeRound .hrK{font:600 11px/1 var(--f-ui);letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.85)}
+#homeRound .hrT{font:800 29px/1.02 var(--f-disp,var(--f-ui))!important;font-stretch:92%;letter-spacing:-.01em!important;color:#fff;text-shadow:0 1px 12px rgba(0,0,0,.25)}
+#homeRound .hrLine span,#homeRound p,#homeRound .mut{color:rgba(255,255,255,.82)}
+#homeRound .hrBtn{border-radius:999px}
+#homeRound .hrBtn.ghost{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.45);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+@media (max-width:600px){#homeRound{margin-inline:-16px;border-radius:0}}
+#homeStats{display:grid;grid-template-columns:repeat(3,1fr);padding:10px 4px;background:var(--surface);border:1px solid var(--line);border-radius:18px}
+@media (max-width:600px){#homeStats{margin:-12px -16px 0;border-width:0 0 1px;border-radius:0}}
+#homeStats .hStat{display:grid;justify-items:center;gap:5px;position:relative;min-height:0;padding:6px 0;border:0;border-radius:12px;background:transparent;color:var(--ink);font:inherit}
+#homeStats .hStat+.hStat::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:1px;background:var(--line)}
+#homeStats .hStat b{display:flex;align-items:center;gap:6px;font:800 34px/1 var(--f-disp,var(--f-ui));font-stretch:68%;font-variant-numeric:tabular-nums}
+#homeStats .hStat small{font:600 10px/1 var(--f-ui);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+#homeStats .mr{--p:0;width:20px;height:20px;border-radius:50%;background:conic-gradient(var(--green) calc(var(--p)*360deg),var(--line) 0);display:grid;place-items:center;flex:none}
+#homeStats .mr::after{content:"";width:12px;height:12px;border-radius:50%;background:var(--surface)}
+#homePlan,#homeFocus,#homeGame{background:transparent;border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:none;padding:18px 2px 6px}
+.hThumb{width:56px;height:68px;border-radius:10px;object-fit:cover;background:var(--line);display:block;flex:none}
+#homeFocus.hasThumb{grid-template-columns:56px minmax(0,1fr);column-gap:14px}
+#homeFocus.hasThumb>.hThumb{grid-row:1/span 3;align-self:start}
+#homeFocus.hasThumb>*:not(.hThumb){grid-column:2}
+#homeFocus.hasThumb>button,#homeFocus.hasThumb>.liveBtn{grid-column:1/-1}
+#homePlan .rtTop>.hThumb{margin-right:14px}
+#homePlan .rtTop>.hThumb+div{flex:1;min-width:0}
+.qt{border-radius:14px;min-height:108px;box-shadow:none}
+.qt .qi{width:30px;height:30px;border-radius:9px;background:var(--green-soft,rgba(29,90,52,.1));display:grid;place-items:center}
+.qt .qi svg{width:18px;height:18px}
 </style>
 
 <header class="topbar"><div class="in">
@@ -1988,6 +2019,7 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 <div class="wrap sheet" id="main">
 <section id="p0" class="wrap" style="padding:0">
  <div class="card" id="homeRound" aria-label="Start a round"></div>
+ <div id="homeStats" aria-label="Your game at a glance" hidden></div>
  <div class="card" id="homeNews" hidden aria-live="polite"></div>
  <div class="card" id="homeStart" hidden></div>
  <div class="card" id="homeHcp" hidden></div>
