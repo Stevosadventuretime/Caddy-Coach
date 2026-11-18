@@ -2033,7 +2033,7 @@ body.homeImm #homeStats{margin:-38px 16px 0;border:1px solid var(--line);border-
 .pgSpark{display:block;width:100%;height:70px;margin:10px 0;color:var(--green)}
 
 /* Home on a phone: an aerial course behind the page; scrolling flies down it (homehole.js) */
-#holeBg,#holeShade,#holePin{display:none}
+#holeBg,#holeShade{display:none}
 body.homeHole{background:#06140c}
 body.homeHole #holeBg{display:block;position:fixed;left:50%;top:0;z-index:0;pointer-events:none;will-change:transform;transform-origin:50% 0}
 #holeBg img,#holeBg svg{position:absolute;inset:0;width:100%;height:100%;display:block}#holeBg img{object-fit:cover}
@@ -2042,17 +2042,11 @@ body.homeHole #holeShade{display:block;position:fixed;inset:0;z-index:0;pointer-
 #holeBg .hbTrail{fill:none;stroke:#fff;stroke-width:5;stroke-linecap:round;filter:drop-shadow(0 0 6px rgba(255,255,255,.6))}
 #holeBg .hbBall{fill:#fff;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
 #holeBg .hbLand{fill:none;stroke:#fff;stroke-width:3;opacity:0;transition:opacity .4s}#holeBg .hbLand.on{opacity:.85}
-body.homeHole #holePin{display:flex;position:fixed;z-index:15;left:50%;transform:translateX(-50%);bottom:calc(var(--tabh,64px) + env(safe-area-inset-bottom,0px) + 12px);align-items:center;gap:10px;padding:8px 14px 8px 12px;border-radius:999px;background:rgba(6,20,12,.8);border:1px solid rgba(255,255,255,.14);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);white-space:nowrap;color:#f3f7f2;pointer-events:none;opacity:0;transition:opacity .3s ease}
-body.homeHole #holePin.show{opacity:1}
-#holePin i{width:10px;height:20px;position:relative;flex:none}
-#holePin i::before{content:"";position:absolute;left:1px;top:0;width:2px;height:20px;background:#fff;border-radius:1px}
-#holePin i::after{content:"";position:absolute;left:3px;top:1px;border-left:9px solid #f3c43a;border-top:5px solid transparent;border-bottom:5px solid transparent}
-#holePin b{font:800 24px/1 Archivo,'Instrument Sans',system-ui,sans-serif;font-stretch:62%;font-variant-numeric:tabular-nums;min-width:2.6ch;text-align:right}
-#holePin span{font-size:12.5px;opacity:.8}#holePin em{font-style:normal;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#f3c43a;font-weight:600}
+
 /* Home reads white on dark over the course: the dark theme's colours, just here */
 body.homeHole #p0,body.homeHole #hero{--bg:#0d1510;--bg2:#101a13;--card:#16201a;--tx:#e6efe7;--mut:#98aa9c;--ac:#4cbf74;--ac-tx:#08130c;--bd:#2a3a2e;--chip:#1d2b21;--sign:#1c4a2b;--sign-tx:#f1f7ef;--good:#46c06e;--mid:#e0b13a;--bad:#ef6b5e;
  --canvas:#0a120d;--surface:rgba(255,255,255,.06);--surface2:rgba(255,255,255,.09);--ink:#eef4ef;--ink2:#d2ddd5;--muted:#a9b9ad;--line:rgba(255,255,255,.14);--line2:rgba(255,255,255,.2);--fairway:#08190f;--fairway2:#0c2416;--green:#5cc488;--green-ink:#06130b;color:var(--ink);color-scheme:dark}
-body.homeHole #p0{position:relative;z-index:1;padding-bottom:88px!important}
+body.homeHole #p0{position:relative;z-index:1;padding-bottom:28px!important}
 body.homeImm.homeHole #homeRound{background:linear-gradient(180deg,rgba(6,20,12,.6) 0,rgba(6,20,12,.42) 260px,rgba(6,20,12,.42) calc(100% - 60px),rgba(6,20,12,0) 100%)!important;border-radius:0;box-shadow:none}
 body.homeHole #homeRound,body.homeHole #hero{text-shadow:0 1px 3px rgba(0,0,0,.55),0 0 18px rgba(0,0,0,.35)}
 body.homeHole #homeRound .hrCourse,body.homeHole #homeRound .hrBtn.ghost{background:rgba(8,24,14,.62)!important;border-color:rgba(255,255,255,.18)!important;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);text-shadow:none}
