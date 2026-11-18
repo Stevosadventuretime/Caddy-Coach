@@ -1,9 +1,9 @@
 // Caddy Coach: Home on a phone is laid over an aerial golf course. Scrolling flies down the course, a ball flight draws
-// from the tee to a flag, and a pill counts the yards down to the pin. Only while Home shows on a phone (body.homeImm,
+// from the tee to a flag. Only while Home shows on a phone (body.homeImm,
 // set in app-4.js); everywhere else the layer is hidden. Photo: Unsplash (free licence), Bernd Dittrich.
 (function () {
 'use strict';
-const NS = 'http://www.w3.org/2000/svg', HOLE = 412, TEE = 255;    // a 412-yard hole; the tee shot covers 255 of them
+const NS = 'http://www.w3.org/2000/svg';
 const ROUTE = 'M250 110 Q 330 420 410 800 Q 470 1010 500 1190', SHOT1 = 'M250 110 Q 330 420 410 800';
 const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -17,13 +17,9 @@ bg.innerHTML = `<img src="home-course.jpg" alt="" decoding="async">
  <circle class="hbBall" r="10" cx="250" cy="110"/>
 </svg>`;
 const shade = document.createElement('div'); shade.id = 'holeShade'; shade.setAttribute('aria-hidden', 'true');
-const pin = document.createElement('div');
-pin.id = 'holePin'; pin.setAttribute('aria-hidden', 'true');   // decoration: the numbers are made up for the picture
-pin.innerHTML = '<i></i><b>412</b><span>yds to pin</span><em>Tee</em>';
-document.body.prepend(shade); document.body.prepend(bg); document.body.appendChild(pin);
+document.body.prepend(shade); document.body.prepend(bg);
 
 const trail = bg.querySelector('.hbTrail'), ball = bg.querySelector('.hbBall'), land = bg.querySelector('.hbLand');
-const yds = pin.querySelector('b'), stage = pin.querySelector('em');
 let L = 0, seg1 = 0.5, H = 0, vh = 0, on = false;
 function measure() {
   try {
@@ -46,10 +42,6 @@ function draw() {
   trail.style.strokeDashoffset = (L * (1 - p)).toFixed(1);
   const pt = trail.getPointAtLength(L * p); ball.setAttribute('cx', pt.x.toFixed(1)); ball.setAttribute('cy', pt.y.toFixed(1));
   land.classList.toggle('on', p >= seg1);
-  const y = p < seg1 ? Math.round(HOLE - TEE * (p / seg1)) : Math.round((HOLE - TEE) * (1 - (p - seg1) / (1 - seg1)));
-  yds.textContent = Math.max(0, y);
-  pin.classList.toggle('show', scrollY > 60);   // hidden at the very top, so it never sits over the stats
-  stage.textContent = p < 0.03 ? 'Tee' : p < seg1 ? 'Tee shot' : p < 0.92 ? 'Approach' : p < 0.995 ? 'On the green' : 'In the hole';
 }
 function sync() {
   const now = document.body.classList.contains('homeImm');
@@ -73,7 +65,7 @@ if (typeof homeBar === 'function') {
     if (!on) return;
     const tb = document.querySelector('.topbar'); if (!tb) return;
     document.body.classList.add('homeOver');
-    tb.style.setProperty('--barA', Math.min(.62, Math.max(0, scrollY / 180 * .62)).toFixed(3));
+    tb.style.setProperty('--barA', Math.min(.86, Math.max(0, scrollY / 160 * .86)).toFixed(3));
   };
 }
 // the page grows as Home's cards fill in, so re-measure the scroll range then
