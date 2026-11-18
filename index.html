@@ -2005,6 +2005,33 @@ body.homeImm #homeStats{margin:-38px 16px 0;border:1px solid var(--line);border-
 .qt{border-radius:14px;min-height:108px;box-shadow:none}
 .qt .qi{width:30px;height:30px;border-radius:9px;background:var(--green-soft,rgba(29,90,52,.1));display:grid;place-items:center}
 .qt .qi svg{width:18px;height:18px}
+
+/* swing results: nine positions as a swipe strip; honesty tags */
+.keys{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding-bottom:6px;scrollbar-width:none}
+.keys::-webkit-scrollbar{display:none}
+.keys .kp{flex:0 0 min(64%,250px);scroll-snap-align:start}
+.bTag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.02em;padding:2px 7px;border-radius:999px;margin-left:6px;vertical-align:1px;background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}
+.bTag.est{background:color-mix(in srgb,var(--mid) 18%,transparent);color:color-mix(in srgb,var(--mid) 70%,var(--ink))}
+.fixTags .bTag{margin-left:0}
+.bTag.read{background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--muted)}
+/* AI coach, practice plan and progress cards on swing results */
+.aiHd{display:flex;align-items:center;justify-content:space-between;gap:8px}.aiHd h2{margin:0}
+.aiProg{margin:8px 0 0;padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--green) 10%,transparent)}
+.aiFix{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:14px 0;border-top:1px solid var(--line)}
+.aiFix:first-of-type{border-top:0}.aiFix h3{margin:2px 0 6px}.aiFix p{margin:4px 0}
+.aiN{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:var(--green);color:var(--green-ink,#fff)}
+.aiRoutine{padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--ink) 5%,transparent)}
+.aiChat{margin-top:8px;padding-top:12px;border-top:1px solid var(--line)}
+.aiThread{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.aiMsg{margin:0;padding:8px 12px;border-radius:14px;max-width:88%;line-height:1.4}
+.aiMsg.me{align-self:flex-end;background:var(--green);color:var(--green-ink,#fff);border-bottom-right-radius:4px}
+.aiMsg.coach{align-self:flex-start;background:color-mix(in srgb,var(--ink) 7%,transparent);border-bottom-left-radius:4px}
+.aiMsg.wait{opacity:.6}
+.aiAsk{display:flex;gap:8px}.aiAsk input{flex:1;min-width:0;padding:10px 12px;border-radius:999px;border:1px solid var(--line2,var(--line));background:var(--surface);color:var(--ink);font:inherit}
+.aiNote{font-size:12.5px;margin:8px 0 0}
+.planSteps{margin:0;padding-left:20px}.planSteps li{margin:6px 0}
+.pgSpark{display:block;width:100%;height:70px;margin:10px 0;color:var(--green)}
+
 </style>
 
 <header class="topbar"><div class="in">
@@ -2319,6 +2346,7 @@ body.homeImm #homeStats{margin:-38px 16px 0;border:1px solid var(--line);border-
 <script src="app-2.js"></script>
 <script src="app-3.js"></script>
 <script src="app-4.js"></script>
+<script src="swingcoach.js"></script>
 
 <script>
 // Offline support, and getting updates in one launch: the app opens from the copy saved on the phone and fetches any new

@@ -755,7 +755,7 @@ async function finishAnalysis(my,quick){
  const I=IdealPose.build(dense,R);
  RES.R=R;RES.I=I;RES.T0=I.T0;RES.byFrame=new Map();dense.forEach((f,k)=>RES.byFrame.set(f.i,{me:f.pts,id:I.ideal[k]}));
  RES.nearest=t=>{let b=0,bd=1e9;dense.forEach((f,k)=>{const d=Math.abs(f.t-t);if(d<bd){bd=d;b=k}});return bd<0.05?{me:dense[b].pts,id:I.ideal[b]}:null};
- const T=R.times,items=[['Address',T.address],['Takeaway',T.takeaway],['Top',T.top],['Downswing',(T.top+T.impact)/2],['Impact',T.impact],['Finish',T.finish]];
+ const T=R.times,items=[['Address',T.address],['Takeaway',T.takeaway],['Halfway back',T.halfway],['Top',T.top],['Transition',T.transition],['Downswing',T.downswing!=null?T.downswing:(T.top+T.impact)/2],['Impact',T.impact],['Follow-through',T.through],['Finish',T.finish]].filter(x=>x[1]!=null);
  if(I.headAt!=null){const lab=Object.keys(I.notes).find(k=>I.notes[k].some(n=>n.area==='Head stability'));const it=items.find(x=>x[0]===lab);if(it)it[1]=I.headAt}
  const keys=[];
  for(const [lab,t] of items){let bk=0;dense.forEach((f,k)=>{if(Math.abs(f.t-t)<Math.abs(dense[bk].t-t))bk=k});const f=dense[bk];const b=await bmp(f.i);
@@ -896,12 +896,14 @@ function gaugeSVG(c){
  const mx=Math.max(3,Math.min(W-3,x(c.value)));
  return `<svg class="gauge" viewBox="0 0 ${W} ${H+10}" preserveAspectRatio="none" role="img" aria-label="You: ${esc(c.shown)}. Tour players: ${esc(c.target)}">${segs}<path d="M${mx.toFixed(1)} ${H+9} l-5 -7 h10 z" class="gm"/><rect x="${(mx-1.5).toFixed(1)}" y="0" width="3" height="${H}" class="gm"/></svg>`;
 }
+// honesty tags: how a number was got (seen directly, or worked out from a flat picture), and that advice is a coach's read
+function basisTag(c){const e=(c.basis||(SwingMetrics.BASIS||{})[c.id])==='estimated';return `<span class="bTag${e?' est':''}" title="${e?'Worked out from a flat video, so a good estimate rather than exact':'Seen directly in your video'}">${e?'Estimate':'Measured'}</span>`}
 function fixCard(c,n,live,open){
  const a=plainAdvice(c),[sl,sc]=SEV[a.severity]||SEV.minor;
  const see=live?`<button type="button" class="link" data-see="${esc(PH_KEY[c.phase]||'')}">See it in your swing</button>`:'';
- const head=`<div class="fixHd"><span class="fixN" aria-hidden="true">${n}</span><div><h3>${esc(a.title)}</h3><div class="fixTags"><span class="pill g-${sc}">${sl}</span><span class="mut">${esc(c.phase)}</span></div></div></div>`;
+ const head=`<div class="fixHd"><span class="fixN" aria-hidden="true">${n}</span><div><h3>${esc(a.title)}</h3><div class="fixTags"><span class="pill g-${sc}">${sl}</span><span class="mut">${esc(c.phase)}</span>${basisTag(c)}<span class="bTag read" title="What a coach would take from the numbers">Coach's read</span></div></div></div>`;
  const body=`<div class="fixMeas"><div class="fxNow"><span class="mut">Where you are</span><b>${esc(plainState(c))}</b></div>${gaugeHTML(c)}
-  <details class="fxNums"><summary>Show the numbers</summary><p>You measured <b>${esc(c.shown)}</b>${esc(realDist(c))}. Tour players: ${esc(c.target)}.</p></details></div>
+  <details class="fxNums"><summary>Show the numbers</summary><p>${basisTag(c)} You measured <b>${esc(c.shown)}</b>${esc(realDist(c))}. Tour players: ${esc(c.target)}.</p></details></div>
  <div class="fixRow"><b>Why it matters</b><p>${esc(a.why)}</p>${a.term?`<p class="fxTerm">Coaches call this <b>${esc(a.term)}</b>.</p>`:''}</div>
  <div class="fixFeel"><b>Practice swings: how it should feel</b><p>${esc(a.feel)}</p>${a.cue?`<b>When you hit: one swing thought</b><p>${esc(a.cue)}</p>`:''}</div>
  ${(()=>{const lib=drillsForCheck(c.id),d0=lib[0];
@@ -927,12 +929,12 @@ function checklistHTML(m){
  const tally={tour:0,ok:0,borderline:0,info:0,fault:0,major:0};C.forEach(c=>tally[c.verdict]++);
  const row=c=>{const a=plainAdvice(c),[lab,cls,sym]=VERDICT[c.verdict];
   return `<details class="ck"><summary><span class="ckI g-${cls}" aria-hidden="true">${sym}</span><span class="ckN">${esc(plainName(c))}</span><span class="ckV g-${cls}">${esc(c.verdict==='tour'?lab:plainState(c))}</span></summary>
-  <div class="ckB">${gaugeHTML(c)}<p class="mut" style="margin:0">You measured ${esc(c.shown)}${esc(realDist(c))}. Tour players: ${esc(c.target)}.</p><p>${esc(c.verdict==='tour'?(a.good||''):(a.why||a.good||''))}</p>${a.feel&&c.verdict!=='tour'?`<p><b>How it should feel:</b> ${esc(a.feel)}</p>`:''}</div></details>`};
+  <div class="ckB">${gaugeHTML(c)}<p class="mut" style="margin:0">${basisTag(c)} You measured ${esc(c.shown)}${esc(realDist(c))}. Tour players: ${esc(c.target)}.</p><p>${esc(c.verdict==='tour'?(a.good||''):(a.why||a.good||''))}</p>${a.feel&&c.verdict!=='tour'?`<p><b>How it should feel:</b> ${esc(a.feel)}</p>`:''}</div></details>`};
  return `<div class="card ckList"><h2>Every check, position by position</h2><p class="mut" style="margin:0 0 10px">Everything we could measure from this ${fo?'front-on':'behind-the-ball'} video, compared with tour players filmed the same way. Tap any row to see the numbers.</p>
  <div class="ckTally"><span><b class="g-good">${tally.tour}</b> spot on</span><span><b class="g-mid">${tally.ok+tally.borderline}</b> nearly there</span><span><b class="g-bad">${tally.fault+tally.major}</b> need work</span></div>
  ${PHASES.map(ph=>{const cs=C.filter(c=>c.phase===ph);return cs.length?`<h3 class="ckPh">${ph}</h3>${cs.map(row).join('')}`:''}).join('')}
  ${other.length?`<div class="ckOther"><b>Film one swing from ${fo?'behind you, looking at the target,':'in front of you, facing your chest,'} to check ${other.length} more things,</b> including ${esc([...new Set(other.slice().sort((a,b)=>b.w-a.w).map(c=>plainName(c).toLowerCase()))].slice(0,3).join(', '))}.</div>`:''}
- <p class="mut" style="margin:10px 0 0">Measured from one camera, so treat single numbers as good estimates rather than exact. Tour ranges come from tour swings tracked by this app plus published GolfTEC, Sportsbox AI and TPI data.</p></div>`;
+ <p class="mut" style="margin:10px 0 0"><b>Measured</b> means seen directly in your video. <b>Estimate</b> means worked out from a flat video (turns, planes, the club), so treat it as close rather than exact. <b>Coach's read</b> is what the numbers suggest, not something the camera saw. One camera can't see depth, so no single number is exact. Tour ranges come from tour swings tracked by this app plus published GolfTEC, Sportsbox AI and TPI data.</p></div>`;
 }
 function wireFixes(root){setTimeout(posters,50);root.querySelectorAll('[data-see]').forEach(b=>b.onclick=()=>{const k=(RES.keys||[]).find(x=>x.lab===b.dataset.see);if(!k)return;stopPlay();showFrame(k.fi);$('playerCard').scrollIntoView({behavior:'smooth',block:'start'})})}
 
@@ -940,7 +942,7 @@ function wireFixes(root){setTimeout(posters,50);root.querySelectorAll('[data-see
 const grade=n=>n==null?'na':n>=8?'good':n>=5?'mid':'bad';
 const word=n=>n>=8?'Strong':n>=5?'Work on':'Priority';
 function keysHTML(keys,live){
- return `<div class="card"><h2>You vs a better version of you</h2><p class="mut" style="margin:0 0 10px">The orange and blue lines are you. The green dashed figure is you in the same position with the faults fixed, and the white arrows show which way to move.${live?' Tap a picture to jump the clip there.':''}</p>
+ return `<div class="card"><h2>You vs a better version of you</h2><p class="mut" style="margin:0 0 10px">Your swing in ${keys.length} positions. Swipe along them. The orange and blue lines are you. The green dashed figure is you in the same position with the faults fixed, and the white arrows show which way to move.${live?' Tap a picture to jump the clip there.':''}</p>
  <div class="keys">${keys.map(k=>`<div class="kp"><img alt="${esc(k.lab)} position" src="${k.img||k.small||''}" ${live?`data-fi="${k.fi}"`:''}><div class="kb"><b>${esc(k.lab)} <span class="mut" style="font-weight:400">${(+k.t).toFixed(2)}s</span></b>
  ${k.notes&&k.notes.length?k.notes.map(n=>`<div>${esc(n.txt)}</div><div class="chips">${drillChips(n.area)}</div>`).join(''):'<div class="ok">Looks good here.</div>'}</div></div>`).join('')}</div></div>`;
 }
