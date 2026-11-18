@@ -2099,6 +2099,27 @@ html.chOpen{overflow:hidden}
 #homeCoach .chips{margin:12px 0 10px}#homeCoach .hcOpen{width:100%}
 .chFromSwing{margin:10px 0}.chFromSwing .btn{width:100%}
 @media (prefers-reduced-motion:reduce){.chPanel,.chWrap{transition:none}}
+/* round report, progress dashboard, club consistency (perf.js) */
+.rrHead{display:flex;align-items:baseline;gap:10px;margin:2px 0 4px}.rrHead b{font:800 44px/1 Archivo,'Instrument Sans',system-ui,sans-serif;font-stretch:68%;font-variant-numeric:tabular-nums}
+.rrHead span{color:var(--muted,#5f6f64)}.rrVs{margin:0 0 6px;font-weight:600}
+.rrCard h3{margin:14px 0 4px;font-size:15px}.rrCard ul{margin:0;padding-left:18px}.rrCard li{margin:3px 0}
+.rrTarget{margin-top:14px;padding:12px 14px;border-radius:14px;background:color-mix(in srgb,var(--green,#1e6b3e) 10%,transparent);display:flex;flex-direction:column;gap:2px}
+.rrTarget span{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#5f6f64)}
+.rrTip{margin:6px 0 0;font-size:14px}.rrAsk{width:100%;margin-top:12px}
+.pgSec,.pgScore{background:var(--surface,#fff);border:1px solid var(--line,#dde4de);border-radius:16px;padding:12px 14px}
+.pgSec h3,.pgScore h3{margin:0 0 6px}.pgSec p{margin:4px 0 0}
+.pgSpark{display:block;width:100%;height:64px;margin:4px 0;color:var(--green,#1e6b3e)}
+.pgBig{margin:0 0 8px}.pgBig b{font:800 28px/1 Archivo,'Instrument Sans',system-ui,sans-serif;font-stretch:68%}
+.pgM{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.pgM li{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;font-size:14.5px}
+.pgM small{color:var(--muted,#5f6f64);font-variant-numeric:tabular-nums}
+.pgM i{font-style:normal;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--ink,#132018) 8%,transparent)}
+.pgM li.up i{background:color-mix(in srgb,var(--green,#1e6b3e) 16%,transparent);color:var(--green,#1e6b3e)}
+.pgM li.down i{background:color-mix(in srgb,var(--bad,#c0392b) 14%,transparent);color:var(--bad,#c0392b)}
+.pgBests{margin:0;display:grid;gap:6px}.pgBests div{display:flex;justify-content:space-between;gap:10px}.pgBests dt{color:var(--muted,#5f6f64)}.pgBests dd{margin:0;text-align:right}
+.pgTop{margin:0 0 8px;padding-left:18px}.pgOpen{width:100%;margin-bottom:12px}
+.ccList{margin:0;padding-left:20px;display:grid;gap:4px}.ccList li span{display:block;font-size:13.5px;color:var(--muted,#5f6f64)}
+.ccNote{font-size:13.5px;margin:8px 2px 0}
 </style>
 
 <header class="topbar"><div class="in">
@@ -2418,6 +2439,8 @@ html.chOpen{overflow:hidden}
 <script src="onboard.js"></script>
 <script src="coachbrain.js"></script>
 <script src="coachhub.js"></script>
+<script src="roundreport.js"></script>
+<script src="perf.js"></script>
 
 <script>
 // Offline support, and getting updates in one launch: the app opens from the copy saved on the phone and fetches any new

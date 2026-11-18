@@ -87,3 +87,12 @@ test('what the coach knows reflects the golfer, including left-handers', () => {
   assert.match(k[0].v, /Regular golfer/);
   assert.strictEqual(k.find(r => r.k === 'swings').v, 'None yet');
 });
+
+test('last round answers from the round report, or says there is none', () => {
+  assert.strictEqual(B.intent('How did my last round go?').k, 'round');
+  assert.match(B.answer('How did my last round go?', empty).points[0], /haven't recorded a round/);
+  const rep = { overall: { score: 92, holes: 18, pts: 33, vsAvg: -2 }, good: ['No three-putts.'], improve: [], biggest: { text: 'About 4 shots went on penalties (an estimate from your scorecard).' }, target: 'No more than 3 penalty shots next round.', missing: [], basis: 'Compared with your last 4 rounds.' };
+  const a = B.answer('how did my round go', { ...empty, lastReport: rep });
+  assert.match(a.points[0], /92 over 18 holes, 33 points \(2 better than usual/);
+  assert.ok(a.points.length <= 3);
+});
