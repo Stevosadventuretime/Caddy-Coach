@@ -263,9 +263,10 @@ a{color:var(--green)}
 .card>.mut:first-of-type{margin-top:0}
 
 /* buttons */
-button,.btn{font:600 15px/1 var(--f-ui);min-height:44px;padding:0 16px;border-radius:var(--r-m);border:1px solid var(--line2);background:var(--surface);color:var(--ink);gap:8px;justify-content:center;transition:background .15s,border-color .15s,transform .06s}
+button,.btn{font:600 15px/1 var(--f-ui);min-height:44px;padding:0 16px;border-radius:var(--r-m);border:1px solid var(--line2);background:var(--surface);color:var(--ink);gap:8px;justify-content:center;transition:background .15s,border-color .15s,scale var(--sp-snappy-ms,350ms) var(--sp-snappy,cubic-bezier(.2,.9,.25,1.1)),filter .2s}
 button:hover,.btn:hover{border-color:var(--muted)}
-button:active,.btn:active{transform:translateY(1px)}
+button:not(:disabled):active,.btn:active,.is-pressed{scale:var(--press,.965);filter:brightness(.94);transition:background .15s,border-color .15s,scale 90ms cubic-bezier(.3,0,.5,1),filter 90ms}
+.subnav button{--press:1}
 button.on,.pri,.btn.pri{background:var(--green);border-color:var(--green);color:var(--green-ink)}
 .pri:hover,.btn.pri:hover{background:color-mix(in srgb,var(--green) 88%,#000)}
 button:focus-visible,.btn:focus-within,select:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid color-mix(in srgb,var(--green) 45%,transparent);outline-offset:2px}
@@ -2257,6 +2258,7 @@ button.hcTap:hover{border-color:transparent;filter:brightness(1.08)}
 <script src="zones.js"></script>
 <script src="drills.js"></script>
 <script src="coach.js"></script>
+<script src="motion.js"></script>
 <script src="app-1.js"></script>
 <script src="app-2.js"></script>
 <script src="app-3.js"></script>
