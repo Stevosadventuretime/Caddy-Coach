@@ -1,33 +1,16 @@
-// Caddy Coach: Home on a phone is laid over an aerial golf course. Scrolling flies down the course, a ball flight draws
-// from the tee to a flag. Only while Home shows on a phone (body.homeImm,
-// set in app-4.js); everywhere else the layer is hidden. Photo: Unsplash (free licence), Bernd Dittrich.
+// Caddy Coach: Home on a phone is laid over an aerial golf course, and scrolling flies down it. Only while Home shows
+// on a phone (body.homeImm, set in app-4.js); everywhere else the layer is hidden. Photo: Unsplash (free licence), Bernd Dittrich.
 (function () {
 'use strict';
-const NS = 'http://www.w3.org/2000/svg';
-const ROUTE = 'M250 110 Q 330 420 410 800 Q 470 1010 500 1190', SHOT1 = 'M250 110 Q 330 420 410 800';
 const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const bg = document.createElement('div');
 bg.id = 'holeBg'; bg.setAttribute('aria-hidden', 'true');
-bg.innerHTML = `<img src="home-course.jpg" alt="" decoding="async">
-<svg viewBox="0 0 720 1280" preserveAspectRatio="xMidYMid slice">
- <path class="hbRoute" d="${ROUTE}"/><path class="hbTrail" d="${ROUTE}"/>
- <circle class="hbLand" cx="410" cy="800" r="16"/>
- <g transform="translate(500 1190)"><ellipse rx="9" ry="4" fill="rgba(0,0,0,.45)"/><line x1="0" y1="0" x2="0" y2="-62" stroke="#fff" stroke-width="4"/><path d="M2 -62 L40 -50 L2 -38Z" fill="#f3c43a"/></g>
- <circle class="hbBall" r="10" cx="250" cy="110"/>
-</svg>`;
+bg.innerHTML = '<img src="home-course.jpg" alt="" decoding="async">';
 const shade = document.createElement('div'); shade.id = 'holeShade'; shade.setAttribute('aria-hidden', 'true');
 document.body.prepend(shade); document.body.prepend(bg);
 
-const trail = bg.querySelector('.hbTrail'), ball = bg.querySelector('.hbBall'), land = bg.querySelector('.hbLand');
-let L = 0, seg1 = 0.5, H = 0, vh = 0, on = false;
-function measure() {
-  try {
-    L = trail.getTotalLength();
-    const p = document.createElementNS(NS, 'path'); p.setAttribute('d', SHOT1); seg1 = p.getTotalLength() / L;
-    trail.style.strokeDasharray = L;
-  } catch (_) {}
-}
+let H = 0, vh = 0, on = false;
 function size() {
   vh = innerHeight; const vw = innerWidth;
   H = Math.max(vw * 16 / 9, vh * 1.75); const W = H * 9 / 16;
@@ -38,10 +21,6 @@ function draw() {
   if (!on) return;
   const max = Math.max(1, document.documentElement.scrollHeight - vh), p = Math.min(1, Math.max(0, scrollY / max));
   bg.style.transform = `translate3d(0,${(-p * (H - vh)).toFixed(1)}px,0)` + (still() ? '' : ` scale(${(1.06 - 0.06 * p).toFixed(4)})`);
-  if (!L) measure(); if (!L) return;
-  trail.style.strokeDashoffset = (L * (1 - p)).toFixed(1);
-  const pt = trail.getPointAtLength(L * p); ball.setAttribute('cx', pt.x.toFixed(1)); ball.setAttribute('cy', pt.y.toFixed(1));
-  land.classList.toggle('on', p >= seg1);
 }
 function sync() {
   const now = document.body.classList.contains('homeImm');
@@ -70,5 +49,5 @@ if (typeof homeBar === 'function') {
 }
 // the page grows as Home's cards fill in, so re-measure the scroll range then
 try { if (window.ResizeObserver) new ResizeObserver(() => { if (on) draw(); }).observe(document.getElementById('p0')); } catch (_) {}
-measure(); setTimeout(sync, 0);
+setTimeout(sync, 0);
 })();
