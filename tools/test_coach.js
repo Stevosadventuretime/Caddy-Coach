@@ -65,3 +65,4 @@ test('a focus lasts two weeks: learn and test in week 1, own it and pressure-tes
 
 // the swing position and label tests run with these (CI runs this file)
 require('./test_metrics.js');
+require('./test_coachbrain.js');

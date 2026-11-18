@@ -2064,6 +2064,41 @@ body.homeHole .qh{color:var(--ink);text-shadow:0 1px 12px rgba(0,0,0,.4)}
 .obNav{display:flex;justify-content:space-between;gap:10px;margin-top:14px}.obNav .btn{min-width:110px}
 .obFor{display:block;margin-top:2px}
 @media (prefers-reduced-motion:reduce){.obSheet,.obScrim{transition:none}}
+/* Your coach (coachhub.js) */
+.chWrap{position:fixed;inset:0;z-index:58;display:flex;justify-content:center;align-items:stretch;background:rgba(4,14,8,0);pointer-events:none;transition:background .25s}
+.chWrap.on{background:rgba(4,14,8,.5);pointer-events:auto}
+.chPanel{width:100%;max-width:640px;display:flex;flex-direction:column;background:var(--canvas,#f4f7f3);color:var(--ink,#132018);transform:translateY(100%);transition:transform var(--sp-sheet-ms,.42s) var(--sp-sheet,cubic-bezier(.2,.8,.2,1));padding-top:env(safe-area-inset-top,0px)}
+.chWrap.on .chPanel{transform:none}
+html.chOpen{overflow:hidden}
+.chHead{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px 10px;border-bottom:1px solid var(--line,#dde4de)}
+.chHead h2{margin:0}.chHead small{display:block}
+.chX{width:38px;height:38px;border-radius:50%;border:1px solid var(--line,#dde4de);background:var(--surface,#fff);color:inherit;font-size:16px}
+.chBody{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}
+.chKnow{background:var(--surface,#fff);border:1px solid var(--line,#dde4de);border-radius:16px;padding:12px 14px}
+.chKnow summary{display:flex;flex-direction:column;gap:2px;cursor:pointer;list-style:none}.chKnow summary::-webkit-details-marker{display:none}
+.chKnow dl{margin:10px 0 0;display:grid;gap:8px}.chKnow dl>div{display:grid;grid-template-columns:118px 1fr;gap:8px;font-size:14.5px}
+.chKnow dt{color:var(--muted,#5f6f64)}.chKnow dd{margin:0;min-width:0}
+.chTop h3{margin:0 0 8px}.chTop ol{margin:0;padding:0;list-style:none;display:grid;gap:8px;counter-reset:t}
+.chTop li{counter-increment:t;display:grid;grid-template-columns:28px 1fr;gap:2px 10px;align-items:start;padding:12px;border-radius:14px;background:var(--surface,#fff);border:1px solid var(--line,#dde4de)}
+.chTop li::before{content:counter(t);grid-row:span 3;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:var(--green,#1e6b3e);color:var(--green-ink,#fff)}
+.chTop li small{color:var(--muted,#5f6f64)}.chTop li .chip{justify-self:start;margin-top:6px}
+.chChat{display:flex;flex-direction:column;gap:10px}
+.chMsg{max-width:92%;padding:10px 13px;border-radius:16px;line-height:1.45}
+.chMsg.me{align-self:flex-end;background:var(--green,#1e6b3e);color:var(--green-ink,#fff);border-bottom-right-radius:5px}
+.chMsg.coach{align-self:flex-start;background:var(--surface,#fff);border:1px solid var(--line,#dde4de);border-bottom-left-radius:5px}
+.chMsg ul{margin:6px 0 0;padding-left:18px}.chMsg li{margin:3px 0}
+.chT{display:block}.chEv{margin:8px 0 0;font-size:13px;color:var(--muted,#5f6f64)}
+.chMiss{margin:8px 0 0;font-size:13.5px;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--mid,#b9860a) 12%,transparent)}
+.chMsg .chips{margin-top:8px}
+.chFoot{border-top:1px solid var(--line,#dde4de);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:var(--canvas,#f4f7f3)}
+.chQs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:8px}.chQs::-webkit-scrollbar{display:none}.chQs .chip{flex:none}
+.chAsk{display:flex;gap:8px}.chAsk input{flex:1;min-width:0;padding:11px 14px;border-radius:999px;border:1px solid var(--line2,var(--line,#dde4de));background:var(--surface,#fff);color:var(--ink,#132018);font:inherit}
+#homeCoach .hcTop{display:flex;gap:12px;align-items:center}#homeCoach h2{margin:0}
+#homeCoach .hcIcon{width:40px;height:40px;flex:none;border-radius:12px;background:var(--green,#1e6b3e);position:relative}
+#homeCoach .hcIcon::after{content:"";position:absolute;inset:11px 9px 13px;border:2.5px solid var(--green-ink,#fff);border-radius:8px 8px 8px 2px}
+#homeCoach .chips{margin:12px 0 10px}#homeCoach .hcOpen{width:100%}
+.chFromSwing{margin:10px 0}.chFromSwing .btn{width:100%}
+@media (prefers-reduced-motion:reduce){.chPanel,.chWrap{transition:none}}
 </style>
 
 <header class="topbar"><div class="in">
@@ -2381,6 +2416,8 @@ body.homeHole .qh{color:var(--ink);text-shadow:0 1px 12px rgba(0,0,0,.4)}
 <script src="swingcoach.js"></script>
 <script src="homehole.js"></script>
 <script src="onboard.js"></script>
+<script src="coachbrain.js"></script>
+<script src="coachhub.js"></script>
 
 <script>
 // Offline support, and getting updates in one launch: the app opens from the copy saved on the phone and fetches any new
