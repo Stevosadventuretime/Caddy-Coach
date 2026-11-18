@@ -18,16 +18,17 @@ function spring(d, b) {
   pts[n] = 1;
   return { e: 'linear(' + pts.join(',') + ')', ms: Math.round(T * 1000) };
 }
-const SPRINGS = { snappy: [0.35, 0.15], smooth: [0.5, 0] };
-try {
-  if (window.CSS && CSS.supports('transition-timing-function', 'linear(0, 1)')) {
-    for (const k in SPRINGS) {
-      const s = spring(SPRINGS[k][0], SPRINGS[k][1]);
-      root.style.setProperty('--sp-' + k, s.e);
-      root.style.setProperty('--sp-' + k + '-ms', s.ms + 'ms');
-    }
-  }
-} catch (_) {}
+const SPRINGS = { snappy: [0.35, 0.15], smooth: [0.5, 0], bouncy: [0.5, 0.32], sheet: [0.45, 0.08] };
+const FALLBACK = { snappy: ['cubic-bezier(.2,.9,.25,1.1)', 420], smooth: ['cubic-bezier(.2,.8,.2,1)', 600], bouncy: ['cubic-bezier(.3,1.5,.5,1)', 600], sheet: ['cubic-bezier(.2,.9,.25,1.05)', 560] };
+const S = {};
+let LINEAR = false;
+try { LINEAR = !!(window.CSS && CSS.supports('transition-timing-function', 'linear(0, 1)')); } catch (_) {}
+for (const k in SPRINGS) {
+  S[k] = LINEAR ? spring(SPRINGS[k][0], SPRINGS[k][1]) : { e: FALLBACK[k][0], ms: FALLBACK[k][1] };
+  if (LINEAR) { root.style.setProperty('--sp-' + k, S[k].e); root.style.setProperty('--sp-' + k + '-ms', S[k].ms + 'ms'); }
+}
+window.ccSpring = S;
+const still = () => RM.matches;
 
 // ---- press feedback: mark the button the moment a finger lands, before any click handler runs
 const PRESSABLE = 'button:not(:disabled),.btn';
@@ -39,7 +40,7 @@ document.addEventListener('pointerdown', e => {
   if (!el || el.getAttribute('aria-disabled') === 'true') return;
   release();
   pressed = el;
-  if (el.offsetWidth > 240 && !el.style.getPropertyValue('--press')) el.style.setProperty('--press', '.985');
+  if (el.offsetWidth > 240 && !el.style.getPropertyValue('--press')) el.style.setProperty('--press', '.975');
   el.classList.add('is-pressed');
 }, { passive: true, capture: true });
 ['pointerup', 'pointercancel', 'dragstart'].forEach(t => document.addEventListener(t, release, { passive: true, capture: true }));
@@ -76,6 +77,57 @@ window.ccHaptic = function (kind) {
     }
     iosTap();
     if (kind === 'success') setTimeout(iosTap, 110);
+  } catch (_) {}
+};
+
+// ---- rolling numbers: digits roll from the last value shown under the same key, like a scoreboard
+const LAST = {};
+window.ccRoll = function (el, key) {
+  try {
+    if (!el) return;
+    const to = el.textContent.trim(), from = LAST[key];
+    LAST[key] = to;
+    if (still() || from == null || from === to || !/^\d+$/.test(to) || !/^\d+$/.test(from) || from.length !== to.length) return;
+    const H = el.getBoundingClientRect().height;
+    if (!H) return;
+    const color = getComputedStyle(el).color;
+    el.classList.add('ccRolling');
+    const o = document.createElement('span');
+    o.className = 'ccOdo'; o.setAttribute('aria-hidden', 'true'); o.style.color = color;
+    const cols = [...to].map((d, i) => {
+      const c = document.createElement('span');
+      c.className = 'ccOdoC';
+      for (let k = 0; k < 10; k++) { const s = document.createElement('span'); s.textContent = k; s.style.height = s.style.lineHeight = H + 'px'; c.appendChild(s); }
+      c.style.transform = 'translateY(' + (-from[i] * H) + 'px)';
+      o.appendChild(c);
+      return c;
+    });
+    el.appendChild(o);
+    o.getBoundingClientRect();
+    cols.forEach((c, i) => {
+      c.style.transition = 'transform ' + S.smooth.ms + 'ms ' + S.smooth.e + ' ' + (cols.length - 1 - i) * 30 + 'ms';
+      c.style.transform = 'translateY(' + (-to[i] * H) + 'px)';
+    });
+    setTimeout(() => { o.remove(); el.classList.remove('ccRolling'); }, S.smooth.ms + cols.length * 30 + 60);
+  } catch (_) {}
+};
+
+// ---- progress rings (CSS --p from 0 to 1): fill from the last value, or from empty the first time each launch
+const RING = {};
+let propOK = false;
+try { if (window.CSS && CSS.registerProperty) { CSS.registerProperty({ name: '--p', syntax: '<number>', inherits: false, initialValue: '0' }); propOK = true; } } catch (_) { propOK = true; }
+window.ccRing = function (el, key) {
+  try {
+    if (!el) return;
+    const to = parseFloat(el.style.getPropertyValue('--p') || getComputedStyle(el).getPropertyValue('--p')) || 0;
+    const seen = key in RING, from = seen ? RING[key] : 0;
+    RING[key] = to;
+    if (still() || from === to || !propOK || !el.animate) return;
+    el.animate([{ '--p': from }, { '--p': to }], { duration: Math.round(S.smooth.ms * 1.6), easing: S.smooth.e });
+    if (to >= 1 && from < 1 && seen) {
+      el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.12)' }, { transform: 'scale(1)' }], { duration: 520, delay: Math.round(S.smooth.ms * 1.2), easing: 'cubic-bezier(.3,1.4,.5,1)' });
+      setTimeout(() => window.ccHaptic('success'), Math.round(S.smooth.ms * 1.2));
+    }
   } catch (_) {}
 };
 })();
