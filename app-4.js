@@ -122,3 +122,6 @@ setTimeout(()=>{try{renderMissCard()}catch(e){console.error(e)}},0);
 // ---- motion hooks (motion.js): GPS yardages roll to new values; the weekly practice ring fills
 if(typeof gpsPanel==='function')gpsPanel=(f=>function(){const r=f.apply(this,arguments);try{const p=$('gpsPanel');if(p&&window.ccRoll){ccRoll(p.querySelector('.gpsBig b'),'gps-mid');const fb=p.querySelectorAll('.fbRow b');ccRoll(fb[0],'gps-front');ccRoll(fb[1],'gps-back')}}catch(_){}return r})(gpsPanel);
 if(typeof renderHomePlan==='function')renderHomePlan=(f=>async function(){const r=await f.apply(this,arguments);try{const el=$('homePlan');if(el&&!el.hidden&&window.ccRing)ccRing(el.querySelector('.wpRing'),'home-plan')}catch(_){}return r})(renderHomePlan);
+// which way a page change goes, in tab-bar order (then order within a section): 1 = forward, -1 = back, 0 = unknown
+function pgDir(n){const prev=[0,1,2,3,4,5,6,7,8,9].find(k=>{const e=$('p'+k);return e&&!e.hidden});if(prev==null||prev===n)return 0;const pos=k=>{for(let i=0;i<GROUPS.length;i++){const j=GROUPS[i].p.indexOf(k);if(j>=0)return i*10+j}return -1};const a=pos(prev),b=pos(n);return a<0||b<0?0:b>a?1:-1}
+if(window.ccTabInd)setTimeout(ccTabInd,0);

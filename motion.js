@@ -112,6 +112,38 @@ window.ccRoll = function (el, key) {
   } catch (_) {}
 };
 
+// ---- tab bar: one green marker that slides to the current tab
+window.ccTabInd = function () {
+  try {
+    const bar = document.querySelector('#tabbar .in'); if (!bar) return;
+    let ind = bar.querySelector('.tabInd'), fresh = false;
+    if (!ind) { ind = document.createElement('span'); ind.className = 'tabInd'; ind.setAttribute('aria-hidden', 'true'); bar.appendChild(ind); fresh = true; }
+    const b = bar.querySelector('[data-grp][aria-current="page"]');
+    if (!b || !b.offsetWidth) { ind.style.opacity = '0'; return; }
+    if (fresh || ind.style.opacity === '0') ind.style.transition = 'none';
+    ind.style.opacity = '1';
+    ind.style.width = b.offsetWidth + 'px';
+    ind.style.transform = 'translateX(' + b.offsetLeft + 'px)';
+    if (ind.style.transition === 'none') { ind.getBoundingClientRect(); ind.style.transition = ''; }
+  } catch (_) {}
+};
+let rz = 0;
+window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { const i = document.querySelector('.tabInd'); if (i) { i.style.opacity = '0'; } window.ccTabInd(); }, 120); });
+
+// ---- small pop on a tapped icon
+window.ccPop = function (el) {
+  try { if (el && el.animate && !still()) el.animate([{ transform: 'scale(.8)' }, { transform: 'scale(1)' }], { duration: S.bouncy.ms, easing: S.bouncy.e }); } catch (_) {}
+};
+
+// ---- a page arriving: slides in from the side you're heading towards (dir 1 = from the right, -1 = from the left)
+window.ccPageIn = function (el, dir) {
+  try {
+    if (!el || !el.animate || still()) return;
+    const from = dir ? 'translateX(' + (dir * 28) + 'px)' : 'translateY(8px)';
+    el.animate([{ opacity: 0, transform: from }, { opacity: 1, transform: 'none' }], { duration: S.smooth.ms, easing: S.smooth.e });
+  } catch (_) {}
+};
+
 // ---- progress rings (CSS --p from 0 to 1): fill from the last value, or from empty the first time each launch
 const RING = {};
 let propOK = false;
