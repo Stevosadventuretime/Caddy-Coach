@@ -175,4 +175,8 @@ if (has('progressHTML')) {
   const base = window.progressHTML;
   window.progressHTML = async function (m) { return (await base.apply(this, arguments)) + (m ? await progressCardHTML(m.view) : ''); };
 }
+// the app version (from the offline cache name), shown under Log out so a golfer can tell an update has arrived
+async function appVer() { try { const ks = await caches.keys(); const v = ks.filter(k => /^cc-gh-/.test(k)).sort().pop(); return v ? v.replace('cc-gh-', '') : 'online'; } catch (_) { return 'online'; } }
+new MutationObserver(async () => { const els = document.querySelectorAll('[data-appver]:not([data-done])'); if (!els.length) return; const v = await appVer(); els.forEach(e => { e.textContent = v; e.dataset.done = '1'; }); })
+  .observe(document.body, { childList: true, subtree: true });
 })();
