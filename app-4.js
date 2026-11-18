@@ -153,3 +153,11 @@ addEventListener('resize',()=>{clearTimeout(homeImmLayout.t);homeImmLayout.t=set
 try{if(window.ResizeObserver){const ro=new ResizeObserver(()=>homeImmLayout());[document.querySelector('.topbar'),$('hero')].forEach(e=>e&&ro.observe(e))}}catch(_){}
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(homeImmLayout).catch(()=>{});
 setTimeout(homeImmLayout,0);
+// top bar over the Home photo: stays clear at the top, darkens into frosted glass as you scroll, and only turns light once the photo has passed under it
+function homeBar(){try{const b=document.body,tb=document.querySelector('.topbar'),hr=$('homeRound');if(!tb)return;
+ if(!b.classList.contains('homeImm')||!hr){b.classList.remove('homeOver');tb.style.removeProperty('--barA');return}
+ const over=hr.getBoundingClientRect().bottom>tb.getBoundingClientRect().bottom+6;b.classList.toggle('homeOver',over);
+ if(over)tb.style.setProperty('--barA',Math.min(.62,Math.max(0,scrollY/180*.62)).toFixed(3));else tb.style.removeProperty('--barA')}catch(_){}}
+addEventListener('scroll',()=>{if(homeBar.q)return;homeBar.q=requestAnimationFrame(()=>{homeBar.q=0;homeBar()})},{passive:true});
+homeImmLayout=(f=>function(){f.apply(this,arguments);homeBar()})(homeImmLayout);
+setTimeout(homeBar,0);
