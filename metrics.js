@@ -110,7 +110,17 @@ function phases(F) {
       for (let i = pb; i > Math.max(0, addr - 3); i--) if (vs[i - 1] < th && vs[i] >= th) { takeS = tm(i - 1) + (tm(i) - tm(i - 1)) * clamp((th - vs[i - 1]) / Math.max(1e-9, vs[i] - vs[i - 1]), 0, 1); break; }
     } }
   const impT = peak(imp);
-  return { addr, take, takeT, top, imp, fin, T, topT, impT, topS: (topS != null && takeS != null && takeS < topS && topS < impT && topS - takeS > 0.45 && topS - takeS < 1.8) ? topS : null, takeS };
+  // the in-between positions, each where the hands cross a set share of the way between two positions already
+  // found, placed between frames. One that can't be found (too few frames there) is left out, never guessed.
+  const cross = (from, to, level, up) => { for (let i = Math.max(1, from); i <= to && i < F.length; i++) {
+      const a = F[i - 1].h, b = F[i].h; if (up ? (a < level && b >= level) : (a > level && b <= level)) return F[i - 1].t + (F[i].t - F[i - 1].t) * clamp((level - a) / ((b - a) || 1e-9), 0, 1); }
+    return null; };
+  const hA = F[addr].h, hT = hmax, hI = F[imp].h, hF = F[fin].h;
+  const halfT = hT - hA > 0.3 ? cross(take, top, hA + 0.5 * (hT - hA), true) : null;
+  const transT = hT - hI > 0.3 ? cross(top + 1, imp, hT - 0.1 * (hT - hI), false) : null;
+  const downT = hT - hI > 0.3 ? cross(top + 1, imp, hI + 0.45 * (hT - hI), false) : null;
+  const thruT = hF - hI > 0.3 ? cross(imp + 1, fin, hI + 0.5 * (hF - hI), true) : null;
+  return { addr, take, takeT, top, imp, fin, T, topT, impT, halfT, transT, downT, thruT, topS: (topS != null && takeS != null && takeS < topS && topS < impT && topS - takeS > 0.45 && topS - takeS < 1.8) ? topS : null, takeS };
 }
 
 function band(v, steps) { if (v == null || isNaN(v)) return null; for (const [lim, s] of steps) if (v <= lim) return s; return steps[steps.length - 1][1]; }
@@ -209,6 +219,11 @@ function analyse(frames, opt) {
     }
   }
   const times = { address: r2(Math.max(F[0].t, Math.min(A.t, P.takeT - 0.25))), takeaway: r2(P.takeT), top: r2(P.topT), impact: r2(P.impT), finish: r2(Fi.t) };
+  // the in-between positions, kept only when they fall in order between their neighbours
+  const btw = (x, a, b) => (x != null && x > a && x < b) ? r2(x) : undefined;
+  times.halfway = btw(P.halfT, P.takeT, P.topT); times.transition = btw(P.transT, P.topT, P.impT);
+  times.downswing = btw(P.downT, times.transition != null ? P.transT : P.topT, P.impT); times.through = btw(P.thruT, P.impT, Fi.t);
+  for (const k of Object.keys(times)) if (times[k] === undefined) delete times[k];
   return { ok: true, metrics: m, times, F, P, toBall, scores: score(m, view), checks: checks(m, view) };
 }
 
@@ -372,6 +387,10 @@ const NOISE = { flatShoulders: 3, ballPos: 0.03, shaftLean: 1.5, downPlane: 0.06
   ott: 0.03, earlyExt: 0.015, standUp: 1.5, headDepth: 0.02, headDrop: 0.02, headRise: 0.03, finishDtl: 0.03, finishFo: 0.05, hold: 0.05,
   stance: 0.02, setupTilt: 1, sway: 0.02, reverse: 1, shTurn: 3, hipTurn: 5, swayGap: 0.03, hipShift: 0.03, slide: 0.02, hipOpen: 4,
   impactTilt: 1.5, headImpact: 0.02, headSide: 0.02, chickenWing: 3, finishWeight: 0.06, trailHeel: 0.02 };
+// how each reading is got. 'measured': a position or angle seen directly in the picture. 'estimated': a turn,
+// plane or club reading worked out from a flat picture (or a guessed depth), so it's a good estimate, not exact.
+const BASIS = { shTurn: 'estimated', hipTurn: 'estimated', hipOpen: 'estimated', flatShoulders: 'estimated', downPlane: 'estimated',
+  ott: 'estimated', ballPos: 'estimated', shaftLean: 'estimated' };
 const AREA_LIST = ['Setup posture', 'Spine angle', 'Head stability', 'Hip and shoulder rotation', 'Backswing and top', 'Tempo and sequencing', 'Impact position', 'Balance and finish'];
 function checks(m, view) {
   const v = view === 'face-on' ? 'fo' : view === 'down-the-line' ? 'dtl' : 'fo';
@@ -390,7 +409,7 @@ function checks(m, view) {
     // backswing (and the tempo ratio) can't be timed reliably: shown, not judged
     const lowFps = (c.id === 'tempo' || c.id === 'dsTime') && m.fps != null && m.fps < 50;
     const info = lowFps || (c.id === 'tempo' && v === 'dtl');
-    out.push({ id: c.id, phase: c.phase, area: c.area, w: c.w, name: c.name, value: val, shown: c.fmt(val), target: c.target, score: Math.round(s * 10) / 10,
+    out.push({ id: c.id, basis: BASIS[c.id] || 'measured', phase: c.phase, area: c.area, w: c.w, name: c.name, value: val, shown: c.fmt(val), target: c.target, score: Math.round(s * 10) / 10,
       infoWhy: info ? (lowFps ? 'fps' : 'angle') : undefined,
       verdict: info ? 'info' : hi < 6.5 ? (s >= 4 ? 'fault' : 'major') : lo >= 6.5 ? (s >= 8.5 ? 'tour' : 'ok') : 'borderline', info });
   }
@@ -811,6 +830,6 @@ function progress(now, prev, view) {
   out.sort((x, y) => Math.abs(y.ds) * y.w - Math.abs(x.ds) * x.w);
   return { better: out.filter(o => o.better), worse: out.filter(o => !o.better) };
 }
-const api = { progress, CUES, consistency, detectShaft, MISSES, missLink, analyse, features, phases, score, checks, level, faults, advice, lerp, FAULTS, CHECKS, AREA_LIST, findWindow, L };
+const api = { BASIS, progress, CUES, consistency, detectShaft, MISSES, missLink, analyse, features, phases, score, checks, level, faults, advice, lerp, FAULTS, CHECKS, AREA_LIST, findWindow, L };
 if (typeof module !== 'undefined') module.exports = api; else root.SwingMetrics = api;
 })(this);

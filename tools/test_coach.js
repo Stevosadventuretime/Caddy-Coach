@@ -62,3 +62,6 @@ test('a focus lasts two weeks: learn and test in week 1, own it and pressure-tes
   assert.strictEqual(C.focusSessions(f, t0 + 20 * 864e5).length, 0);
   assert.strictEqual(C.focusActive({ drills: [] , until: t0 + 1e9 }, t0), false);
 });
+
+// the swing position and label tests run with these (CI runs this file)
+require('./test_metrics.js');

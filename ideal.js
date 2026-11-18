@@ -71,7 +71,7 @@ function build(frames, R) {
     let bi = -1, bd = 0;
     frames.forEach((f, i) => { if (f.t < T.takeaway || f.t > T.impact) return; const d = Math.hypot(ideal[i][0].x - f.pts[0].x, ideal[i][0].y - f.pts[0].y); if (d > bd) { bd = d; bi = i; } });
     if (bi >= 0) {
-      const t = frames[bi].t, keys = [['Takeaway', T.takeaway], ['Top', T.top], ['Downswing', (T.top + T.impact) / 2], ['Impact', T.impact]];
+      const t = frames[bi].t, keys = [['Takeaway', T.takeaway], ['Top', T.top], ['Downswing', T.downswing != null ? T.downswing : (T.top + T.impact) / 2], ['Impact', T.impact]];
       const k = keys.reduce((a, b) => Math.abs(b[1] - t) < Math.abs(a[1] - t) ? b : a)[0];
       const dy = (ideal[bi][0].y - frames[bi].pts[0].y) / T0;
       add(k, dy < -0.04 ? `Keep your head level: it dipped ${cm(m.head_max_drop)} during the swing.` : `Keep your head steady: it moved ${cm(Math.max(m.head_max_side, m.head_max_drop))} during the swing.`, 'Head stability');
