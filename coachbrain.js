@@ -13,6 +13,7 @@ function intent(text) {
   const t = String(text || '').toLowerCase();
   for (const [k, re] of MISS_WORDS) if (re.test(t)) return { k: 'miss', miss: k };
   if (/last round|my round|round go|how did i (play|do|get on)|today'?s round/.test(t)) return { k: 'round' };
+  if (/\blevel\b|\bxp\b|badge|achievement|challenge/.test(t)) return { k: 'level' };
   if (/handicap|index/.test(t)) return { k: 'hcp' };
   if (/improv|getting better|progress|better than|over the last|compared|reference/.test(t)) return { k: 'improved' };
   for (const [k, re] of AREA_WORDS) if (re.test(t)) return { k: 'area', area: k };
@@ -211,6 +212,20 @@ function roundAnswer(s) {
   return a;
 }
 
+// ---------- level, badges and this week's challenges (achieve.js, worked out on the phone) ----------
+function levelAnswer(s) {
+  const A = s.achieve, a = ans({ title: 'Your level and badges' });
+  if (!A) { a.points = ["I can't see your badges right now."]; return a; }
+  a.points.push(`Level ${A.L.n}, ${A.L.name}: ${A.X.total} XP${A.L.to ? `, ${A.L.to - A.X.total} to ${A.L.nextName}` : ''}.`);
+  const next = A.B.filter(b => !b.earned).sort((x, y) => y.have / y.need - x.have / x.need).slice(0, 3);
+  if (next.length) a.points.push('Closest badges: ' + next.map(b => `${b.name} (${b.need > 1 ? `${b.have} of ${b.need}` : b.how.toLowerCase()})`).join('; ') + '.');
+  const open = A.C.filter(c => !c.done);
+  a.points.push(open.length ? `This week: ${open.map(c => c.title.toLowerCase()).join('; ')}.` : "You've done all three challenges this week.");
+  a.evidence = 'XP only comes from real golf: swings, rounds, drill tests, practice sessions and badges.';
+  a.actions = [{ type: 'ask', q: 'What should I practise today?', label: 'What should I practise today?' }];
+  return a;
+}
+
 function helpAnswer() {
   return ans({ title: 'I can help with', points: ['Why you hit a certain miss (slice, hook, fat, thin…)', 'What to practise today, and where you lose shots', 'Whether your swing is improving'], actions: CHIPS.slice(0, 3).map(q => ({ type: 'ask', q, label: q })) });
 }
@@ -219,7 +234,7 @@ function answer(text, s) {
   s = s || {};
   const it = intent(text);
   const a = it.k === 'miss' ? missAnswer(s, it.miss) : it.k === 'practice' ? practiceAnswer(s) : it.k === 'improved' ? improvedAnswer(s)
-    : it.k === 'area' ? areaAnswer(s, it.area) : it.k === 'focus' ? focusAnswer(s) : it.k === 'hcp' ? hcpAnswer(s) : it.k === 'round' ? roundAnswer(s) : helpAnswer();
+    : it.k === 'area' ? areaAnswer(s, it.area) : it.k === 'focus' ? focusAnswer(s) : it.k === 'hcp' ? hcpAnswer(s) : it.k === 'round' ? roundAnswer(s) : it.k === 'level' ? levelAnswer(s) : helpAnswer();
   a.intent = it.k; a.points = a.points.filter(Boolean).slice(0, 3);
   return a;
 }

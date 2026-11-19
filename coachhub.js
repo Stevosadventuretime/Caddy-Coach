@@ -74,6 +74,7 @@ async function snapshot() {
   } catch (_) {}
   try { const rec = HcpStore.rec; if (rec && rec.start) s.hcp = { hi: WHS.calc(rec).hi, start: rec.start.hi, scores: (rec.scores || []).length }; } catch (_) {}
   try { s.goals = goalsGet(); } catch (_) { s.goals = []; }
+  try { if (window.ccAchieve && !snapshot.inAchieve) { snapshot.inAchieve = true; s.achieve = await ccAchieve(); } } catch (_) {} finally { snapshot.inAchieve = false; }
   try { s.bagN = BG.bag && BG.bag.yards ? Object.values(BG.bag.yards).filter(y => y && y.carry).length : 0; } catch (_) { s.bagN = 0; }
   try {
     const p = await planGet(), i = p.sessions.findIndex((x, j) => !p.done['s' + j]);
