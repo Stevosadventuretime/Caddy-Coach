@@ -69,3 +69,4 @@ require('./test_coachbrain.js');
 require('./test_roundreport.js');
 require('./test_achieve.js');
 require('./test_friendlogic.js');
+require('./test_tiers.js');

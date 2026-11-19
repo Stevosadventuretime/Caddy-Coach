@@ -120,7 +120,9 @@ LIVE PINS, CLUBS, COACHING AND CADDY COACH PLUS
       https://dhrzscyirgvjwnvgdpqt.supabase.co/functions/v1/cc-stripe-webhook
       with events checkout.session.completed and customer.subscription.created/updated/deleted. Copy its
       signing secret into Supabase > Edge Functions > Secrets as STRIPE_WEBHOOK_SECRET.
-   3. In app-3.js set PLUS={on:true, linkMonthly:'<monthly link>', linkYearly:'<yearly link>',
+   3. Plans and prices live in tiers.js (Free, Plus, Pro). Turning payments on is still one switch (Pro also needs the
+      cc-stripe-webhook to save plan 'pro' for the Pro price, as today it saves only the billing interval):
+      in app-3.js set PLUS={on:true, linkMonthly:'<monthly link>', linkYearly:'<yearly link>',
       portal:'<Stripe customer portal link>', ...}. Or ask Claude to do it.
 
 TESTING ON REAL PHONES

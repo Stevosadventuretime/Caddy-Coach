@@ -86,6 +86,7 @@ async function homeStrip() {
     const b = A.B.find(x => x.id === id); if (!b) continue;
     try { if (window.ccHaptic) ccHaptic('success'); } catch (_) {}
     if (typeof toast === 'function') toast(`Badge earned: ${b.name}`);
+    try { if (window.ccTrackX) ccTrackX('badge', id); } catch (_) {}
   }
 }
 let t = 0;

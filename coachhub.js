@@ -43,8 +43,9 @@ async function snapshot() {
     const view = (s.swings[0] || {}).view;
     if (view) {
       const same = det.filter(x => x.m.view === view);
-      let win = 30, pick = same.filter(x => Date.now() - Date.parse(x.e.createdAt) < 30 * 864e5);
-      if (pick.length < 2) { win = 90; pick = same.filter(x => Date.now() - Date.parse(x.e.createdAt) < 90 * 864e5); }
+      const periods = !window.ccCan || ccCan('periods');   // 30/90-day windows are Pro; otherwise all swings from this angle
+      let win = 30, pick = periods ? same.filter(x => Date.now() - Date.parse(x.e.createdAt) < 30 * 864e5) : [];
+      if (periods && pick.length < 2) { win = 90; pick = same.filter(x => Date.now() - Date.parse(x.e.createdAt) < 90 * 864e5); }
       if (pick.length < 2) { win = 0; pick = same; }
       if (pick.length >= 2) {
         const last = pick[0], first = pick[pick.length - 1], P = SwingMetrics.progress(last.m, first.m, view) || { better: [], worse: [] };
@@ -52,7 +53,7 @@ async function snapshot() {
         s.trend = { n: pick.length, view, window: win, first: first.e.overall, last: last.e.overall, from: fmtDate(first.e.createdAt), to: fmtDate(last.e.createdAt),
           better: P.better.map(nm), worse: P.worse.map(nm) };
       }
-      const refId = lsGet('cc_refswing', null), ref = refId && det.find(x => x.e.id === refId);
+      const refId = (!window.ccCan || ccCan('reference')) && lsGet('cc_refswing', null), ref = refId && det.find(x => x.e.id === refId);
       if (ref && det[0] && ref !== det[0] && ref.m.view === det[0].m.view) {
         const P = SwingMetrics.progress(det[0].m, ref.m, ref.m.view) || { better: [], worse: [] };
         s.reference = { text: `Against your reference swing (${fmtDate(ref.e.createdAt)}): ${P.better.length || P.worse.length ? `${P.better.length} position${P.better.length === 1 ? '' : 's'} better, ${P.worse.length} worse` : 'no clear change'}.` };
@@ -128,7 +129,7 @@ async function open(q) {
     panel.addEventListener('click', e => {
       if (e.target.closest('.chX')) { close(); return; }
       const c = e.target.closest('[data-cq]'); if (c) { askQ(c.dataset.cq); return; }
-      if (e.target.closest('[data-cref]')) { const id = snap && snap.swings[0] && snap.swings[0].id; if (id) { lsSet('cc_refswing', id); if (typeof toast === 'function') toast('Saved as your reference swing'); } return; }
+      if (e.target.closest('[data-cref]')) { if (window.ccGate && !ccGate('reference')) return; const id = snap && snap.swings[0] && snap.swings[0].id; if (id) { lsSet('cc_refswing', id); if (typeof toast === 'function') toast('Saved as your reference swing'); } return; }
       if (e.target.closest('[data-go],[data-drill],[data-ob-change]')) close();   // the app's own handlers then open the page
     });
     panel.querySelector('.chAsk').addEventListener('submit', e => { e.preventDefault(); const i = panel.querySelector('#chQ'); askQ(i.value); i.value = ''; });

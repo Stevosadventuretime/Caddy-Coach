@@ -21,6 +21,7 @@ function reportFor(r, rounds) {
 window.ccRoundReport = reportFor;
 function reportHTML(rep) {
   if (!rep || !rep.overall || !rep.overall.holes) return '';
+  if (window.ccCan && !ccCan('reportFull')) rep = Object.assign({}, rep, { good: [], improve: [], biggest: null, plan: [], locked: true });
   const o = rep.overall, tp = o.toPar === 0 ? 'level par' : (o.toPar > 0 ? '+' : '') + o.toPar;
   const act = p => p.kind === 'drill' ? `<button type="button" class="chip" data-drill="${E(p.id)}">${E(p.label)}</button>`
     : p.kind === 'task' ? `<button type="button" class="chip" data-go="3">${E(p.label)}</button>` : `<p class="rrTip">${E(p.label)}</p>`;
@@ -32,6 +33,7 @@ function reportHTML(rep) {
    ${rep.biggest ? `<h3>Biggest chance to save shots</h3><p>${E(rep.biggest.text)}</p>` : ''}
    ${rep.plan.length ? `<h3>Practise before your next round</h3><div class="chips">${rep.plan.map(act).join('')}</div>` : ''}
    ${rep.target ? `<div class="rrTarget"><span>Target for next round</span><b>${E(rep.target)}</b></div>` : ''}
+   ${rep.locked ? '<button type="button" class="btn ghost rrAsk" data-plans>See the full report with Plus</button>' : ''}
    ${rep.missing.map(m => `<p class="chMiss">${E(m)}</p>`).join('')}
    <p class="chEv">${E(rep.basis)}</p>
    <button type="button" class="btn ghost rrAsk" data-coach="How did my last round go?">Ask your coach about this round</button></div>`;
@@ -163,7 +165,8 @@ if (has('bagTrackedHTML')) {
       const C = RoundReport.clubConsistency(D, order), nm = id => typeof clubName === 'function' ? clubName(id) : id;
       const bag = (BG.bag && BG.bag.yards) || {}, est = Object.keys(bag).filter(id => (bag[id] || {}).carry && !(D[id] && D[id].n >= 1));
       let extra = '';
-      if (C.ranked.length >= 2) extra += `<div class="card"><h2>Your most consistent clubs</h2><p class="mut" style="margin:0 0 8px">From clubs with at least 5 GPS-measured shots. A smaller spread means a more reliable distance.</p>
+      if (C.ranked.length >= 2 && window.ccCan && !ccCan('clubs')) extra += '<p class="mut ccNote">Your most consistent clubs are part of Caddy Coach Plus. <button type="button" class="link" data-plans>See plans</button></p>';
+      else if (C.ranked.length >= 2) extra += `<div class="card"><h2>Your most consistent clubs</h2><p class="mut" style="margin:0 0 8px">From clubs with at least 5 GPS-measured shots. A smaller spread means a more reliable distance.</p>
         <ol class="ccList">${C.ranked.map(c => `<li><b>${E(nm(c.id))}</b><span>${c.lo}–${c.hi} yds (${c.spread}-yd spread, ${c.n} shots)</span></li>`).join('')}</ol>
         ${C.tips.map(t => `<p class="hcNote">From about ${t.yds} yds, your ${E(nm(t.good).toLowerCase())} is more consistent than your ${E(nm(t.bad).toLowerCase())}.</p>`).join('')}</div>`;
       else if (Object.keys(D).length) extra += `<p class="mut ccNote">Mark 5 or more shots with a club to see how consistent it is.</p>`;
