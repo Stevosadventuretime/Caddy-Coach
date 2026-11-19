@@ -2120,6 +2120,20 @@ html.chOpen{overflow:hidden}
 .pgTop{margin:0 0 8px;padding-left:18px}.pgOpen{width:100%;margin-bottom:12px}
 .ccList{margin:0;padding-left:20px;display:grid;gap:4px}.ccList li span{display:block;font-size:13.5px;color:var(--muted,#5f6f64)}
 .ccNote{font-size:13.5px;margin:8px 2px 0}
+/* level, badges and challenges (achieveui.js) */
+.lvTop{display:flex;gap:12px;align-items:center}.lvTop h3{margin:0}
+.lvN{width:44px;height:44px;flex:none;border-radius:50%;display:grid;place-items:center;font:800 22px/1 Archivo,'Instrument Sans',system-ui,sans-serif;background:var(--green,#1e6b3e);color:var(--green-ink,#fff)}
+.lvN.sm{width:30px;height:30px;font-size:15px}
+.lvBar{height:8px;border-radius:999px;background:color-mix(in srgb,var(--ink,#132018) 9%,transparent);overflow:hidden;margin:10px 0 2px}.lvBar i{display:block;height:100%;border-radius:inherit;background:var(--green,#1e6b3e)}
+.lvSec h4{margin:14px 0 6px;font-size:14px}
+.lvCh{list-style:none;margin:0;padding:0;display:grid;gap:6px}.lvCh li{display:flex;gap:10px;align-items:center;font-size:14.5px}
+.lvCh span{min-width:38px;text-align:center;font-size:12px;font-weight:700;padding:3px 6px;border-radius:999px;background:color-mix(in srgb,var(--ink,#132018) 8%,transparent);font-variant-numeric:tabular-nums}
+.lvCh li.done span{background:var(--green,#1e6b3e);color:var(--green-ink,#fff)}
+.bdGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.bd{padding:10px 12px;border-radius:12px;border:1px dashed var(--line2,var(--line,#dde4de));opacity:.75}.bd b{display:block;font-size:14px}.bd small{color:var(--muted,#5f6f64);font-size:12.5px}
+.bd.on{opacity:1;border-style:solid;border-color:color-mix(in srgb,var(--green,#1e6b3e) 45%,transparent);background:color-mix(in srgb,var(--green,#1e6b3e) 9%,transparent)}
+.lvStrip{display:flex;align-items:center;gap:10px;width:100%;margin-top:10px;padding:9px 12px;border-radius:12px;border:1px solid var(--line,#dde4de);background:transparent;color:inherit;font:inherit;text-align:left;flex-wrap:wrap}
+.lvStrip .mut{margin-left:auto;font-size:13px}
 </style>
 
 <header class="topbar"><div class="in">
@@ -2441,6 +2455,8 @@ html.chOpen{overflow:hidden}
 <script src="coachhub.js"></script>
 <script src="roundreport.js"></script>
 <script src="perf.js"></script>
+<script src="achieve.js"></script>
+<script src="achieveui.js"></script>
 
 <script>
 // Offline support, and getting updates in one launch: the app opens from the copy saved on the phone and fetches any new

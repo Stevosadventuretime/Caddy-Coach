@@ -96,3 +96,14 @@ test('last round answers from the round report, or says there is none', () => {
   assert.match(a.points[0], /92 over 18 holes, 33 points \(2 better than usual/);
   assert.ok(a.points.length <= 3);
 });
+
+test('level question answers from the achievements, with the nearest badges', () => {
+  assert.strictEqual(B.intent("What's my level?").k, 'level');
+  const achieve = { L: { n: 2, name: 'Weekend Golfer', to: 400, nextName: 'Regular' }, X: { total: 260 },
+    B: [{ name: 'Ten swings', have: 7, need: 10, earned: false, how: 'Analyse 10 swings' }, { name: 'Break 90', have: 0, need: 1, earned: false, how: 'Score under 90 for 18 holes' }],
+    C: [{ title: 'Do 3 drill tests', done: false }, { title: 'Play a round', done: true }] };
+  const a = B.answer('what badges can I get next', { ...empty, achieve });
+  assert.match(a.points[0], /Level 2, Weekend Golfer: 260 XP, 140 to Regular/);
+  assert.match(a.points[1], /Ten swings \(7 of 10\)/);
+  assert.ok(a.points.length <= 3);
+});

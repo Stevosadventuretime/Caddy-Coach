@@ -67,3 +67,4 @@ test('a focus lasts two weeks: learn and test in week 1, own it and pressure-tes
 require('./test_metrics.js');
 require('./test_coachbrain.js');
 require('./test_roundreport.js');
+require('./test_achieve.js');
