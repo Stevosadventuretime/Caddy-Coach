@@ -12,6 +12,7 @@ const AREA_WORDS = [['putt', /putt/], ['arg', /chip|pitch|short game|bunker|sand
 function intent(text) {
   const t = String(text || '').toLowerCase();
   for (const [k, re] of MISS_WORDS) if (re.test(t)) return { k: 'miss', miss: k };
+  if (/last round|my round|round go|how did i (play|do|get on)|today'?s round/.test(t)) return { k: 'round' };
   if (/handicap|index/.test(t)) return { k: 'hcp' };
   if (/improv|getting better|progress|better than|over the last|compared|reference/.test(t)) return { k: 'improved' };
   for (const [k, re] of AREA_WORDS) if (re.test(t)) return { k: 'area', area: k };
@@ -191,6 +192,25 @@ function hcpAnswer(s) {
   return a;
 }
 
+// ---------- how did my last round go? (from roundreport.js, built on the phone) ----------
+function roundAnswer(s) {
+  const R = s.lastReport, a = ans({ title: 'Your last round' });
+  if (!R || !R.overall || !R.overall.holes) {
+    a.points = ["You haven't recorded a round yet."];
+    a.missing.push('Score your next round in Caddy Coach (putts and fairways help) and I\'ll break it down for you.');
+    a.actions = [{ type: 'go', page: 8, label: 'Play a round' }];
+    return a;
+  }
+  const o = R.overall;
+  a.points.push(`${o.score} over ${plural(o.holes, 'hole')}${o.pts != null ? `, ${o.pts} points` : ''}${o.vsAvg != null ? ` (${o.vsAvg === 0 ? 'your usual' : `${Math.abs(o.vsAvg)} ${o.vsAvg < 0 ? 'better' : 'worse'} than usual per 18`})` : ''}.`);
+  if (R.good[0]) a.points.push('Went well: ' + R.good[0].replace(/\.$/, '') + '.');
+  if (R.biggest) a.points.push(R.biggest.text);
+  if (R.target) a.actions.push({ type: 'go', page: 8, label: 'Target: ' + R.target.replace(/ next round\.$/, '') });
+  a.evidence = (s.lastReportWhen ? `Your round on ${s.lastReportWhen}. ` : '') + (R.basis || '');
+  a.missing = R.missing.slice(0, 1);
+  return a;
+}
+
 function helpAnswer() {
   return ans({ title: 'I can help with', points: ['Why you hit a certain miss (slice, hook, fat, thin…)', 'What to practise today, and where you lose shots', 'Whether your swing is improving'], actions: CHIPS.slice(0, 3).map(q => ({ type: 'ask', q, label: q })) });
 }
@@ -199,7 +219,7 @@ function answer(text, s) {
   s = s || {};
   const it = intent(text);
   const a = it.k === 'miss' ? missAnswer(s, it.miss) : it.k === 'practice' ? practiceAnswer(s) : it.k === 'improved' ? improvedAnswer(s)
-    : it.k === 'area' ? areaAnswer(s, it.area) : it.k === 'focus' ? focusAnswer(s) : it.k === 'hcp' ? hcpAnswer(s) : helpAnswer();
+    : it.k === 'area' ? areaAnswer(s, it.area) : it.k === 'focus' ? focusAnswer(s) : it.k === 'hcp' ? hcpAnswer(s) : it.k === 'round' ? roundAnswer(s) : helpAnswer();
   a.intent = it.k; a.points = a.points.filter(Boolean).slice(0, 3);
   return a;
 }
@@ -229,7 +249,7 @@ function knows(s) {
   ];
 }
 
-const CHIPS = ['What should I practise today?', 'Which part of my game should I focus on?', 'Has my swing improved?', 'Why am I slicing?', 'How is my putting?', "What's my handicap doing?"];
+const CHIPS = ['What should I practise today?', 'Which part of my game should I focus on?', 'Has my swing improved?', 'How did my last round go?', 'Why am I slicing?', 'How is my putting?', "What's my handicap doing?"];
 const api = { intent, answer, top3, knows, CHIPS, focusPick };
 if (typeof module !== 'undefined') module.exports = api; else root.CoachBrain = api;
 })(typeof window !== 'undefined' ? window : this);

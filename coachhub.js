@@ -69,6 +69,7 @@ async function snapshot() {
         stats: { fwPct: pct(st.fw, st.fwN), girPct: pct(st.gir, st.girN), udPct: pct(st.ud, st.udN), sandPct: pct(st.sand, st.sandN),
           puttsPer18: st.pN ? Math.round(st.putts / st.pN * 18) : null, threePutts: st.three, missSide: st.fl > st.fr * 1.5 ? 'left' : st.fr > st.fl * 1.5 ? 'right' : '' },
         sg: { tee: g.tee, app: g.app, arg: g.arg, putt: g.putt, full: g.full } };
+      try { if (window.ccRoundReport) { s.lastReport = ccRoundReport(rs[0], rs); s.lastReportWhen = fmtDate(rs[0].date ? rs[0].date + 'T12:00:00' : rs[0].finishedAt); } } catch (_) {}
     }
   } catch (_) {}
   try { const rec = HcpStore.rec; if (rec && rec.start) s.hcp = { hi: WHS.calc(rec).hi, start: rec.start.hi, scores: (rec.scores || []).length }; } catch (_) {}
@@ -118,7 +119,7 @@ function askQ(q) {
 async function open(q) {
   if (!panel) {
     panel = document.createElement('div'); panel.className = 'chWrap'; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); panel.setAttribute('aria-label', 'Your coach');
-    panel.innerHTML = `<div class="chPanel"><header class="chHead"><div><h2>Your coach</h2><small class="mut">Answers from your own swings, rounds and practice</small></div><button type="button" class="chX" aria-label="Close">✕</button></header>
+    panel.innerHTML = `<div class="chPanel"><header class="chHead"><div><h2>Your coach</h2><small class="mut">Answers from your own swings, rounds and practice · <button type="button" class="link" data-progress>Your progress</button></small></div><button type="button" class="chX" aria-label="Close">✕</button></header>
      <div class="chBody"><p class="mut">Getting your data…</p></div>
      <footer class="chFoot"><div class="chips chQs">${CoachBrain.CHIPS.map(c => `<button type="button" class="chip" data-cq="${esc_(c)}">${esc_(c)}</button>`).join('')}</div>
      <form class="chAsk"><input id="chQ" maxlength="200" autocomplete="off" placeholder="Ask about your game…" aria-label="Ask your coach"><button type="submit" class="btn sm">Ask</button></form></footer></div>`;
@@ -140,6 +141,7 @@ async function open(q) {
 }
 function close() { if (!panel) return; panel.classList.remove('on'); document.documentElement.classList.remove('chOpen'); }
 window.ccCoach = open;
+window.ccSnapshot = snapshot;
 document.addEventListener('click', e => { const b = e.target.closest('[data-coach]'); if (b) open(b.dataset.coach || ''); });
 
 // ---------- ways in: a card on Home, a button on swing results ----------
