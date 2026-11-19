@@ -1580,7 +1580,9 @@ function statsHTML(){const s=OWN.sum||{},k=s.kinds||{},W=s.weeks||[],ret=s.cohor
  return `<div class="pfCard"><button type="button" class="link pfBack" data-pf="to-me">Back</button><h2>App usage</h2>${OWN.err?`<p class="rtMsg bad">${esc(OWN.err)}</p>`:''}
  <div class="rtNetRow"><div><b>${s.golfers_7d??'–'}</b><span>Golfers this week</span></div><div><b>${s.golfers_total??'–'}</b><span>Golfers ever</span></div><div><b>${ret==null?'–':ret+'%'}</b><span>Came back after 4 weeks${s.cohort?` (${s.cohort_back} of ${s.cohort})`:''}</span></div></div>
  <h3 class="lbH">Golfers each week</h3>${bar}
- <h3 class="lbH">Last 30 days</h3><p style="margin:0">${[['round','rounds'],['swing','swings analysed'],['trace','shots traced'],['pin','pins marked'],['practice','practice sessions'],['coach','swings sent to coaches']].map(([a,l])=>`<b>${k[a]||0}</b> ${l}`).join(' · ')}</p>
+ ${s.retention?`<h3 class="lbH">Coming back</h3><div class="rtNetRow">${[['d1','Within a day'],['d7','Within a week'],['d30','Within a month']].map(([d,l])=>{const r=s.retention[d]||{};return `<div><b>${r.eligible?Math.round(100*r.back/r.eligible)+'%':'–'}</b><span>${l}${r.eligible?` (${r.back} of ${r.eligible})`:''}</span></div>`}).join('')}</div>`:''}
+ <h3 class="lbH">Last 30 days</h3><p style="margin:0">${[['round','rounds'],['swing','swings analysed'],['trace','shots traced'],['pin','pins marked'],['practice','practice sessions'],['coach','swings sent to coaches'],['coach_q','coach questions'],['progress','progress views'],['report','round reports'],['friends','friends visits'],['badge','badges earned']].map(([a,l])=>`<b>${k[a]||0}</b> ${l}`).join(' · ')}</p>
+ ${s.gates&&Object.keys(s.gates).length?`<h3 class="lbH">Locked features tapped (30 days)</h3><p style="margin:0">${Object.entries(s.gates).sort((a,b)=>b[1]-a[1]).map(([g,n])=>`<b>${n}</b> ${esc(g)}`).join(' · ')}</p>`:''}
  <p class="mut" style="font-size:12.5px">${s.profiles??'–'} profiles, ${s.with_password??'–'} with their own password. Counts are anonymous: each golfer is a one-way code, not their name.</p>
  <h3 class="lbH">Club admins</h3>${OWN.admins.length?`<ul class="goList">${OWN.admins.map(a=>`<li><div class="goTop"><b>@${esc(a.username)}</b><small>${esc(a.club_key)}</small><button type="button" class="link" data-own-rm="${esc(a.club_key)}|${esc(a.username)}">Remove</button></div></li>`).join('')}</ul>`:'<p class="mut">None yet.</p>'}
  <form class="grpJoin" data-own-form novalidate><input id="ownU" placeholder="Username" aria-label="Username of the new club admin" autocapitalize="none" autocomplete="off"><button type="submit">Make club admin</button></form>
@@ -1596,6 +1598,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-own-
 function v2Render(b,m){if(m==='plus'){b.innerHTML=plusHTML();return true}if(m==='coaching'){b.innerHTML=coachingHTML();return true}if(m==='pupil'){b.innerHTML=pupilHTML();return true}
  if(m==='coachswing'){b.innerHTML=coachSwingHTML();return true}if(m==='stats'){b.innerHTML=statsHTML();return true}return false}
 function v2MeLinks(){const L=[];if(v2Authed())L.push('<button type="button" class="link" data-pf="to-coaching">Coaching</button>');
+ L.push('<button type="button" class="link" data-plans>Caddy Coach plans</button>');
  if(PLUS.on)L.push(`<button type="button" class="link" data-pf="to-plus">${plusActive()?'Caddy Coach Plus: on':'Get Caddy Coach Plus'}</button>`);
  if(OWN.is)L.push('<button type="button" class="link" data-pf="to-stats">App usage and club admins</button>');return L.join('')}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-pf="to-coaching"],[data-pf="to-plus"],[data-pf="to-stats"]');if(!b)return;e.stopImmediatePropagation();PROF.err={};PROF.f={};
