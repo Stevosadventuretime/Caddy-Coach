@@ -63,8 +63,8 @@ It's a static PWA on GitHub Pages (`main`), with Supabase (project `dhrzscyirgvj
   - welcome questions, visitor access;
   - Your coach, round reports, Your progress, club consistency;
   - badges/XP/levels/challenges, friends and competitions;
-  - plans (Free/Plus/Pro, payments off) and owner retention numbers.
-- **In progress:** My Golf Brain foundations (PR `brain-foundation`).
+  - plans (Free/Plus/Pro, payments off) and owner retention numbers;
+  - My Golf Brain foundations (PR 61, 23 Nov 2026): profile, focus with status, coaching history, "why", brain backup.
 - **Next, from the master prompt:**
   1. Home "current focus" + "Start today's practice", and the improvement timeline.
   2. Practice generator (10–60 min, by location) with a session player.
