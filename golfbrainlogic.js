@@ -6,7 +6,7 @@ const DAY = 864e5;
 const fmt = t => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
 function empty(now) {
-  return { v: 1, updatedAt: now || Date.now(), about: { name: '', level: '', goal: '', hand: '', freq: '', conditions: '', target: '' }, history: [], focus: [], refSwing: null, planSess: {} };
+  return { v: 1, updatedAt: now || Date.now(), about: { name: '', level: '', goal: '', hand: '', freq: '', conditions: '', target: '' }, history: [], focus: [], sessions: [], refSwing: null, planSess: {} };
 }
 
 // keep each priority's start date and status; new ones start as 'new'; at most 3
