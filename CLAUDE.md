@@ -3,6 +3,7 @@
 Owen's UK golf coaching web app, in testing with a small group of golfers. Owen isn't a developer: explain changes in plain English, keep replies short, and tell him what to check on his phone.
 
 Live: https://stevosadventuretime.github.io/Caddy-Coach/ (GitHub Pages, publishes from `main`).
+Project memory in the repo: `docs/PROJECT.md` (architecture, data, decisions, phases, how to test). Read it first.
 Project brain (status, decisions, next steps): Google Drive > "Claude Super Brain" > "11 Caddy Coach". Read it at the start of a session if the Drive connector is available, and update its Status / Next steps / Decisions log at the end.
 
 ## Save tokens
@@ -31,7 +32,7 @@ Project brain (status, decisions, next steps): Google Drive > "Claude Super Brai
 
 ## Making a change
 1. Branch → pull request → GitHub Actions runs tests → merge to `main` → live in 1–2 minutes.
-2. Run tests locally before pushing:
+2. Run tests locally before pushing (`tools/test_coach.js` also runs the coach, brain, round report, achievements, friends, tiers and metrics tests):
    ```
    node --test tools/test_whs.js tools/test_drills_content.js tools/test_coach.js tools/golfer/motion/test_drill_motion.js tools/golfer/motion/test_perf.js
    python tools/ci/smoke.py

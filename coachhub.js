@@ -137,7 +137,7 @@ async function open(q) {
   }
   document.documentElement.classList.add('chOpen');
   void panel.offsetWidth; panel.classList.add('on');   // force a layout first so the slide-in still animates
-  snap = await snapshot().catch(e => { console.warn('coach', e); return { swings: [] }; });
+  snap = await (window.ccSnapshot || snapshot)().catch(e => { console.warn('coach', e); return { swings: [] }; });
   render();
   if (q) askQ(q);
 }
@@ -151,7 +151,7 @@ async function homeCard() {
   const p0 = document.getElementById('p0'); if (!p0) return;
   let el = document.getElementById('homeCoach');
   if (!el) { el = document.createElement('div'); el.className = 'card'; el.id = 'homeCoach'; const after = document.getElementById('homeStats') || document.getElementById('homeRound'); if (after) after.after(el); else p0.prepend(el); }
-  const s = await snapshot().catch(() => null); if (!s) return;
+  const s = await (window.ccSnapshot || snapshot)().catch(() => null); if (!s) return;
   const t = CoachBrain.top3(s)[0];
   el.innerHTML = `<div class="hcTop"><span class="hcIcon" aria-hidden="true"></span><div><h2>Your coach</h2><small class="mut">${t ? `Top priority: ${esc_(t.title)}` : 'Ask anything about your game. Answers come from your own data.'}</small></div></div>
    <div class="chips">${CoachBrain.CHIPS.slice(0, 3).map(c => `<button type="button" class="chip" data-coach="${esc_(c)}">${esc_(c)}</button>`).join('')}</div>

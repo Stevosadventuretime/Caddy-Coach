@@ -70,3 +70,4 @@ require('./test_roundreport.js');
 require('./test_achieve.js');
 require('./test_friendlogic.js');
 require('./test_tiers.js');
+require('./test_golfbrain.js');
