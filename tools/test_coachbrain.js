@@ -107,3 +107,16 @@ test('level question answers from the achievements, with the nearest badges', ()
   assert.match(a.points[1], /Ten swings \(7 of 10\)/);
   assert.ok(a.points.length <= 3);
 });
+
+test('what am I working on, and why, come from the saved focus and history', () => {
+  assert.strictEqual(B.intent('What am I working on?').k, 'working');
+  assert.strictEqual(B.intent('Why are you recommending this?').k, 'why');
+  assert.match(B.answer('What am I working on?', empty).points[0], /Nothing yet/);
+  const DAY = 864e5, now = Date.now();
+  const s = { ...empty, focusNow: [{ id: 'ott', kind: 'fault', title: 'Over the top', why: 'In 3 of your last swings', measure: 'Whether it still shows up in your next 2 swings', status: 'working', since: now - 6 * DAY }],
+    brainHistory: [{ at: now - 5 * DAY, text: 'Work on: Over the top', ref: 'ott', source: 'swing' }] };
+  assert.match(B.answer('What am I working on?', s).points[0], /1\. Over the top \(working on it\)/);
+  const w = B.answer('why are you recommending this', s);
+  assert.match(w.points[0], /in 3 of your last swings, measured by the camera/);
+  assert.match(w.points[1], /I suggested working on over the top/);
+});

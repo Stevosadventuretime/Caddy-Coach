@@ -2149,6 +2149,15 @@ html.chOpen{overflow:hidden}
 .plCard.on{border-color:var(--green,#1e6b3e);box-shadow:0 0 0 1px var(--green,#1e6b3e) inset}
 .plTop{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}.plTop span{font-size:13.5px;color:var(--muted,#5f6f64)}
 .plCard ul{margin:6px 0 8px;padding-left:18px}.plCard li{margin:3px 0}.plSoon{margin:4px 0 0;font-weight:600}
+/* My Golf Brain (golfbrainui.js) */
+.gbFocus{list-style:none;margin:0;padding:0;display:grid;gap:10px}.gbFocus li{padding:10px 12px;border-radius:12px;border:1px solid var(--line,#dde4de)}.gbFocus p{margin:6px 0}
+.gbFT{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.gbSt{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--ink,#132018) 8%,transparent);white-space:nowrap}
+.gbSt.improving{background:color-mix(in srgb,var(--green,#1e6b3e) 16%,transparent);color:var(--green,#1e6b3e)}.gbSt.done{background:var(--green,#1e6b3e);color:var(--green-ink,#fff)}
+.gbAbout{display:grid;gap:10px}.gbAbout label{display:grid;gap:4px;font-size:13.5px;color:var(--muted,#5f6f64)}
+.gbAbout input,.gbAbout select{padding:10px 12px;border-radius:12px;border:1px solid var(--line2,var(--line,#dde4de));background:var(--surface,#fff);color:var(--ink,#132018);font:inherit;min-width:0}
+.gbDl{margin:0;display:grid;gap:8px}.gbDl div{display:grid;grid-template-columns:44% 1fr;gap:8px;font-size:14.5px}.gbDl dt{color:var(--muted,#5f6f64)}.gbDl dd{margin:0;min-width:0}.gbDl .bTag{margin-left:4px}
+.gbHist{list-style:none;margin:0;padding:0;display:grid;gap:8px}.gbHist li{font-size:14px}.gbHist small{display:block;color:var(--muted,#5f6f64)}
 </style>
 
 <header class="topbar"><div class="in">
@@ -2466,6 +2475,7 @@ html.chOpen{overflow:hidden}
 <script src="swingcoach.js"></script>
 <script src="homehole.js"></script>
 <script src="onboard.js"></script>
+<script src="golfbrainlogic.js"></script>
 <script src="coachbrain.js"></script>
 <script src="coachhub.js"></script>
 <script src="roundreport.js"></script>
@@ -2476,6 +2486,8 @@ html.chOpen{overflow:hidden}
 <script src="friends.js"></script>
 <script src="tiers.js"></script>
 <script src="plans.js"></script>
+<script src="golfbrain.js"></script>
+<script src="golfbrainui.js"></script>
 
 <script>
 // Offline support, and getting updates in one launch: the app opens from the copy saved on the phone and fetches any new

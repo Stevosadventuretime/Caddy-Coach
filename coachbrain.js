@@ -3,6 +3,7 @@
 // Rules: only say what the data shows, say what it's based on, say what's missing, and never more than 3 things.
 (function (root) {
 'use strict';
+const GBL = root.GolfBrainLogic || (typeof require === 'function' ? (() => { try { return require('./golfbrainlogic.js'); } catch (_) { return null; } })() : null);
 
 // ---------- what was asked ----------
 const MISS_WORDS = [['slice', /slic/], ['hook', /hook/], ['push', /\bpush/], ['pull', /\bpull/], ['fat', /\bfat\b|heavy|chunk/],
@@ -12,6 +13,8 @@ const AREA_WORDS = [['putt', /putt/], ['arg', /chip|pitch|short game|bunker|sand
 function intent(text) {
   const t = String(text || '').toLowerCase();
   for (const [k, re] of MISS_WORDS) if (re.test(t)) return { k: 'miss', miss: k };
+  if (/why (are|do|did) you|why (this|that)|why recommend|why should i/.test(t)) return { k: 'why' };
+  if (/working on|current focus|my focus|my priorit/.test(t)) return { k: 'working' };
   if (/last round|my round|round go|how did i (play|do|get on)|today'?s round/.test(t)) return { k: 'round' };
   if (/\blevel\b|\bxp\b|badge|achievement|challenge/.test(t)) return { k: 'level' };
   if (/handicap|index/.test(t)) return { k: 'hcp' };
@@ -69,6 +72,7 @@ function practiceAnswer(s) {
   if (fault) {
     items.push(`${fault.title}${fault.n > 1 ? `: it's shown up in ${fault.n} of your last swings` : ': from your last swing'}. 10 minutes of the drill, then half swings with that feel.`);
     acts.push(...drillActs(fault.drills).slice(0, 1));
+    const back = GBL && fault.id && GBL.recallLine(s.brainHistory, fault.id, true); if (back && items.length < 3) items.push(back);
   }
   const fz = focusPick(s);
   if (fz && fz.kind === 'area' && items.length < 3) items.push(`On the course you're losing most in ${AREA[fz.area].toLowerCase()}. ${fz.tip}`);
@@ -226,6 +230,27 @@ function levelAnswer(s) {
   return a;
 }
 
+// ---------- My Golf Brain: what am I working on, and why? ----------
+function workingAnswer(s) {
+  const F = s.focusNow || [], a = ans({ title: 'What you\'re working on' });
+  if (!F.length) { a.points = ["Nothing yet. Analyse a swing or record a round and I'll set your first priorities, never more than three."]; a.missing.push("I haven't got any of your swings or rounds yet."); a.actions = [{ type: 'go', page: 1, label: 'Analyse a swing' }]; return a; }
+  const ST = (GBL && GBL.STATUS) || {};
+  a.points = F.slice(0, 3).map((p, i) => `${i + 1}. ${p.title} (${(ST[p.status] || p.status || 'new').toLowerCase()})`);
+  a.evidence = 'Your priorities update after every swing analysis and round.';
+  a.actions = [{ type: 'ask', q: 'Why are you recommending this?', label: 'Why these?' }, { type: 'ask', q: 'What should I practise today?', label: 'What should I practise today?' }];
+  return a;
+}
+function whyAnswer(s) {
+  const F = s.focusNow || [], a = ans({ title: 'Why I\'m recommending this' });
+  if (!GBL) { a.points = ["I can't explain that right now."]; return a; }
+  if (!F.length) { a.points = [GBL.whyFor(null)]; a.actions = [{ type: 'go', page: 1, label: 'Analyse a swing' }]; return a; }
+  a.points = F.slice(0, 2).map(p => GBL.whyFor(p));
+  const back = F.map(p => GBL.recallLine(s.brainHistory, p.id, p.status !== 'done')).find(Boolean);
+  if (back) a.points.push(back);
+  a.evidence = 'From your own swings and rounds. Open My Golf Brain to see everything I know.';
+  return a;
+}
+
 function helpAnswer() {
   return ans({ title: 'I can help with', points: ['Why you hit a certain miss (slice, hook, fat, thin…)', 'What to practise today, and where you lose shots', 'Whether your swing is improving'], actions: CHIPS.slice(0, 3).map(q => ({ type: 'ask', q, label: q })) });
 }
@@ -234,7 +259,7 @@ function answer(text, s) {
   s = s || {};
   const it = intent(text);
   const a = it.k === 'miss' ? missAnswer(s, it.miss) : it.k === 'practice' ? practiceAnswer(s) : it.k === 'improved' ? improvedAnswer(s)
-    : it.k === 'area' ? areaAnswer(s, it.area) : it.k === 'focus' ? focusAnswer(s) : it.k === 'hcp' ? hcpAnswer(s) : it.k === 'round' ? roundAnswer(s) : it.k === 'level' ? levelAnswer(s) : helpAnswer();
+    : it.k === 'area' ? areaAnswer(s, it.area) : it.k === 'focus' ? focusAnswer(s) : it.k === 'hcp' ? hcpAnswer(s) : it.k === 'round' ? roundAnswer(s) : it.k === 'level' ? levelAnswer(s) : it.k === 'working' ? workingAnswer(s) : it.k === 'why' ? whyAnswer(s) : helpAnswer();
   a.intent = it.k; a.points = a.points.filter(Boolean).slice(0, 3);
   return a;
 }
@@ -242,11 +267,11 @@ function answer(text, s) {
 // ---------- your top 3, and what the coach knows ----------
 function top3(s) {
   s = s || {}; const out = [], seen = new Set();
-  for (const r of (s.recurring || [])) { if (out.length >= 2) break; seen.add(r.id); out.push({ title: r.title, why: `In ${r.n} of your last swings`, drill: (r.drills || [])[0] || null }); }
+  for (const r of (s.recurring || [])) { if (out.length >= 2) break; seen.add(r.id); out.push({ id: r.id, kind: 'fault', n: r.n, title: r.title, why: `In ${r.n} of your last swings`, drill: (r.drills || [])[0] || null }); }
   const fz = focusPick(s);
-  if (fz && out.length < 3) out.push({ title: `${AREA[fz.area]} on the course`, why: fz.how === 'sg' ? 'Where your rounds lose the most shots' : 'Your weakest round stat', ask: `How is my ${{ tee: 'driving', app: 'approach play', arg: 'short game', putt: 'putting' }[fz.area]}?` });
+  if (fz && out.length < 3) out.push({ id: 'area:' + fz.area, kind: 'area', area: fz.area, how: fz.how, tip: fz.tip, title: `${AREA[fz.area]} on the course`, why: fz.how === 'sg' ? 'Where your rounds lose the most shots' : 'Your weakest round stat', ask: `How is my ${{ tee: 'driving', app: 'approach play', arg: 'short game', putt: 'putting' }[fz.area]}?` });
   const last = (s.swings || [])[0];
-  if (last && last.faults) for (const f of last.faults) { if (out.length >= 3) break; if (seen.has(f.id)) continue; seen.add(f.id); out.push({ title: f.title, why: 'From your last swing', drill: (f.drills || [])[0] || null }); }
+  if (last && last.faults) for (const f of last.faults) { if (out.length >= 3) break; if (seen.has(f.id)) continue; seen.add(f.id); out.push({ id: f.id, kind: 'fault', n: 1, title: f.title, why: 'From your last swing', drill: (f.drills || [])[0] || null }); }
   return out.slice(0, 3);
 }
 const LEVEL = { new: 'New to golf', casual: 'Plays now and then', regular: 'Regular golfer', low: 'Single-figure golfer' };
@@ -264,7 +289,7 @@ function knows(s) {
   ];
 }
 
-const CHIPS = ['What should I practise today?', 'Which part of my game should I focus on?', 'Has my swing improved?', 'How did my last round go?', 'Why am I slicing?', 'How is my putting?', "What's my handicap doing?"];
+const CHIPS = ['What am I working on?', 'What should I practise today?', 'Which part of my game should I focus on?', 'Has my swing improved?', 'How did my last round go?', 'Why am I slicing?', 'How is my putting?', "What's my handicap doing?"];
 const api = { intent, answer, top3, knows, CHIPS, focusPick };
 if (typeof module !== 'undefined') module.exports = api; else root.CoachBrain = api;
 })(typeof window !== 'undefined' ? window : this);

@@ -1598,6 +1598,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-own-
 function v2Render(b,m){if(m==='plus'){b.innerHTML=plusHTML();return true}if(m==='coaching'){b.innerHTML=coachingHTML();return true}if(m==='pupil'){b.innerHTML=pupilHTML();return true}
  if(m==='coachswing'){b.innerHTML=coachSwingHTML();return true}if(m==='stats'){b.innerHTML=statsHTML();return true}return false}
 function v2MeLinks(){const L=[];if(v2Authed())L.push('<button type="button" class="link" data-pf="to-coaching">Coaching</button>');
+ L.push('<button type="button" class="link" data-brain>My Golf Brain</button>');
  L.push('<button type="button" class="link" data-plans>Caddy Coach plans</button>');
  if(PLUS.on)L.push(`<button type="button" class="link" data-pf="to-plus">${plusActive()?'Caddy Coach Plus: on':'Get Caddy Coach Plus'}</button>`);
  if(OWN.is)L.push('<button type="button" class="link" data-pf="to-stats">App usage and club admins</button>');return L.join('')}
