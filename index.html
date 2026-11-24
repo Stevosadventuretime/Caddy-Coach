@@ -2149,6 +2149,21 @@ html.chOpen{overflow:hidden}
 .plCard.on{border-color:var(--green,#1e6b3e);box-shadow:0 0 0 1px var(--green,#1e6b3e) inset}
 .plTop{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}.plTop span{font-size:13.5px;color:var(--muted,#5f6f64)}
 .plCard ul{margin:6px 0 8px;padding-left:18px}.plCard li{margin:3px 0}.plSoon{margin:4px 0 0;font-weight:600}
+/* Swing timeline and round patterns (trends.js) */
+.trList{list-style:none;margin:0 0 8px;padding:0}
+.trList li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line,#dde4de)}.trList li:first-child{border-top:0}
+.trList b{display:block;font:600 14.5px/1.3 var(--f-ui)}.trList small{color:var(--muted,#5f6f64);font:400 13px/1.3 var(--f-ui)}
+.trList i{font:700 12px/1 var(--f-ui);font-style:normal;padding:4px 8px;border-radius:999px;background:color-mix(in srgb,var(--ink,#132018) 7%,transparent);white-space:nowrap}
+.trList li.better i{background:color-mix(in srgb,var(--green,#1e6b3e) 16%,transparent);color:var(--green,#1e6b3e)}
+.trList li.worse i{background:color-mix(in srgb,#c2410c 14%,transparent);color:#c2410c}
+.trSpark{width:90px;height:26px;color:var(--muted,#5f6f64)}.trList li.better .trSpark{color:var(--green,#1e6b3e)}.trList li.worse .trSpark{color:#c2410c}
+.trCmp li{grid-template-columns:minmax(0,1fr) auto}
+.trPick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 12px}
+.trPick label{display:grid;gap:4px;font:600 13px/1.3 var(--f-ui);color:var(--muted,#5f6f64)}
+.trPick select{padding:10px;border-radius:12px;border:1px solid var(--line2,var(--line,#dde4de));background:var(--surface,#fff);color:var(--ink,#132018);font:500 15px/1.2 var(--f-ui);min-width:0}
+.trPat{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.trPat li{padding:12px;border-radius:12px;border:1px solid var(--line,#dde4de)}
+.trPat b{font:700 15.5px/1.3 var(--f-ui)}.trPat p{margin:4px 0;font:400 15px/1.45 var(--f-ui)}.trPat small{color:var(--muted,#5f6f64);font:400 13px/1.4 var(--f-ui)}
 /* Today's practice (practiceui.js) */
 #homeFocus.hfCard{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:8px}#homeFocus.hfCard>*{grid-column:1/-1!important;min-width:0}#homeFocus .hfGo{grid-column:1/-1}#homeFocus .hfLinks{grid-column:1/-1}
 .hfEye{color:var(--green,#1e6b3e);font:700 12px/1.2 var(--f-ui);letter-spacing:.08em;text-transform:uppercase}
@@ -2538,6 +2553,8 @@ html.chOpen{overflow:hidden}
 <script src="feedback.js"></script>
 <script src="practicelogic.js"></script>
 <script src="practiceui.js"></script>
+<script src="trendlogic.js"></script>
+<script src="trends.js"></script>
 
 <script>
 // Offline support, and getting updates in one launch: the app opens from the copy saved on the phone and fetches any new
