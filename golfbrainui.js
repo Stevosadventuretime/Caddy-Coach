@@ -47,13 +47,19 @@ async function render() {
      ${row('Handicap index', s.hcp && s.hcp.hi != null ? s.hcp.hi : '', 'calc')}</dl></section>
    <section class="pgSec"><h3>Practice</h3><dl class="gbDl">
      ${row("This week's plan", P.total ? `${P.done} of ${P.total} sessions` : '', 'meas')}${row('Practice streak', P.streak ? `${P.streak} week${P.streak === 1 ? '' : 's'}` : '', 'meas')}
-     ${row('Two-week focus', P.focus, 'meas')}${row('Club distances set', s.bagN ? `${s.bagN} clubs` : '', 'told')}</dl></section>
+     ${row('Sessions from today\'s practice (30 days)', (b.sessions || []).filter(x => Date.now() - x.at < 30 * 864e5).length || '', 'meas')}${row('Two-week focus', P.focus, 'meas')}${row('Club distances set', s.bagN ? `${s.bagN} clubs` : '', 'told')}</dl></section>
+   <section class="pgSec" id="gbJourney"><h3>Your journey</h3>${(() => {
+     const J = typeof PracticeLogic !== 'undefined' ? PracticeLogic.journey(b.history, b.sessions, 30) : [];
+     const IC = { swing: 'Swing', sorted: 'Sorted', round: 'Round', practice: 'Practice' };
+     return J.length ? `<ol class="gbJourney">${J.map(e => `<li class="${e.type}"><small>${fmt(e.at)} · ${IC[e.type]}</small>${E(e.text)}</li>`).join('')}</ol>`
+       : '<p class="mut">Your swing fixes, practice sessions, rounds and the faults you sort out will build up here.</p>';
+   })()}</section>
    <section class="pgSec"><h3>Coaching history</h3>${b.history.length ? `<ul class="gbHist">${b.history.slice(0, 25).map(h => `<li><small>${fmt(h.at)} · ${E({ swing: 'Swing analysis', round: 'Round', coach: 'Your coach', plan: 'Practice plan' }[h.source] || h.source)}</small>${E(h.text)}</li>`).join('')}</ul>`
      : '<p class="mut">Advice from your swings, rounds and the coach will be kept here, so I never forget what we\'ve worked on.</p>'}</section>
    <section class="pgSec"><h3>Start again</h3><p class="mut">Clears what you told us and the coaching history. Your swings, rounds, practice and handicap stay, and your focus is worked out again from them.</p>
      <button type="button" class="btn ghost" data-gb-reset>${armed ? 'Tap again to reset. This can\'t be undone' : 'Reset My Golf Brain'}</button></section>`;
 }
-function open() {
+function open(section) {
   if (!W) {
     W = document.createElement('div'); W.className = 'chWrap gbWrap'; W.setAttribute('role', 'dialog'); W.setAttribute('aria-modal', 'true'); W.setAttribute('aria-label', 'My Golf Brain');
     W.innerHTML = `<div class="chPanel"><header class="chHead"><div><h2>My Golf Brain</h2><small class="mut">Everything your coach knows about your game</small></div><button type="button" class="chX" aria-label="Close">✕</button></header><div class="chBody"></div></div>`;
@@ -62,7 +68,7 @@ function open() {
       if (e.target.closest('.chX') || e.target.closest('[data-drill],[data-go]')) { W.classList.remove('on'); document.documentElement.classList.remove('chOpen'); armed = false; return; }
       if (e.target.closest('[data-gb-reset]')) {
         if (!armed) { armed = true; render(); return; }
-        armed = false; const b = GolfBrainLogic.empty(); b.about.hand = typeof Hand !== 'undefined' ? Hand.get() : ''; ccBrain.save(b);
+        armed = false; const keep = ccBrain.load().sessions || [], b = GolfBrainLogic.empty(); b.sessions = keep; b.about.hand = typeof Hand !== 'undefined' ? Hand.get() : ''; ccBrain.save(b);
         if (typeof toast === 'function') toast('My Golf Brain has been reset'); render();
       }
     });
@@ -76,7 +82,8 @@ function open() {
     });
   }
   document.querySelectorAll('.chWrap.on').forEach(x => { if (x !== W) x.classList.remove('on'); });
-  document.documentElement.classList.add('chOpen'); void W.offsetWidth; W.classList.add('on'); render();
+  document.documentElement.classList.add('chOpen'); void W.offsetWidth; W.classList.add('on');
+  render().then(() => { if (section === 'journey') { const j = W.querySelector('#gbJourney'); if (j) j.scrollIntoView({ block: 'start' }); } });
 }
 window.ccBrainOpen = open;
 document.addEventListener('click', e => { if (e.target.closest('[data-brain]')) { if (typeof profHide === 'function') profHide(); open(); } });
